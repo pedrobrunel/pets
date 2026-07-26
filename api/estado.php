@@ -5,9 +5,9 @@
    Suba este arquivo em /api/estado.php e crie a tabela do LEIA-ME.
 
    Ações:
-     POST ?acao=entrar   {apelido, pin}  -> cria ou autentica
-     GET  ?acao=carregar                 -> devolve o estado salvo
-     POST ?acao=salvar   {...estado}     -> grava o estado
+     POST ?acao=entrar   {apelido, senha}  -> cria ou autentica
+     GET  ?acao=carregar                   -> devolve o estado salvo
+     POST ?acao=salvar   {...estado}       -> grava o estado
    ========================================================= */
 
 declare(strict_types=1);
@@ -44,26 +44,29 @@ try {
   if ($acao === 'entrar') {
     $d = corpo();
     $apelido = trim((string)($d['apelido'] ?? ''));
-    $pin     = (string)($d['pin'] ?? '');
+    $senha   = (string)($d['senha'] ?? '');
 
     // apelido: só letras, números e _ — nada de nome real, e-mail ou telefone
-    if (!preg_match('/^[\p{L}0-9_]{3,14}$/u', $apelido) || !preg_match('/^\d{4}$/', $pin)) {
-      responder(['erro' => 'Use um apelido de 3 a 14 letras e um PIN de 4 números.'], 422);
+    // senha: sem exigir número/maiúscula/símbolo — é jogo infantil, não banco
+    if (!preg_match('/^[\p{L}0-9_]{3,14}$/u', $apelido) || mb_strlen($senha) < 4 || mb_strlen($senha) > 60) {
+      responder(['erro' => 'Use um usuário de 3 a 14 letras e uma senha de pelo menos 4 caracteres.'], 422);
     }
 
+    // "pin_hash" é o nome antigo da coluna (a tabela já existe em produção);
+    // guarda o hash da senha normalmente, sem precisar mudar o banco
     $st = bd()->prepare('SELECT id, pin_hash FROM jogadores WHERE apelido = ?');
     $st->execute([$apelido]);
     $jogador = $st->fetch(PDO::FETCH_ASSOC);
 
     if ($jogador) {
-      if (!password_verify($pin, $jogador['pin_hash'])) {
+      if (!password_verify($senha, $jogador['pin_hash'])) {
         usleep(400000); // atrasa tentativa de força bruta
-        responder(['erro' => 'Apelido já existe e o PIN não confere.'], 401);
+        responder(['erro' => 'Usuário já existe e a senha não confere.'], 401);
       }
       $id = (int)$jogador['id'];
     } else {
       $st = bd()->prepare('INSERT INTO jogadores (apelido, pin_hash, estado) VALUES (?, ?, ?)');
-      $st->execute([$apelido, password_hash($pin, PASSWORD_DEFAULT), '{}']);
+      $st->execute([$apelido, password_hash($senha, PASSWORD_DEFAULT), '{}']);
       $id = (int)bd()->lastInsertId();
     }
 
@@ -73,7 +76,7 @@ try {
   }
 
   $id = $_SESSION['jogador_id'] ?? null;
-  if (!$id) responder(['erro' => 'Entre com seu apelido primeiro.'], 401);
+  if (!$id) responder(['erro' => 'Entre com seu usuário e senha primeiro.'], 401);
 
   if ($acao === 'carregar') {
     $st = bd()->prepare('SELECT estado FROM jogadores WHERE id = ?');

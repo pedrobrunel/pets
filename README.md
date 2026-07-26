@@ -35,7 +35,7 @@ sw.js                 service worker: funciona offline depois da 1ª visita
 icone-*.png           ícones do app instalado
 .htaccess             HTTPS forçado, cache e proteção das credenciais
 api/
-  estado.php          back-end opcional: login por apelido + PIN, salvar progresso
+  estado.php          back-end opcional: login por usuário + senha, salvar progresso
   install.php          roda uma vez só: cria a tabela do banco sozinho
   config.example.php  modelo — copie para config.php e preencha (não versionado)
 ```
@@ -49,11 +49,11 @@ api/
 - 5 trilhas × 2 lições × 3 perguntas, com leitura curta antes do quiz
 - Moedas e XP: a primeira vez paga mais, refazer paga menos
 - Minigame **Memória do Bicho** e **Chuva de Frutas** (canvas, com toque e teclado)
-- Loja com comidas e acessórios que aparecem vestidos no bicho
+- Loja com comidas (viram item de mochila) e acessórios que aparecem vestidos no bicho; a comida comprada só faz efeito quando o jogador escolhe "Dar pro bicho" — comprar e usar são coisas separadas
 - Mural de recados montados por blocos prontos
-- Carteirinha compartilhável com medalhas
+- Carteirinha com trilha de conquistas em sequência, estilo álbum de figurinha
 - Instalável como aplicativo no Android e no iOS
-- Salvar progresso (opcional): com apelido + PIN de 4 números, o jogo sincroniza com o banco — sem PIN, continua 100% local
+- Salvar progresso (opcional): com usuário + senha, o jogo sincroniza com o banco — sem conta, continua 100% local
 
 **Ainda não funciona:** perfil público do aluno e painel do responsável/professor — veja "Próximos passos".
 
@@ -114,7 +114,7 @@ Premium e Business têm acesso SSH, e aí o `rsync` fica mais rápido e mais seg
 
 **Comentário sem caixa de texto.** O mural monta recados a partir de blocos prontos: `Oi, gente!` + `terminei a trilha de História` + `🎉`. Não é limitação técnica, é o desenho de segurança mais importante do projeto. Sem texto livre não existe link, telefone, combinação de encontro nem aliciamento — e some a necessidade de moderação humana 24h, que é o que inviabiliza plataforma infantil pequena. Se um dia liberar texto livre, ele precisa de fila de moderação **antes** de publicar, nunca depois.
 
-**Apelido, nunca nome.** Sem e-mail, sem foto, sem idade, sem escola, sem cidade. Criança de 9 anos não gerencia e-mail e senha; o login é apelido + PIN de 4 dígitos. Alinhado com a LGPD (art. 14: dado de criança exige consentimento específico do responsável).
+**Apelido, nunca nome.** Sem e-mail, sem foto, sem idade, sem escola, sem cidade. O login é usuário (o próprio apelido de bicho) + senha — igual a qualquer jogo, sem PIN numérico. É menos restrito que a versão anterior (que usava só PIN de 4 dígitos por causa da LGPD, art. 14: dado de criança exige consentimento específico do responsável), mas continua sem coletar nenhum dado que identifique a criança de verdade: nenhum campo pede nome, e-mail, idade ou qualquer informação além do apelido escolhido e da senha.
 
 ---
 
@@ -141,7 +141,7 @@ CREATE TABLE jogadores (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-Com o banco pronto, o front-end já está ligado: a tela inicial tem um campo de PIN opcional — sem PIN, o jogo continua 100% local igual antes; com PIN, `entrarNoServidor()`/`carregarDoServidor()`/`salvarNoServidor()` (fim do `index.html`) cuidam de criar a conta, restaurar progresso salvo e sincronizar a cada ação relevante (lição concluída, item comprado, recado publicado).
+Com o banco pronto, o front-end já está ligado: a tela inicial tem um campo de senha opcional — em branco, o jogo continua 100% local igual antes; preenchido, `entrarNoServidor()`/`carregarDoServidor()`/`salvarNoServidor()` (fim do `index.html`) cuidam de criar a conta, restaurar progresso salvo e sincronizar a cada ação relevante (lição concluída, item comprado, item consumido, recado publicado).
 
 > ⚠️ **Moedas e XP hoje são calculados no navegador.** Qualquer aluno com o console aberto vira milionário. Quando isso passar a valer alguma coisa (ranking, item raro), a conta precisa subir para o PHP: o cliente manda *"respondi a alternativa 2 da pergunta 3 da lição bio1"*, o servidor confere e credita.
 
@@ -151,7 +151,6 @@ Com o banco pronto, o front-end já está ligado: a tela inicial tem um campo de
 
 1. **Painel do responsável/professor** — quem estudou o quê, quanto tempo, onde errou. É isso que faz escola pagar
 2. **Conteúdo de verdade** — só `bio1` usa os blocos novos (flashcard, vídeo, cloze, caça-palavras); as outras 9 lições ainda são só leitura + quiz. Ancorar nas habilidades da BNCC (`EF08HI01` e afins) desde já organiza o currículo e vira argumento de venda
-3. **Conquistas em sequência** — trocar a carteirinha estática por selos/conquistas no estilo Neopets
-4. **Lojas de aplicativo** — o mesmo código entra num invólucro (Capacitor ou Bubblewrap/TWA) e sobe na Play Store sem reescrever nada. Foi por isso que já saiu como PWA
+3. **Lojas de aplicativo** — o mesmo código entra num invólucro (Capacitor ou Bubblewrap/TWA) e sobe na Play Store sem reescrever nada. Foi por isso que já saiu como PWA
 
 VPS e Node só quando o número de alunos justificar. Enquanto for protótipo e piloto, hospedagem compartilhada com PHP dá conta com folga.
