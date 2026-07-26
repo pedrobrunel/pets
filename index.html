@@ -41,6 +41,9 @@ body{
   min-height:100dvh;
   overflow-x:hidden;
 }
+/* arcade e perfil são compactos de propósito: sem isso o corpo rola por baixo do rodapé fixo */
+body.sem-scroll{height:100dvh;overflow:hidden}
+body.sem-scroll #app{padding-bottom:0}
 h1,h2,h3,.display{font-family:'Baloo 2',cursive;font-weight:800;margin:0;line-height:1.05}
 button{font-family:inherit;font-weight:900;color:inherit;cursor:pointer}
 img{max-width:100%}
@@ -215,6 +218,60 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 .progresso-quiz i{flex:1;height:10px;background:#fff;border:3px solid var(--tinta);border-radius:999px}
 .progresso-quiz i.ok{background:var(--mata)}
 .progresso-quiz i.x{background:var(--erro)}
+.progresso-quiz i.visto{background:var(--ceu)}
+
+/* ---------- termo clicável (glossário dentro do texto) ---------- */
+.termo{
+  display:inline;background:var(--moeda);border:none;border-radius:6px;padding:1px 5px;
+  font-weight:900;font-family:inherit;font-size:inherit;color:inherit;cursor:pointer;
+  box-shadow:0 2px 0 var(--tinta);
+}
+.termo:active{box-shadow:none;transform:translateY(2px)}
+
+/* ---------- flashcard ---------- */
+.flashcard{perspective:1200px;margin-bottom:14px}
+.flashcard .cartao{
+  position:relative;min-height:180px;transition:transform .5s;transform-style:preserve-3d;cursor:pointer;
+}
+.flashcard.virada .cartao{transform:rotateY(180deg)}
+.flashcard .face{
+  position:absolute;inset:0;backface-visibility:hidden;
+  border:var(--borda) solid var(--tinta);border-radius:var(--r);box-shadow:var(--sombra);
+  background:#fff;display:flex;align-items:center;justify-content:center;text-align:center;
+  padding:18px;font-family:'Baloo 2';font-size:20px;
+}
+.flashcard .face.verso{transform:rotateY(180deg);background:var(--papel)}
+.flashcard .aviso-toque{text-align:center;font-size:12px;font-weight:700;opacity:.65;margin-top:8px}
+
+/* ---------- vídeo embutido ---------- */
+.video-embutido{
+  border:var(--borda) solid var(--tinta);border-radius:var(--r);box-shadow:var(--sombra);
+  overflow:hidden;aspect-ratio:16/9;margin-bottom:6px;
+}
+.video-embutido iframe{width:100%;height:100%;border:0;display:block}
+
+/* ---------- cloze (frase com lacuna) ---------- */
+.cloze .frase{font-family:'Baloo 2';font-size:20px;line-height:1.5;margin-bottom:16px}
+.cloze .lacuna{
+  display:inline-block;min-width:64px;border-bottom:4px solid var(--tinta);
+  text-align:center;font-weight:900;
+}
+.cloze .lacuna.preenchida{border-bottom-style:solid;color:var(--mata-esc)}
+.cloze .lacuna.errada{color:var(--erro)}
+.cloze .opcoes{display:flex;flex-wrap:wrap;gap:8px}
+
+/* ---------- caça-palavras ---------- */
+.grade-palavras{
+  display:grid;gap:3px;margin:0 auto 14px;width:100%;max-width:340px;
+}
+.grade-palavras button{
+  aspect-ratio:1;border:2px solid var(--tinta);border-radius:6px;background:#fff;
+  font-weight:900;font-size:14px;display:grid;place-items:center;padding:0;font-family:inherit;
+}
+.grade-palavras button.selecionada{background:var(--ceu);color:#fff}
+.grade-palavras button.achada{background:var(--mata);color:#fff}
+.lista-palavras{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.lista-palavras .chip.achada{background:var(--mata);color:#fff;text-decoration:line-through}
 
 /* ---------- loja ---------- */
 .item-loja{background:#fff;border:var(--borda) solid var(--tinta);border-radius:18px;
@@ -237,7 +294,7 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 
 /* ---------- minigames ---------- */
 #tabuleiro-memoria{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.carta{aspect-ratio:3/4;border:var(--borda) solid var(--tinta);border-radius:14px;background:var(--jabuti);
+.carta{aspect-ratio:1;border:var(--borda) solid var(--tinta);border-radius:14px;background:var(--jabuti);
   box-shadow:var(--sombra-p);font-size:28px;display:grid;place-items:center;color:transparent}
 .carta.virada{background:#fff;color:inherit}
 .carta.par{background:var(--mata);color:#fff}
@@ -254,10 +311,14 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--tint
 .carteirinha .selo{position:absolute;top:12px;right:14px;background:#fff;border:3px solid var(--tinta);
   border-radius:50%;width:56px;height:56px;display:grid;place-items:center;font-family:'Baloo 2';
   font-size:12px;line-height:1;text-align:center;transform:rotate(10deg)}
-.medalhas{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.medalha{background:#fff;border:3px solid var(--tinta);border-radius:14px;padding:8px 10px;
-  font-size:12px;font-weight:900;box-shadow:0 3px 0 var(--tinta);display:flex;align-items:center;gap:6px}
-.medalha.off{opacity:.42;filter:grayscale(1)}
+.trilha-conquistas{display:flex;overflow-x:auto;padding:6px 4px 6px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+.conquista{flex:0 0 auto;width:70px;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;scroll-snap-align:start}
+.conquista::before{content:"";position:absolute;top:22px;right:50%;width:100%;height:4px;background:var(--tinta);z-index:-1}
+.conquista:first-child::before{display:none}
+.conquista .bolha{width:44px;height:44px;border-radius:50%;background:var(--moeda);border:3px solid var(--tinta);
+  display:grid;place-items:center;font-size:20px;box-shadow:0 3px 0 var(--tinta)}
+.conquista.bloqueada .bolha{background:#E4DCC8;filter:grayscale(1);opacity:.6}
+.conquista span{font-size:10px;font-weight:900;text-align:center;line-height:1.15}
 
 /* ---------- balão / aviso ---------- */
 #brinde{
@@ -291,8 +352,13 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--tint
       <label for="campo-nome" style="display:block;font-family:'Baloo 2';font-size:20px;margin-bottom:6px">Como seu bicho se chama?</label>
       <input id="campo-nome" maxlength="14" placeholder="Ex.: Tobias"
         style="width:100%;font-family:'Baloo 2';font-size:22px;padding:10px 14px;border:4px solid var(--tinta);border-radius:16px;background:#fff;color:inherit">
-      <p style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Nada de nome verdadeiro, sobrenome ou escola. Aqui a gente usa apelido de bicho.</p>
+      <p style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Nada de nome verdadeiro, sobrenome ou escola. Aqui a gente usa apelido de bicho — e é esse apelido que vira seu usuário de login.</p>
+      <label for="campo-senha" style="display:block;font-family:'Baloo 2';font-size:20px;margin-bottom:6px">Senha</label>
+      <input id="campo-senha" type="password" maxlength="60" placeholder="Pelo menos 4 letras/números"
+        style="width:100%;font-family:'Baloo 2';font-size:22px;padding:10px 14px;border:4px solid var(--tinta);border-radius:16px;background:#fff;color:inherit">
+      <p style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Digite pra criar sua conta ou entrar numa que já existe. Deixe em branco pra jogar sem salvar.</p>
       <button class="btn grande" id="btn-comecar">Começar a aventura</button>
+      <p id="aviso-conta" class="aviso" style="margin-top:12px;display:none"></p>
     </div>
   </section>
 
@@ -424,7 +490,7 @@ const estado = {
   apelido:'', tipo:'capivara',
   moedas:60, xp:0,
   fome:72, felicidade:80, energia:90,
-  equipado:[], mochila:[],
+  equipado:[], mochila:[], inventario:{},
   licoesFeitas:[], recordes:{memoria:null, chuva:0},
   recados:[
     {av:'🦔', aut:'Nina_Ouriço', txt:'Terminei a trilha de Biologia! 🎉'},
@@ -441,19 +507,20 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function ganhar(moedas=0, xp=0){
-  estado.moedas += moedas; 
+  estado.moedas += moedas;
   const antes = nivel(); estado.xp += xp;
   atualizarHud();
   if(nivel() > antes) setTimeout(()=>brinde(`🎉 Nível ${nivel()}! Seu bicho está orgulhoso.`), 900);
+  agendarSalvar();
 }
 function atualizarHud(){
   $('#hud-moedas').textContent = estado.moedas;
   $('#hud-nivel').textContent = nivel();
 }
 let brindeTimer;
-function brinde(msg){
+function brinde(msg, duracao=2600){
   const el = $('#brinde'); el.textContent = msg; el.classList.add('ver');
-  clearTimeout(brindeTimer); brindeTimer = setTimeout(()=>el.classList.remove('ver'), 2600);
+  clearTimeout(brindeTimer); brindeTimer = setTimeout(()=>el.classList.remove('ver'), duracao);
 }
 
 /* ---------- 3. NAVEGAÇÃO ---------- */
@@ -464,11 +531,23 @@ function ir(tela, dados){
   if(pararLoops) pararLoops();
   telaAtual = tela;
   if(RENDER[tela]) RENDER[tela](dados);
-  document.querySelectorAll('.tela').forEach(s => s.classList.remove('ativa'));
-  $('#tela-'+tela).classList.add('ativa');
+  document.querySelectorAll('.tela').forEach(s => { s.classList.remove('ativa'); s.style.height = ''; s.style.overflowY = ''; });
+  const secao = $('#tela-'+tela);
+  secao.classList.add('ativa');
   document.querySelectorAll('.aba').forEach(a =>
     a.setAttribute('aria-current', String(a.dataset.ir === tela)));
   window.scrollTo({top:0, behavior:'instant'});
+  // arcade e perfil são desenhados pra caber inteiros acima do rodapé; trilhas e mural podem rolar
+  const semScroll = tela === 'arcade' || tela === 'perfil';
+  document.body.classList.toggle('sem-scroll', semScroll);
+  if(semScroll) ajustarAlturaTela(secao);
+}
+function ajustarAlturaTela(secao){
+  const topoEl = document.querySelector('.topo');
+  const rodapeEl = $('#rodape');
+  const disponivel = rodapeEl.getBoundingClientRect().top - topoEl.getBoundingClientRect().bottom - 12;
+  secao.style.height = Math.max(200, disponivel) + 'px';
+  secao.style.overflowY = 'auto'; // rede de segurança: some aparelho fora do comum não deveria depender disso
 }
 document.querySelectorAll('.aba').forEach(a => a.onclick = () => ir(a.dataset.ir));
 let pararLoops = null;
@@ -525,6 +604,8 @@ RENDER.casa = () => {
 };
 
 /* desgaste suave: o bicho nunca "morre", só fica com saudade */
+// não chama agendarSalvar() aqui de propósito: é desgaste passivo, não ação do
+// jogador — salvar a cada 25s sem ele ter feito nada seria bater no servidor à toa.
 setInterval(()=>{
   estado.fome = lim(estado.fome - 2);
   estado.felicidade = lim(estado.felicidade - 1);
@@ -584,15 +665,25 @@ const TRILHAS = [
   ]},
   { id:'bio', nome:'Biologia', emoji:'🔬', cor:'var(--mata)', licoes:[
     { id:'bio1', emoji:'🧫', titulo:'A célula por dentro', serie:'7º ano',
-      leitura:[
-        'A célula é a menor parte viva de um ser. Você tem cerca de 30 trilhões delas trabalhando agora.',
-        'A membrana controla o que entra e sai. O citoplasma é o gel onde tudo flutua. O <span class="destaque">núcleo</span> guarda o DNA, o manual de instruções.',
-        'As mitocôndrias transformam alimento em energia. Bactérias, ao contrário de nós, não têm núcleo separado: são procariontes.'
-      ],
-      perguntas:[
-        {p:'Onde fica guardado o DNA na célula humana?', alts:['Na membrana','No núcleo','Na mitocôndria','No vacúolo'], certa:1},
-        {p:'Qual organela produz energia?', alts:['Mitocôndria','Ribossomo','Parede celular','Cloroplasto'], certa:0},
-        {p:'Células sem núcleo definido são chamadas de...', alts:['Eucariontes','Vertebradas','Procariontes','Fungos'], certa:2}
+      blocos:[
+        { tipo:'texto', paragrafos:[
+          'A célula é a menor parte viva de um ser. Você tem cerca de 30 trilhões delas trabalhando agora.',
+          'A membrana controla o que entra e sai. O citoplasma é o gel onde tudo flutua. O [[núcleo|Guarda o DNA — o manual de instruções da célula.]] fica protegido no meio dela.',
+          'As [[mitocôndrias|Organelas que transformam o alimento em energia (ATP) — o "motor" da célula.]] fazem esse trabalho em quase toda célula do corpo. Bactérias, ao contrário de nós, não têm núcleo separado: são procariontes.'
+        ]},
+        { tipo:'flashcard', cartas:[
+          {frente:'Núcleo', verso:'Guarda o DNA e comanda as atividades da célula.'},
+          {frente:'Mitocôndria', verso:'Transforma alimento em energia (ATP) — o motor da célula.'},
+          {frente:'Membrana plasmática', verso:'Controla o que entra e sai da célula.'},
+          {frente:'Citoplasma', verso:'Gel onde as organelas flutuam dentro da célula.'}
+        ]},
+        { tipo:'cacapalavras', palavras:['CELULA','NUCLEO','MEMBRANA','CITOPLASMA'] },
+        { tipo:'video', videoId:'L4smfNoMKb8', titulo:'A célula e suas funções' },
+        { tipo:'cloze', frase:'A ___ transforma o alimento em energia para a célula usar.',
+          opcoes:['mitocôndria','membrana','parede celular'], certa:'mitocôndria' },
+        {tipo:'pergunta', p:'Onde fica guardado o DNA na célula humana?', alts:['Na membrana','No núcleo','Na mitocôndria','No vacúolo'], certa:1},
+        {tipo:'pergunta', p:'Qual organela produz energia?', alts:['Mitocôndria','Ribossomo','Parede celular','Cloroplasto'], certa:0},
+        {tipo:'pergunta', p:'Células sem núcleo definido são chamadas de...', alts:['Eucariontes','Vertebradas','Procariontes','Fungos'], certa:2}
       ]},
     { id:'bio2', emoji:'🌱', titulo:'Fotossíntese', serie:'8º ano',
       leitura:[
@@ -657,6 +748,15 @@ const TRILHAS = [
 ];
 const acharLicao = id => TRILHAS.flatMap(t=>t.licoes).find(l=>l.id===id);
 
+// lições antigas (só leitura + perguntas) viram blocos automaticamente — não precisa reescrever
+function blocosDaLicao(l){
+  if(l.blocos) return l.blocos;
+  return [
+    {tipo:'texto', paragrafos:l.leitura},
+    ...l.perguntas.map(p => ({tipo:'pergunta', ...p}))
+  ];
+}
+
 /* ---------- 6. TELA: TRILHAS ---------- */
 RENDER.trilhas = () => {
   $('#tela-trilhas').innerHTML = `
@@ -679,71 +779,237 @@ RENDER.trilhas = () => {
         }).join('')}
         </div></div>`;
     }).join('')}
-    <p class="aviso">Cada lição tem uma leitura curta e um quiz de 3 perguntas. Errou? Sem drama: dá pra refazer quantas vezes quiser.</p>`;
+    <p class="aviso">Cada lição tem leitura, atividades e um quizzinho no final. Errou? Sem drama: dá pra refazer quantas vezes quiser.</p>`;
 };
 
-/* ---------- 7. TELA: LIÇÃO (leitura + quiz) ---------- */
-let quiz = null;
+/* ---------- 7. TELA: LIÇÃO (blocos: texto, flashcard, vídeo, cloze, caça-palavras, pergunta) ---------- */
+let progresso = null;
 RENDER.licao = (id) => {
   const l = acharLicao(id);
-  quiz = {licao:l, i:0, acertos:0, marcas:l.perguntas.map(()=>'')};
+  const blocos = blocosDaLicao(l);
+  progresso = {licao:l, blocos, i:0, acertos:0,
+    totalPerguntas: blocos.filter(b=>b.tipo==='pergunta').length,
+    marcas: blocos.map(()=>'')};
+  mostrarBloco();
+};
+function mostrarBloco(){
+  const b = progresso.blocos[progresso.i];
   $('#tela-licao').innerHTML = `
     <button class="btn pequeno branco" onclick="ir('trilhas')">← Trilhas</button>
-    <div class="titulo-secao"><h2>${l.emoji} ${l.titulo}</h2></div>
-    <div class="sticker leitura">${l.leitura.map(p=>`<p>${p}</p>`).join('')}</div>
-    <button class="btn grande laranja" style="margin-top:16px" onclick="mostrarPergunta()">Fazer o quiz →</button>`;
-};
-function mostrarPergunta(){
-  const q = quiz.licao.perguntas[quiz.i];
-  $('#tela-licao').innerHTML = `
-    <div class="progresso-quiz">${quiz.marcas.map(m=>`<i class="${m}"></i>`).join('')}</div>
-    <div class="sticker">
-      <small style="font-weight:900;opacity:.6">PERGUNTA ${quiz.i+1} DE ${quiz.licao.perguntas.length}</small>
-      <h2 style="font-size:23px;margin:6px 0 16px">${q.p}</h2>
-      <div id="alts">${q.alts.map((a,i)=>
-        `<button class="alternativa" onclick="responder(${i})">${a}</button>`).join('')}</div>
-      <div id="retorno"></div>
-    </div>`;
+    <div class="titulo-secao"><h2>${progresso.licao.emoji} ${progresso.licao.titulo}</h2></div>
+    <div class="progresso-quiz">${progresso.marcas.map(m=>`<i class="${m}"></i>`).join('')}</div>
+    <div id="corpo-bloco"></div>`;
+  INICIAR_BLOCO[b.tipo](b);
 }
-function responder(i){
-  const q = quiz.licao.perguntas[quiz.i];
-  const botoes = document.querySelectorAll('#alts .alternativa');
-  botoes.forEach((b,j)=>{ b.disabled = true;
-    if(j===q.certa) b.classList.add('certa');
-    if(j===i && i!==q.certa) b.classList.add('errada'); });
-  const acertou = i === q.certa;
-  if(acertou) quiz.acertos++;
-  quiz.marcas[quiz.i] = acertou ? 'ok' : 'x';
-  estado.felicidade = lim(estado.felicidade + (acertou?4:1));
-  $('#retorno').innerHTML = `
-    <p style="font-size:16px;margin:14px 0 12px">${acertou
-      ? '✅ Isso aí! Seu bicho deu um pulo.'
-      : '💡 Quase. A resposta certa está em verde — dá uma olhada na leitura de novo.'}</p>
-    <button class="btn grande ${acertou?'':'roxo'}" onclick="proximaPergunta()">
-      ${quiz.i+1 < quiz.licao.perguntas.length ? 'Próxima' : 'Ver resultado'}</button>`;
+function avancarBloco(marca){
+  progresso.marcas[progresso.i] = marca || 'visto';
+  progresso.i++;
+  if(progresso.i < progresso.blocos.length) return mostrarBloco();
+  concluirLicao();
 }
-function proximaPergunta(){
-  quiz.i++;
-  if(quiz.i < quiz.licao.perguntas.length) return mostrarPergunta();
-  const total = quiz.licao.perguntas.length;
-  const primeiraVez = !estado.licoesFeitas.includes(quiz.licao.id);
-  const moedas = quiz.acertos * (primeiraVez ? 10 : 3);
-  const xp = quiz.acertos * (primeiraVez ? 15 : 5);
-  if(primeiraVez && quiz.acertos >= 2) estado.licoesFeitas.push(quiz.licao.id);
+function concluirLicao(){
+  const licao = progresso.licao, total = progresso.totalPerguntas, acertos = progresso.acertos;
+  const meta = Math.ceil(total * 2/3);
+  const primeiraVez = !estado.licoesFeitas.includes(licao.id);
+  const moedas = acertos * (primeiraVez ? 10 : 3);
+  const xp = acertos * (primeiraVez ? 15 : 5);
+  if(primeiraVez && acertos >= meta) estado.licoesFeitas.push(licao.id);
   ganhar(moedas, xp);
   $('#tela-licao').innerHTML = `
     <div class="sticker tilt" style="text-align:center;margin-top:24px">
-      <div style="font-size:56px">${quiz.acertos===total?'🏆':quiz.acertos>=2?'🎉':'💪'}</div>
-      <h2 style="font-size:28px;margin:6px 0">${quiz.acertos} de ${total}</h2>
-      <p style="font-size:15px">${quiz.acertos===total ? 'Gabaritou! Isso vale medalha.'
-        : quiz.acertos>=2 ? 'Boa! Lição concluída.' : 'Faltou pouco. Releia e tente de novo — vale ponto igual.'}</p>
+      <div style="font-size:56px">${acertos===total?'🏆':acertos>=meta?'🎉':'💪'}</div>
+      <h2 style="font-size:28px;margin:6px 0">${acertos} de ${total}</h2>
+      <p style="font-size:15px">${acertos===total ? 'Gabaritou! Isso vale medalha.'
+        : acertos>=meta ? 'Boa! Lição concluída.' : 'Faltou pouco. Releia e tente de novo — vale ponto igual.'}</p>
       <div style="display:flex;gap:10px;justify-content:center;margin:14px 0 18px">
         <span class="chip">🪙 +${moedas}</span><span class="chip">⭐ +${xp}</span>
       </div>
-      <button class="btn grande" onclick="ir('licao','${quiz.licao.id}')">Refazer</button>
+      <button class="btn grande" onclick="ir('licao','${licao.id}')">Refazer</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="ir('trilhas')">Voltar às trilhas</button>
     </div>`;
 }
+
+/* --- bloco: texto (leitura) com termo clicável --- */
+function parseTermos(texto){
+  return texto.replace(/\[\[([^|\]]+)\|([^\]]+)\]\]/g,
+    (_, termo, exp) => `<button class="termo" data-exp="${esc(exp)}" onclick="mostrarTermo(this)">${termo}</button>`);
+}
+function mostrarTermo(el){
+  brinde(el.textContent + ': ' + el.dataset.exp, 5000);
+}
+function iniciarBlocoTexto(b){
+  $('#corpo-bloco').innerHTML = `
+    <div class="sticker leitura">${b.paragrafos.map(p=>`<p>${parseTermos(p)}</p>`).join('')}</div>
+    <button class="btn grande laranja" style="margin-top:16px" onclick="avancarBloco('visto')">Continuar →</button>`;
+}
+
+/* --- bloco: flashcard --- */
+let flashState = null;
+function iniciarBlocoFlashcard(b){
+  flashState = {cartas:b.cartas, i:0, virada:false};
+  pintarFlashcard();
+}
+function pintarFlashcard(){
+  const {cartas, i, virada} = flashState;
+  const c = cartas[i], ultima = i+1 >= cartas.length;
+  $('#corpo-bloco').innerHTML = `
+    <div class="flashcard ${virada?'virada':''}" onclick="virarFlashcard()">
+      <div class="cartao">
+        <div class="face frente">${c.frente}</div>
+        <div class="face verso">${c.verso}</div>
+      </div>
+    </div>
+    <p class="aviso-toque">Toque na carta pra virar · ${i+1}/${cartas.length}</p>
+    <div class="grade" style="margin-top:10px">
+      <button class="btn branco" onclick="navegarFlashcard(-1)" ${i===0?'disabled':''}>← Anterior</button>
+      <button class="btn ${ultima?'laranja':'azul'}" onclick="${ultima?`avancarBloco('visto')`:'navegarFlashcard(1)'}">${ultima?'Continuar →':'Próxima →'}</button>
+    </div>`;
+}
+function virarFlashcard(){
+  flashState.virada = !flashState.virada;
+  document.querySelector('#corpo-bloco .flashcard').classList.toggle('virada', flashState.virada);
+}
+function navegarFlashcard(d){
+  flashState.i += d; flashState.virada = false;
+  pintarFlashcard();
+}
+
+/* --- bloco: vídeo (youtube-nocookie) --- */
+function iniciarBlocoVideo(b){
+  $('#corpo-bloco').innerHTML = `
+    <div class="video-embutido"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(b.videoId)}"
+      title="${esc(b.titulo)}" loading="lazy" allow="encrypted-media" allowfullscreen></iframe></div>
+    <button class="btn grande laranja" style="margin-top:16px" onclick="avancarBloco('visto')">Continuar →</button>`;
+}
+
+/* --- bloco: cloze (frase com lacuna) --- */
+function iniciarBlocoCloze(b){ pintarCloze(b); }
+function pintarCloze(b, escolha){
+  const [antes, depois] = b.frase.split('___');
+  const acertou = escolha === b.certa;
+  $('#corpo-bloco').innerHTML = `
+    <div class="sticker cloze">
+      <p class="frase">${antes}<span class="lacuna ${!escolha?'':acertou?'preenchida':'errada'}">${escolha || '___'}</span>${depois||''}</p>
+      <div class="opcoes">${b.opcoes.map((o,i)=>
+        `<button class="bloco" ${escolha?'disabled':''} onclick="escolherCloze(${i})">${o}</button>`).join('')}</div>
+      ${escolha ? `<button class="btn grande ${acertou?'':'roxo'}" style="margin-top:14px" onclick="avancarBloco('${acertou?'ok':'x'}')">Continuar →</button>` : ''}
+    </div>`;
+}
+function escolherCloze(i){
+  const b = progresso.blocos[progresso.i];
+  pintarCloze(b, b.opcoes[i]);
+}
+
+/* --- bloco: caça-palavras --- */
+let cacaState = null;
+function gerarCacaPalavras(palavras){
+  const tamanho = Math.max(8, Math.min(12, Math.max(...palavras.map(p=>p.length)) + 2));
+  const grade = Array.from({length:tamanho}, () => Array(tamanho).fill(null));
+  const posicoes = [];
+  palavras.forEach(palavra => {
+    for(let tentativa=0; tentativa<200; tentativa++){
+      const vertical = Math.random() < 0.5;
+      const dr = vertical ? 1 : 0, dc = vertical ? 0 : 1;
+      const maxR = vertical ? tamanho - palavra.length : tamanho - 1;
+      const maxC = vertical ? tamanho - 1 : tamanho - palavra.length;
+      if(maxR < 0 || maxC < 0) continue;
+      const r0 = Math.floor(Math.random()*(maxR+1)), c0 = Math.floor(Math.random()*(maxC+1));
+      const celulas = [];
+      let cabe = true;
+      for(let k=0; k<palavra.length; k++){
+        const r=r0+dr*k, c=c0+dc*k, atual=grade[r][c];
+        if(atual && atual!==palavra[k]){ cabe=false; break; }
+        celulas.push([r,c]);
+      }
+      if(cabe){
+        celulas.forEach(([r,c],k)=> grade[r][c]=palavra[k]);
+        posicoes.push({palavra, celulas, achada:false});
+        return;
+      }
+    }
+  });
+  const LETRAS = 'AEIOBCDFGHLMNRST';
+  for(let r=0;r<tamanho;r++) for(let c=0;c<tamanho;c++)
+    if(!grade[r][c]) grade[r][c] = LETRAS[Math.floor(Math.random()*LETRAS.length)];
+  return {tamanho, grade, posicoes, selecao:[]};
+}
+function iniciarBlocoCacaPalavras(b){
+  cacaState = gerarCacaPalavras(b.palavras);
+  pintarCaca();
+}
+function pintarCaca(){
+  const {tamanho, grade, posicoes, selecao} = cacaState;
+  $('#corpo-bloco').innerHTML = `
+    <div class="lista-palavras">${posicoes.map(p=>`<span class="chip ${p.achada?'achada':''}">${p.palavra}</span>`).join('')}</div>
+    <div class="grade-palavras" style="grid-template-columns:repeat(${tamanho},1fr)">
+      ${grade.map((linha,r)=>linha.map((letra,c)=>{
+        const achada = posicoes.some(p=>p.achada && p.celulas.some(([pr,pc])=>pr===r&&pc===c));
+        const selecionada = selecao.some(([sr,sc])=>sr===r&&sc===c);
+        return `<button class="${achada?'achada':selecionada?'selecionada':''}" onclick="tocarCaca(${r},${c})">${letra}</button>`;
+      }).join('')).join('')}
+    </div>
+    <div class="grade">
+      <button class="btn branco" onclick="pularCaca()">Pular</button>
+      <button class="btn laranja" ${posicoes.every(p=>p.achada)?'':'disabled'} onclick="avancarBloco('visto')">Continuar →</button>
+    </div>`;
+}
+function tocarCaca(r,c){
+  if(cacaState.selecao.length===2) cacaState.selecao.length=0;
+  cacaState.selecao.push([r,c]);
+  if(cacaState.selecao.length===2) checarSelecaoCaca();
+  pintarCaca();
+}
+function checarSelecaoCaca(){
+  const [[r0,c0],[r1,c1]] = cacaState.selecao;
+  if(r0!==r1 && c0!==c1){ cacaState.selecao=[]; return; }
+  const dr = Math.sign(r1-r0), dc = Math.sign(c1-c0);
+  const dist = Math.max(Math.abs(r1-r0), Math.abs(c1-c0));
+  const letras = Array.from({length:dist+1}, (_,k)=> cacaState.grade[r0+dr*k][c0+dc*k]).join('');
+  const alvo = cacaState.posicoes.find(p => !p.achada &&
+    (p.palavra===letras || p.palavra===[...letras].reverse().join('')));
+  if(alvo){ alvo.achada=true; brinde('Achou: '+alvo.palavra+'! 🔎'); }
+  cacaState.selecao = [];
+}
+function pularCaca(){
+  cacaState.posicoes.forEach(p => p.achada = true);
+  avancarBloco('visto');
+}
+
+/* --- bloco: pergunta (quiz) --- */
+function iniciarBlocoPergunta(b){ pintarPergunta(b); }
+function pintarPergunta(b, respondidoIdx){
+  const respondido = respondidoIdx !== undefined;
+  $('#corpo-bloco').innerHTML = `
+    <div class="sticker">
+      <h2 style="font-size:23px;margin:6px 0 16px">${b.p}</h2>
+      <div id="alts">${b.alts.map((a,i)=>{
+        let cls = 'alternativa';
+        if(respondido){ if(i===b.certa) cls+=' certa'; else if(i===respondidoIdx) cls+=' errada'; }
+        return `<button class="${cls}" ${respondido?'disabled':''} onclick="responderBloco(${i})">${a}</button>`;
+      }).join('')}</div>
+      <div id="retorno">${!respondido ? '' : `
+        <p style="font-size:16px;margin:14px 0 12px">${respondidoIdx===b.certa
+          ? '✅ Isso aí! Seu bicho deu um pulo.'
+          : '💡 Quase. A resposta certa está em verde — dá uma olhada de novo.'}</p>
+        <button class="btn grande ${respondidoIdx===b.certa?'':'roxo'}" onclick="avancarBloco('${respondidoIdx===b.certa?'ok':'x'}')">Continuar →</button>`}</div>
+    </div>`;
+}
+function responderBloco(i){
+  const b = progresso.blocos[progresso.i];
+  const acertou = i===b.certa;
+  if(acertou) progresso.acertos++;
+  estado.felicidade = lim(estado.felicidade + (acertou?4:1));
+  pintarPergunta(b, i);
+}
+
+const INICIAR_BLOCO = {
+  texto: iniciarBlocoTexto,
+  flashcard: iniciarBlocoFlashcard,
+  video: iniciarBlocoVideo,
+  cloze: iniciarBlocoCloze,
+  cacapalavras: iniciarBlocoCacaPalavras,
+  pergunta: iniciarBlocoPergunta
+};
 
 /* ---------- 8. TELA: ARCADE ---------- */
 RENDER.arcade = () => {
@@ -806,10 +1072,22 @@ function jogoChuva(){
   $('#tela-arcade').innerHTML = `
     <button class="btn pequeno branco" onclick="ir('arcade')">← Arcade</button>
     <div class="titulo-secao"><h2>🍉 Chuva de Frutas</h2><small id="cronometro">30s</small></div>
-    <canvas id="tela-jogo" width="340" height="440"></canvas>
+    <canvas id="tela-jogo"></canvas>
     <p class="aviso" style="margin-top:12px">Arraste o dedo (ou use ← →) para mover a cesta. Fruta vale ponto, lata tira ponto.</p>
     <div id="fim-chuva"></div>`;
   const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
+  // tamanho calculado pelo espaço real que sobra dentro da #tela-arcade (já limitada por
+  // ajustarAlturaTela) — sem isso o canvas fixo de 340x440 estourava em celulares menores
+  const secao = $('#tela-arcade');
+  const voltar = secao.querySelector('.btn.pequeno');
+  const titulo = secao.querySelector('.titulo-secao');
+  const aviso = secao.querySelector('.aviso');
+  const consumidoAntes = titulo.getBoundingClientRect().bottom - voltar.getBoundingClientRect().top;
+  const consumidoDepois = aviso.getBoundingClientRect().height + 12;
+  const bordaCanvas = 8; // canvas tem borda de 4px solid dos dois lados
+  const alturaDisponivel = secao.clientHeight - consumidoAntes - consumidoDepois - bordaCanvas - 20;
+  cv.width = Math.min(360, cv.parentElement.clientWidth);
+  cv.height = Math.max(200, Math.min(420, alturaDisponivel));
   const L = cv.width, A = cv.height;
   let cesta = {x:L/2, l:74}, itens=[], pontos=0, t0=Date.now(), rodando=true, spawn=0, esq=false, dir=false;
   const TIPOS = [{e:'🍉',v:1},{e:'🍎',v:1},{e:'🍌',v:1},{e:'🍓',v:2},{e:'🥫',v:-2}];
@@ -889,6 +1167,7 @@ const ITENS = [
   {id:'cachecol', emoji:'🧣', nome:'Cachecol roxo', preco:110, tipo:'acessorio'}
 ];
 RENDER.loja = () => {
+  const comidasNaMochila = ITENS.filter(i => i.tipo==='comida' && estado.inventario[i.id] > 0);
   $('#tela-loja').innerHTML = `
     <div class="titulo-secao"><h2>Loja da vila</h2><small>você tem 🪙 ${estado.moedas}</small></div>
     <div class="sticker" style="text-align:center;padding-bottom:8px">
@@ -897,6 +1176,9 @@ RENDER.loja = () => {
         <span class="chip">🍖 fome ${lim(estado.fome)}</span><span class="chip">💗 alegria ${lim(estado.felicidade)}</span>
       </div>
     </div>
+    ${comidasNaMochila.length ? `
+      <div class="titulo-secao"><h2 style="font-size:21px">Minha mochila</h2><small>toque pra dar pro bicho</small></div>
+      <div class="grade-3">${comidasNaMochila.map(cartaoMochila).join('')}</div>` : ''}
     <div class="titulo-secao"><h2 style="font-size:21px">Comidas</h2></div>
     <div class="grade-3">${ITENS.filter(i=>i.tipo==='comida').map(cartaoItem).join('')}</div>
     <div class="titulo-secao"><h2 style="font-size:21px">Acessórios</h2></div>
@@ -912,25 +1194,41 @@ function cartaoItem(i){
   return `<div class="item-loja"><span class="emoji">${i.emoji}</span><b>${i.nome}</b>
     <button class="btn pequeno ${cls}" onclick="usarItem('${i.id}')">${rot}</button></div>`;
 }
+function cartaoMochila(i){
+  return `<div class="item-loja"><span class="emoji">${i.emoji}</span><b>${i.nome}</b>
+    <small style="font-weight:900;color:#8A7355">tem ${estado.inventario[i.id]}</small>
+    <button class="btn pequeno laranja" onclick="consumirItem('${i.id}')">Dar pro bicho</button></div>`;
+}
 function usarItem(id){
   const i = ITENS.find(x=>x.id===id);
   if(i.tipo==='acessorio' && estado.mochila.includes(id)){
     const posto = estado.equipado.includes(id);
     estado.equipado = posto ? estado.equipado.filter(x=>x!==id) : [...estado.equipado, id];
     brinde(posto ? 'Guardado na mochila.' : 'Ficou um charme! 😎');
+    agendarSalvar();
     return RENDER.loja();
   }
   if(estado.moedas < i.preco) return brinde('Faltam 🪙 ' + (i.preco-estado.moedas) + '. Bora jogar um minigame!');
   estado.moedas -= i.preco;
   if(i.tipo==='comida'){
-    estado.fome = lim(estado.fome + i.fome);
-    estado.felicidade = lim(estado.felicidade + i.alegria);
-    brinde(i.emoji + ' Nhac! Fome em ' + lim(estado.fome) + '.');
+    estado.inventario[id] = (estado.inventario[id]||0) + 1;
+    brinde(i.emoji + ' Guardado na mochila!');
   } else {
     estado.mochila.push(id); estado.equipado.push(id);
     brinde('Novo acessório desbloqueado!');
   }
   atualizarHud(); RENDER.loja();
+  agendarSalvar();
+}
+function consumirItem(id){
+  const i = ITENS.find(x=>x.id===id);
+  if(!i || !(estado.inventario[id] > 0)) return;
+  estado.inventario[id]--;
+  estado.fome = lim(estado.fome + i.fome);
+  estado.felicidade = lim(estado.felicidade + i.alegria);
+  brinde(i.emoji + ' Nhac! Fome em ' + lim(estado.fome) + '.');
+  atualizarHud(); RENDER.loja();
+  agendarSalvar();
 }
 
 /* ---------- 10. TELA: MURAL (interação segura por blocos) ---------- */
@@ -988,29 +1286,32 @@ const MEDALHAS = [
 RENDER.perfil = () => {
   const totalLicoes = TRILHAS.flatMap(t=>t.licoes).length;
   $('#tela-perfil').innerHTML = `
-    <div class="titulo-secao"><h2>Minha carteirinha</h2></div>
-    <div class="carteirinha">
-      <div class="selo">NÍVEL<br><span style="font-size:22px">${nivel()}</span></div>
+    <div class="titulo-secao" style="margin:12px 4px 8px"><h2 style="font-size:22px">Minha carteirinha</h2></div>
+    <div class="carteirinha" style="padding:14px">
+      <div class="selo" style="width:46px;height:46px;font-size:11px">NÍVEL<br><span style="font-size:18px">${nivel()}</span></div>
       <div style="display:flex;align-items:center;gap:10px">
-        <div style="background:#fff;border:4px solid var(--tinta);border-radius:20px;padding:4px">
-          ${svgBicho(estado.tipo,{equipado:estado.equipado, estilo:'width:96px;height:96px'})}
+        <div style="background:#fff;border:4px solid var(--tinta);border-radius:18px;padding:4px">
+          ${svgBicho(estado.tipo,{equipado:estado.equipado, estilo:'width:76px;height:76px'})}
         </div>
         <div>
-          <h2 style="font-size:26px">${esc(estado.apelido)}</h2>
-          <p style="margin:2px 0 0;font-size:14px;font-weight:900">${BICHOS[estado.tipo].nome} da Bichoteca</p>
+          <h2 style="font-size:22px">${esc(estado.apelido)}</h2>
+          <p style="margin:2px 0 0;font-size:13px;font-weight:900">${BICHOS[estado.tipo].nome} da Bichoteca</p>
         </div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
         <span class="chip">📚 ${estado.licoesFeitas.length}/${totalLicoes} lições</span>
         <span class="chip">🪙 ${estado.moedas}</span>
         <span class="chip">⭐ ${estado.xp} XP</span>
       </div>
     </div>
-    <div class="titulo-secao"><h2 style="font-size:21px">Medalhas</h2><small>${MEDALHAS.filter(m=>m.ok()).length}/${MEDALHAS.length}</small></div>
-    <div class="medalhas">${MEDALHAS.map(m=>
-      `<span class="medalha ${m.ok()?'':'off'}">${m.emoji} ${m.nome}</span>`).join('')}</div>
-    <div style="margin-top:18px"><button class="btn grande rosa" onclick="compartilhar()">🔗 Compartilhar carteirinha</button></div>
-    <p class="aviso" style="margin-top:12px">O link mostra só apelido, bicho, nível e medalhas. Nada de nome real, idade, escola ou cidade.</p>`;
+    <div class="titulo-secao" style="margin:12px 4px 6px"><h2 style="font-size:19px">Conquistas</h2><small>${MEDALHAS.filter(m=>m.ok()).length}/${MEDALHAS.length}</small></div>
+    <div class="trilha-conquistas">${MEDALHAS.map(m=>
+      `<div class="conquista ${m.ok()?'':'bloqueada'}">
+         <div class="bolha">${m.ok()?m.emoji:'🔒'}</div>
+         <span>${m.nome}</span>
+       </div>`).join('')}</div>
+    <div style="margin-top:10px"><button class="btn rosa" style="width:100%" onclick="compartilhar()">🔗 Compartilhar</button></div>
+    <p class="aviso" style="margin-top:8px;padding:8px 12px;font-size:12px">Mostra só apelido, bicho, nível e conquistas — nunca nome real, idade ou escola.</p>`;
 };
 function compartilhar(){
   const texto = `Meu bicho ${estado.apelido} está no nível ${nivel()} na Bichoteca! 🐾`;
@@ -1028,27 +1329,84 @@ function montarEscolha(){
   });
 }
 montarEscolha();
-$('#btn-comecar').onclick = () => {
+$('#btn-comecar').onclick = async () => {
   const nome = $('#campo-nome').value.trim();
+  const senha = $('#campo-senha').value;
+  const aviso = $('#aviso-conta');
   estado.apelido = nome || BICHOS[estado.tipo].nome;
+  if(senha){
+    if(senha.length < 4){
+      aviso.textContent = 'A senha precisa ter pelo menos 4 caracteres. Ou deixe em branco pra jogar sem salvar.';
+      aviso.style.display = 'block';
+      return;
+    }
+    $('#btn-comecar').disabled = true;
+    aviso.style.display = 'none';
+    try{
+      await entrarNoServidor(estado.apelido, senha);
+      await carregarDoServidor();
+      logado = true;
+    }catch(e){
+      $('#btn-comecar').disabled = false;
+      aviso.textContent = e.message || 'Não deu pra entrar. Confira a senha ou tente sem ela.';
+      aviso.style.display = 'block';
+      return;
+    }
+  }
   $('#topo').hidden = false; $('#rodape').hidden = false;
   atualizarHud();
   brinde('Bem-vindo à Bichoteca, ' + estado.apelido + '! 🐾');
   ir('casa');
 };
 $('#campo-nome').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-comecar').click(); });
+$('#campo-senha').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-comecar').click(); });
 
-/* ---------- 13. DADOS: onde plugar o back-end na hospedagem ----------
-   O protótipo guarda tudo na memória (recarregou, zerou).
-   Na Hostinger, crie /api/estado.php lendo e gravando no MySQL e troque
-   as duas funções abaixo. É o único ponto do código que precisa mudar. */
-async function salvarNoServidor(){
-  // await fetch('api/estado.php', {method:'POST', headers:{'Content-Type':'application/json'},
-  //   body: JSON.stringify(estado)});
+/* ---------- 13. DADOS: conta opcional (salvar/carregar progresso no servidor) ----------
+   Sem senha no onboarding, o jogo continua 100% local (nada muda aqui).
+   Com senha, usa o back-end opcional (api/estado.php) documentado no README. */
+let logado = false;
+async function entrarNoServidor(apelido, senha){
+  const r = await fetch('api/estado.php?acao=entrar', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({apelido, senha})
+  });
+  const dados = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(dados.erro || 'Não deu pra entrar. Tente de novo.');
+  return dados;
 }
 async function carregarDoServidor(){
-  // const r = await fetch('api/estado.php'); Object.assign(estado, await r.json());
+  try{
+    const r = await fetch('api/estado.php?acao=carregar', {cache:'no-store'});
+    if(!r.ok) return false;
+    Object.assign(estado, await r.json());
+    return true;
+  }catch(e){ return false; }
 }
+let salvarTimer;
+function agendarSalvar(){
+  if(!logado) return;
+  clearTimeout(salvarTimer);
+  salvarTimer = setTimeout(salvarNoServidor, 2000);
+}
+async function salvarNoServidor(){
+  try{
+    await fetch('api/estado.php?acao=salvar', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(estado)
+    });
+  }catch(e){ /* offline: o jogo continua local, tenta salvar de novo na próxima ação */ }
+}
+
+/* sessão de retorno: se o navegador já tem um login válido, pula o onboarding */
+(async () => {
+  const restaurado = await carregarDoServidor();
+  if(restaurado && estado.apelido){
+    logado = true;
+    $('#topo').hidden = false; $('#rodape').hidden = false;
+    atualizarHud();
+    ir('casa');
+  }
+})();
 
 /* ---------- 14. PWA: instalar como aplicativo ---------- */
 if('serviceWorker' in navigator){
