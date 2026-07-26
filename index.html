@@ -346,7 +346,12 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--tint
       <input id="campo-nome" maxlength="14" placeholder="Ex.: Tobias"
         style="width:100%;font-family:'Baloo 2';font-size:22px;padding:10px 14px;border:4px solid var(--tinta);border-radius:16px;background:#fff;color:inherit">
       <p style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Nada de nome verdadeiro, sobrenome ou escola. Aqui a gente usa apelido de bicho.</p>
+      <label for="campo-pin" style="display:block;font-family:'Baloo 2';font-size:20px;margin-bottom:6px">PIN de 4 números (opcional)</label>
+      <input id="campo-pin" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="Ex.: 1234"
+        style="width:100%;font-family:'Baloo 2';font-size:22px;padding:10px 14px;border:4px solid var(--tinta);border-radius:16px;background:#fff;color:inherit">
+      <p style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Só se você quiser salvar o progresso e continuar depois. Sem PIN, o jogo funciona igual, só que não salva.</p>
       <button class="btn grande" id="btn-comecar">Começar a aventura</button>
+      <p id="aviso-conta" class="aviso" style="margin-top:12px;display:none"></p>
     </div>
   </section>
 
@@ -495,10 +500,11 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function ganhar(moedas=0, xp=0){
-  estado.moedas += moedas; 
+  estado.moedas += moedas;
   const antes = nivel(); estado.xp += xp;
   atualizarHud();
   if(nivel() > antes) setTimeout(()=>brinde(`🎉 Nível ${nivel()}! Seu bicho está orgulhoso.`), 900);
+  agendarSalvar();
 }
 function atualizarHud(){
   $('#hud-moedas').textContent = estado.moedas;
@@ -1157,6 +1163,7 @@ function usarItem(id){
     const posto = estado.equipado.includes(id);
     estado.equipado = posto ? estado.equipado.filter(x=>x!==id) : [...estado.equipado, id];
     brinde(posto ? 'Guardado na mochila.' : 'Ficou um charme! 😎');
+    agendarSalvar();
     return RENDER.loja();
   }
   if(estado.moedas < i.preco) return brinde('Faltam 🪙 ' + (i.preco-estado.moedas) + '. Bora jogar um minigame!');
@@ -1170,6 +1177,7 @@ function usarItem(id){
     brinde('Novo acessório desbloqueado!');
   }
   atualizarHud(); RENDER.loja();
+  agendarSalvar();
 }
 
 /* ---------- 10. TELA: MURAL (interação segura por blocos) ---------- */
@@ -1267,27 +1275,84 @@ function montarEscolha(){
   });
 }
 montarEscolha();
-$('#btn-comecar').onclick = () => {
+$('#btn-comecar').onclick = async () => {
   const nome = $('#campo-nome').value.trim();
+  const pin = $('#campo-pin').value.trim();
+  const aviso = $('#aviso-conta');
   estado.apelido = nome || BICHOS[estado.tipo].nome;
+  if(pin){
+    if(!/^\d{4}$/.test(pin)){
+      aviso.textContent = 'O PIN precisa ter 4 números. Ou deixe em branco pra jogar sem salvar.';
+      aviso.style.display = 'block';
+      return;
+    }
+    $('#btn-comecar').disabled = true;
+    aviso.style.display = 'none';
+    try{
+      await entrarNoServidor(estado.apelido, pin);
+      await carregarDoServidor();
+      logado = true;
+    }catch(e){
+      $('#btn-comecar').disabled = false;
+      aviso.textContent = e.message || 'Não deu pra entrar. Confira o PIN ou tente sem ele.';
+      aviso.style.display = 'block';
+      return;
+    }
+  }
   $('#topo').hidden = false; $('#rodape').hidden = false;
   atualizarHud();
   brinde('Bem-vindo à Bichoteca, ' + estado.apelido + '! 🐾');
   ir('casa');
 };
 $('#campo-nome').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-comecar').click(); });
+$('#campo-pin').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-comecar').click(); });
 
-/* ---------- 13. DADOS: onde plugar o back-end na hospedagem ----------
-   O protótipo guarda tudo na memória (recarregou, zerou).
-   Na Hostinger, crie /api/estado.php lendo e gravando no MySQL e troque
-   as duas funções abaixo. É o único ponto do código que precisa mudar. */
-async function salvarNoServidor(){
-  // await fetch('api/estado.php', {method:'POST', headers:{'Content-Type':'application/json'},
-  //   body: JSON.stringify(estado)});
+/* ---------- 13. DADOS: conta opcional (salvar/carregar progresso no servidor) ----------
+   Sem PIN no onboarding, o jogo continua 100% local (nada muda aqui).
+   Com PIN, usa o back-end opcional (api/estado.php) documentado no README. */
+let logado = false;
+async function entrarNoServidor(apelido, pin){
+  const r = await fetch('api/estado.php?acao=entrar', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({apelido, pin})
+  });
+  const dados = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(dados.erro || 'Não deu pra entrar. Tente de novo.');
+  return dados;
 }
 async function carregarDoServidor(){
-  // const r = await fetch('api/estado.php'); Object.assign(estado, await r.json());
+  try{
+    const r = await fetch('api/estado.php?acao=carregar', {cache:'no-store'});
+    if(!r.ok) return false;
+    Object.assign(estado, await r.json());
+    return true;
+  }catch(e){ return false; }
 }
+let salvarTimer;
+function agendarSalvar(){
+  if(!logado) return;
+  clearTimeout(salvarTimer);
+  salvarTimer = setTimeout(salvarNoServidor, 2000);
+}
+async function salvarNoServidor(){
+  try{
+    await fetch('api/estado.php?acao=salvar', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(estado)
+    });
+  }catch(e){ /* offline: o jogo continua local, tenta salvar de novo na próxima ação */ }
+}
+
+/* sessão de retorno: se o navegador já tem um login válido, pula o onboarding */
+(async () => {
+  const restaurado = await carregarDoServidor();
+  if(restaurado && estado.apelido){
+    logado = true;
+    $('#topo').hidden = false; $('#rodape').hidden = false;
+    atualizarHud();
+    ir('casa');
+  }
+})();
 
 /* ---------- 14. PWA: instalar como aplicativo ---------- */
 if('serviceWorker' in navigator){
