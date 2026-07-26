@@ -36,6 +36,7 @@ icone-*.png           ícones do app instalado
 .htaccess             HTTPS forçado, cache e proteção das credenciais
 api/
   estado.php          back-end opcional: login por apelido + PIN, salvar progresso
+  install.php          roda uma vez só: cria a tabela do banco sozinho
   config.example.php  modelo — copie para config.php e preencha (não versionado)
 ```
 
@@ -52,8 +53,9 @@ api/
 - Mural de recados montados por blocos prontos
 - Carteirinha compartilhável com medalhas
 - Instalável como aplicativo no Android e no iOS
+- Salvar progresso (opcional): com apelido + PIN de 4 números, o jogo sincroniza com o banco — sem PIN, continua 100% local
 
-**Ainda não funciona:** salvar progresso. Hoje o estado mora na memória — recarregou, zerou. O `api/estado.php` está pronto para resolver isso (veja abaixo).
+**Ainda não funciona:** perfil público do aluno e painel do responsável/professor — veja "Próximos passos".
 
 ---
 
@@ -118,7 +120,15 @@ Premium e Business têm acesso SSH, e aí o `rsync` fica mais rápido e mais seg
 
 ## Ligando o back-end (opcional)
 
-No hPanel, crie o banco em *Bancos de dados MySQL* e rode no phpMyAdmin:
+No hPanel, crie o banco em *Bancos de dados MySQL*. Depois:
+
+```bash
+cp api/config.example.php api/config.php   # e preencha com host/banco/usuário/senha do hPanel
+```
+
+**Caminho fácil:** abra `seusite.com/api/install.php` no navegador uma vez — ele cria a tabela `jogadores` sozinho (é seguro rodar mais de uma vez) — e apague o arquivo do servidor depois.
+
+**Caminho manual:** rode isto no phpMyAdmin em vez de usar o `install.php`:
 
 ```sql
 CREATE TABLE jogadores (
@@ -131,13 +141,7 @@ CREATE TABLE jogadores (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-Depois:
-
-```bash
-cp api/config.example.php api/config.php   # e preencha as credenciais
-```
-
-E descomente `salvarNoServidor()` e `carregarDoServidor()` no fim do `index.html` — é o **único** ponto do front-end que muda.
+Com o banco pronto, o front-end já está ligado: a tela inicial tem um campo de PIN opcional — sem PIN, o jogo continua 100% local igual antes; com PIN, `entrarNoServidor()`/`carregarDoServidor()`/`salvarNoServidor()` (fim do `index.html`) cuidam de criar a conta, restaurar progresso salvo e sincronizar a cada ação relevante (lição concluída, item comprado, recado publicado).
 
 > ⚠️ **Moedas e XP hoje são calculados no navegador.** Qualquer aluno com o console aberto vira milionário. Quando isso passar a valer alguma coisa (ranking, item raro), a conta precisa subir para o PHP: o cliente manda *"respondi a alternativa 2 da pergunta 3 da lição bio1"*, o servidor confere e credita.
 
@@ -145,10 +149,9 @@ E descomente `salvarNoServidor()` e `carregarDoServidor()` no fim do `index.html
 
 ## Próximos passos
 
-1. **Salvar progresso** — sem isso não dá para testar com aluno de verdade
-2. **Painel do responsável/professor** — quem estudou o quê, quanto tempo, onde errou. É isso que faz escola pagar
-3. **Conteúdo de verdade** — as 10 lições são amostra. Ancorar nas habilidades da BNCC (`EF08HI01` e afins) desde já organiza o currículo e vira argumento de venda
-4. **Minigames por matéria** — arrastar palavras para classes gramaticais, montar a célula, linha do tempo embaralhada
-5. **Lojas de aplicativo** — o mesmo código entra num invólucro (Capacitor ou Bubblewrap/TWA) e sobe na Play Store sem reescrever nada. Foi por isso que já saiu como PWA
+1. **Painel do responsável/professor** — quem estudou o quê, quanto tempo, onde errou. É isso que faz escola pagar
+2. **Conteúdo de verdade** — só `bio1` usa os blocos novos (flashcard, vídeo, cloze, caça-palavras); as outras 9 lições ainda são só leitura + quiz. Ancorar nas habilidades da BNCC (`EF08HI01` e afins) desde já organiza o currículo e vira argumento de venda
+3. **Conquistas em sequência** — trocar a carteirinha estática por selos/conquistas no estilo Neopets
+4. **Lojas de aplicativo** — o mesmo código entra num invólucro (Capacitor ou Bubblewrap/TWA) e sobe na Play Store sem reescrever nada. Foi por isso que já saiu como PWA
 
 VPS e Node só quando o número de alunos justificar. Enquanto for protótipo e piloto, hospedagem compartilhada com PHP dá conta com folga.
