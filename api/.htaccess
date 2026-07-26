@@ -1,0 +1,5 @@
+# Ninguém acessa o config.php pelo navegador
+<FilesMatch "^config\.php$">
+  Require all denied
+</FilesMatch>
+Options -Indexes

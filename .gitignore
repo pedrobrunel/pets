@@ -1,0 +1,15 @@
+# credenciais — nunca versionar
+api/config.php
+
+# lixo de sistema
+.DS_Store
+Thumbs.db
+*.log
+
+# editores
+.vscode/
+.idea/
+
+# uploads e backups da hospedagem
+/backup/
+*.zip

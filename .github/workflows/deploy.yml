@@ -1,0 +1,52 @@
+name: Publicar na Hostinger
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # permite disparar na mão, pela aba Actions
+
+concurrency:                # se você empurrar 3 commits seguidos, só o último sobe
+  group: deploy-producao
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    name: Enviar para pets.pedro.marketing
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      # O service worker guarda os arquivos no celular do aluno. Se o nome do
+      # cache não mudar, ele continua servindo a versão velha para sempre.
+      # Aqui carimbamos o cache com o hash do commit — toda publicação se
+      # anuncia sozinha e o aluno recebe a versão nova na próxima visita.
+      - name: Carimbar a versão no service worker
+        run: |
+          VERSAO="${GITHUB_SHA::7}"
+          sed -i "s/bichoteca-v1/bichoteca-$VERSAO/" sw.js
+          echo "Cache publicado como bichoteca-$VERSAO"
+
+      - name: Enviar por FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server:   ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps          # troque para ftp se der erro de TLS
+          port: 21
+          local-dir: ./
+          server-dir: ${{ vars.FTP_DIR }}
+
+          # NUNCA ligue isto. Ele apaga do servidor tudo que não está no repo,
+          # e o api/config.php (com a senha do banco) não está no repo.
+          dangerous-clean-slate: false
+
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            README.md
+            LEIA-ME.md
+            api/config.php

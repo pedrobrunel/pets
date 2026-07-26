@@ -1,0 +1,32 @@
+# Bichoteca — regras para Apache/LiteSpeed (Hostinger compartilhada)
+
+# 1. Força HTTPS (o service worker e o "Instalar aplicativo" exigem)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} off
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+</IfModule>
+
+# 2. Nunca cachear o service worker: senão a atualização não chega no aluno
+<FilesMatch "sw\.js$">
+  Header set Cache-Control "no-cache, no-store, must-revalidate"
+</FilesMatch>
+
+# 3. Cache longo para ícones
+<FilesMatch "\.(png|svg|woff2)$">
+  Header set Cache-Control "public, max-age=2592000"
+</FilesMatch>
+
+# 4. Bloqueia acesso direto às credenciais
+<FilesMatch "^config\.(php|example\.php)$">
+  Require all denied
+</FilesMatch>
+
+# 4b. O deploy por FTP cria este índice de arquivos no servidor.
+#     Ele é legível por qualquer um se ficar exposto.
+<FilesMatch "^\.ftp-deploy-sync-state\.json$">
+  Require all denied
+</FilesMatch>
+
+# 5. Some com a listagem de diretórios
+Options -Indexes
