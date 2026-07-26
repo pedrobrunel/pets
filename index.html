@@ -41,6 +41,9 @@ body{
   min-height:100dvh;
   overflow-x:hidden;
 }
+/* arcade e perfil são compactos de propósito: sem isso o corpo rola por baixo do rodapé fixo */
+body.sem-scroll{height:100dvh;overflow:hidden}
+body.sem-scroll #app{padding-bottom:0}
 h1,h2,h3,.display{font-family:'Baloo 2',cursive;font-weight:800;margin:0;line-height:1.05}
 button{font-family:inherit;font-weight:900;color:inherit;cursor:pointer}
 img{max-width:100%}
@@ -291,7 +294,7 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 
 /* ---------- minigames ---------- */
 #tabuleiro-memoria{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.carta{aspect-ratio:3/4;border:var(--borda) solid var(--tinta);border-radius:14px;background:var(--jabuti);
+.carta{aspect-ratio:1;border:var(--borda) solid var(--tinta);border-radius:14px;background:var(--jabuti);
   box-shadow:var(--sombra-p);font-size:28px;display:grid;place-items:center;color:transparent}
 .carta.virada{background:#fff;color:inherit}
 .carta.par{background:var(--mata);color:#fff}
@@ -308,10 +311,14 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--tint
 .carteirinha .selo{position:absolute;top:12px;right:14px;background:#fff;border:3px solid var(--tinta);
   border-radius:50%;width:56px;height:56px;display:grid;place-items:center;font-family:'Baloo 2';
   font-size:12px;line-height:1;text-align:center;transform:rotate(10deg)}
-.medalhas{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.medalha{background:#fff;border:3px solid var(--tinta);border-radius:14px;padding:8px 10px;
-  font-size:12px;font-weight:900;box-shadow:0 3px 0 var(--tinta);display:flex;align-items:center;gap:6px}
-.medalha.off{opacity:.42;filter:grayscale(1)}
+.trilha-conquistas{display:flex;overflow-x:auto;padding:6px 4px 6px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+.conquista{flex:0 0 auto;width:70px;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;scroll-snap-align:start}
+.conquista::before{content:"";position:absolute;top:22px;right:50%;width:100%;height:4px;background:var(--tinta);z-index:-1}
+.conquista:first-child::before{display:none}
+.conquista .bolha{width:44px;height:44px;border-radius:50%;background:var(--moeda);border:3px solid var(--tinta);
+  display:grid;place-items:center;font-size:20px;box-shadow:0 3px 0 var(--tinta)}
+.conquista.bloqueada .bolha{background:#E4DCC8;filter:grayscale(1);opacity:.6}
+.conquista span{font-size:10px;font-weight:900;text-align:center;line-height:1.15}
 
 /* ---------- balão / aviso ---------- */
 #brinde{
@@ -345,11 +352,11 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--tint
       <label for="campo-nome" style="display:block;font-family:'Baloo 2';font-size:20px;margin-bottom:6px">Como seu bicho se chama?</label>
       <input id="campo-nome" maxlength="14" placeholder="Ex.: Tobias"
         style="width:100%;font-family:'Baloo 2';font-size:22px;padding:10px 14px;border:4px solid var(--tinta);border-radius:16px;background:#fff;color:inherit">
-      <p style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Nada de nome verdadeiro, sobrenome ou escola. Aqui a gente usa apelido de bicho.</p>
-      <label for="campo-pin" style="display:block;font-family:'Baloo 2';font-size:20px;margin-bottom:6px">PIN de 4 números (opcional)</label>
-      <input id="campo-pin" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="Ex.: 1234"
+      <p style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Nada de nome verdadeiro, sobrenome ou escola. Aqui a gente usa apelido de bicho — e é esse apelido que vira seu usuário de login.</p>
+      <label for="campo-senha" style="display:block;font-family:'Baloo 2';font-size:20px;margin-bottom:6px">Senha</label>
+      <input id="campo-senha" type="password" maxlength="60" placeholder="Pelo menos 4 letras/números"
         style="width:100%;font-family:'Baloo 2';font-size:22px;padding:10px 14px;border:4px solid var(--tinta);border-radius:16px;background:#fff;color:inherit">
-      <p style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Só se você quiser salvar o progresso e continuar depois. Sem PIN, o jogo funciona igual, só que não salva.</p>
+      <p style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Digite pra criar sua conta ou entrar numa que já existe. Deixe em branco pra jogar sem salvar.</p>
       <button class="btn grande" id="btn-comecar">Começar a aventura</button>
       <p id="aviso-conta" class="aviso" style="margin-top:12px;display:none"></p>
     </div>
@@ -483,7 +490,7 @@ const estado = {
   apelido:'', tipo:'capivara',
   moedas:60, xp:0,
   fome:72, felicidade:80, energia:90,
-  equipado:[], mochila:[],
+  equipado:[], mochila:[], inventario:{},
   licoesFeitas:[], recordes:{memoria:null, chuva:0},
   recados:[
     {av:'🦔', aut:'Nina_Ouriço', txt:'Terminei a trilha de Biologia! 🎉'},
@@ -524,11 +531,23 @@ function ir(tela, dados){
   if(pararLoops) pararLoops();
   telaAtual = tela;
   if(RENDER[tela]) RENDER[tela](dados);
-  document.querySelectorAll('.tela').forEach(s => s.classList.remove('ativa'));
-  $('#tela-'+tela).classList.add('ativa');
+  document.querySelectorAll('.tela').forEach(s => { s.classList.remove('ativa'); s.style.height = ''; s.style.overflowY = ''; });
+  const secao = $('#tela-'+tela);
+  secao.classList.add('ativa');
   document.querySelectorAll('.aba').forEach(a =>
     a.setAttribute('aria-current', String(a.dataset.ir === tela)));
   window.scrollTo({top:0, behavior:'instant'});
+  // arcade e perfil são desenhados pra caber inteiros acima do rodapé; trilhas e mural podem rolar
+  const semScroll = tela === 'arcade' || tela === 'perfil';
+  document.body.classList.toggle('sem-scroll', semScroll);
+  if(semScroll) ajustarAlturaTela(secao);
+}
+function ajustarAlturaTela(secao){
+  const topoEl = document.querySelector('.topo');
+  const rodapeEl = $('#rodape');
+  const disponivel = rodapeEl.getBoundingClientRect().top - topoEl.getBoundingClientRect().bottom - 12;
+  secao.style.height = Math.max(200, disponivel) + 'px';
+  secao.style.overflowY = 'auto'; // rede de segurança: some aparelho fora do comum não deveria depender disso
 }
 document.querySelectorAll('.aba').forEach(a => a.onclick = () => ir(a.dataset.ir));
 let pararLoops = null;
@@ -585,6 +604,8 @@ RENDER.casa = () => {
 };
 
 /* desgaste suave: o bicho nunca "morre", só fica com saudade */
+// não chama agendarSalvar() aqui de propósito: é desgaste passivo, não ação do
+// jogador — salvar a cada 25s sem ele ter feito nada seria bater no servidor à toa.
 setInterval(()=>{
   estado.fome = lim(estado.fome - 2);
   estado.felicidade = lim(estado.felicidade - 1);
@@ -1051,10 +1072,22 @@ function jogoChuva(){
   $('#tela-arcade').innerHTML = `
     <button class="btn pequeno branco" onclick="ir('arcade')">← Arcade</button>
     <div class="titulo-secao"><h2>🍉 Chuva de Frutas</h2><small id="cronometro">30s</small></div>
-    <canvas id="tela-jogo" width="340" height="440"></canvas>
+    <canvas id="tela-jogo"></canvas>
     <p class="aviso" style="margin-top:12px">Arraste o dedo (ou use ← →) para mover a cesta. Fruta vale ponto, lata tira ponto.</p>
     <div id="fim-chuva"></div>`;
   const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
+  // tamanho calculado pelo espaço real que sobra dentro da #tela-arcade (já limitada por
+  // ajustarAlturaTela) — sem isso o canvas fixo de 340x440 estourava em celulares menores
+  const secao = $('#tela-arcade');
+  const voltar = secao.querySelector('.btn.pequeno');
+  const titulo = secao.querySelector('.titulo-secao');
+  const aviso = secao.querySelector('.aviso');
+  const consumidoAntes = titulo.getBoundingClientRect().bottom - voltar.getBoundingClientRect().top;
+  const consumidoDepois = aviso.getBoundingClientRect().height + 12;
+  const bordaCanvas = 8; // canvas tem borda de 4px solid dos dois lados
+  const alturaDisponivel = secao.clientHeight - consumidoAntes - consumidoDepois - bordaCanvas - 20;
+  cv.width = Math.min(360, cv.parentElement.clientWidth);
+  cv.height = Math.max(200, Math.min(420, alturaDisponivel));
   const L = cv.width, A = cv.height;
   let cesta = {x:L/2, l:74}, itens=[], pontos=0, t0=Date.now(), rodando=true, spawn=0, esq=false, dir=false;
   const TIPOS = [{e:'🍉',v:1},{e:'🍎',v:1},{e:'🍌',v:1},{e:'🍓',v:2},{e:'🥫',v:-2}];
@@ -1134,6 +1167,7 @@ const ITENS = [
   {id:'cachecol', emoji:'🧣', nome:'Cachecol roxo', preco:110, tipo:'acessorio'}
 ];
 RENDER.loja = () => {
+  const comidasNaMochila = ITENS.filter(i => i.tipo==='comida' && estado.inventario[i.id] > 0);
   $('#tela-loja').innerHTML = `
     <div class="titulo-secao"><h2>Loja da vila</h2><small>você tem 🪙 ${estado.moedas}</small></div>
     <div class="sticker" style="text-align:center;padding-bottom:8px">
@@ -1142,6 +1176,9 @@ RENDER.loja = () => {
         <span class="chip">🍖 fome ${lim(estado.fome)}</span><span class="chip">💗 alegria ${lim(estado.felicidade)}</span>
       </div>
     </div>
+    ${comidasNaMochila.length ? `
+      <div class="titulo-secao"><h2 style="font-size:21px">Minha mochila</h2><small>toque pra dar pro bicho</small></div>
+      <div class="grade-3">${comidasNaMochila.map(cartaoMochila).join('')}</div>` : ''}
     <div class="titulo-secao"><h2 style="font-size:21px">Comidas</h2></div>
     <div class="grade-3">${ITENS.filter(i=>i.tipo==='comida').map(cartaoItem).join('')}</div>
     <div class="titulo-secao"><h2 style="font-size:21px">Acessórios</h2></div>
@@ -1157,6 +1194,11 @@ function cartaoItem(i){
   return `<div class="item-loja"><span class="emoji">${i.emoji}</span><b>${i.nome}</b>
     <button class="btn pequeno ${cls}" onclick="usarItem('${i.id}')">${rot}</button></div>`;
 }
+function cartaoMochila(i){
+  return `<div class="item-loja"><span class="emoji">${i.emoji}</span><b>${i.nome}</b>
+    <small style="font-weight:900;color:#8A7355">tem ${estado.inventario[i.id]}</small>
+    <button class="btn pequeno laranja" onclick="consumirItem('${i.id}')">Dar pro bicho</button></div>`;
+}
 function usarItem(id){
   const i = ITENS.find(x=>x.id===id);
   if(i.tipo==='acessorio' && estado.mochila.includes(id)){
@@ -1169,13 +1211,22 @@ function usarItem(id){
   if(estado.moedas < i.preco) return brinde('Faltam 🪙 ' + (i.preco-estado.moedas) + '. Bora jogar um minigame!');
   estado.moedas -= i.preco;
   if(i.tipo==='comida'){
-    estado.fome = lim(estado.fome + i.fome);
-    estado.felicidade = lim(estado.felicidade + i.alegria);
-    brinde(i.emoji + ' Nhac! Fome em ' + lim(estado.fome) + '.');
+    estado.inventario[id] = (estado.inventario[id]||0) + 1;
+    brinde(i.emoji + ' Guardado na mochila!');
   } else {
     estado.mochila.push(id); estado.equipado.push(id);
     brinde('Novo acessório desbloqueado!');
   }
+  atualizarHud(); RENDER.loja();
+  agendarSalvar();
+}
+function consumirItem(id){
+  const i = ITENS.find(x=>x.id===id);
+  if(!i || !(estado.inventario[id] > 0)) return;
+  estado.inventario[id]--;
+  estado.fome = lim(estado.fome + i.fome);
+  estado.felicidade = lim(estado.felicidade + i.alegria);
+  brinde(i.emoji + ' Nhac! Fome em ' + lim(estado.fome) + '.');
   atualizarHud(); RENDER.loja();
   agendarSalvar();
 }
@@ -1235,29 +1286,32 @@ const MEDALHAS = [
 RENDER.perfil = () => {
   const totalLicoes = TRILHAS.flatMap(t=>t.licoes).length;
   $('#tela-perfil').innerHTML = `
-    <div class="titulo-secao"><h2>Minha carteirinha</h2></div>
-    <div class="carteirinha">
-      <div class="selo">NÍVEL<br><span style="font-size:22px">${nivel()}</span></div>
+    <div class="titulo-secao" style="margin:12px 4px 8px"><h2 style="font-size:22px">Minha carteirinha</h2></div>
+    <div class="carteirinha" style="padding:14px">
+      <div class="selo" style="width:46px;height:46px;font-size:11px">NÍVEL<br><span style="font-size:18px">${nivel()}</span></div>
       <div style="display:flex;align-items:center;gap:10px">
-        <div style="background:#fff;border:4px solid var(--tinta);border-radius:20px;padding:4px">
-          ${svgBicho(estado.tipo,{equipado:estado.equipado, estilo:'width:96px;height:96px'})}
+        <div style="background:#fff;border:4px solid var(--tinta);border-radius:18px;padding:4px">
+          ${svgBicho(estado.tipo,{equipado:estado.equipado, estilo:'width:76px;height:76px'})}
         </div>
         <div>
-          <h2 style="font-size:26px">${esc(estado.apelido)}</h2>
-          <p style="margin:2px 0 0;font-size:14px;font-weight:900">${BICHOS[estado.tipo].nome} da Bichoteca</p>
+          <h2 style="font-size:22px">${esc(estado.apelido)}</h2>
+          <p style="margin:2px 0 0;font-size:13px;font-weight:900">${BICHOS[estado.tipo].nome} da Bichoteca</p>
         </div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
         <span class="chip">📚 ${estado.licoesFeitas.length}/${totalLicoes} lições</span>
         <span class="chip">🪙 ${estado.moedas}</span>
         <span class="chip">⭐ ${estado.xp} XP</span>
       </div>
     </div>
-    <div class="titulo-secao"><h2 style="font-size:21px">Medalhas</h2><small>${MEDALHAS.filter(m=>m.ok()).length}/${MEDALHAS.length}</small></div>
-    <div class="medalhas">${MEDALHAS.map(m=>
-      `<span class="medalha ${m.ok()?'':'off'}">${m.emoji} ${m.nome}</span>`).join('')}</div>
-    <div style="margin-top:18px"><button class="btn grande rosa" onclick="compartilhar()">🔗 Compartilhar carteirinha</button></div>
-    <p class="aviso" style="margin-top:12px">O link mostra só apelido, bicho, nível e medalhas. Nada de nome real, idade, escola ou cidade.</p>`;
+    <div class="titulo-secao" style="margin:12px 4px 6px"><h2 style="font-size:19px">Conquistas</h2><small>${MEDALHAS.filter(m=>m.ok()).length}/${MEDALHAS.length}</small></div>
+    <div class="trilha-conquistas">${MEDALHAS.map(m=>
+      `<div class="conquista ${m.ok()?'':'bloqueada'}">
+         <div class="bolha">${m.ok()?m.emoji:'🔒'}</div>
+         <span>${m.nome}</span>
+       </div>`).join('')}</div>
+    <div style="margin-top:10px"><button class="btn rosa" style="width:100%" onclick="compartilhar()">🔗 Compartilhar</button></div>
+    <p class="aviso" style="margin-top:8px;padding:8px 12px;font-size:12px">Mostra só apelido, bicho, nível e conquistas — nunca nome real, idade ou escola.</p>`;
 };
 function compartilhar(){
   const texto = `Meu bicho ${estado.apelido} está no nível ${nivel()} na Bichoteca! 🐾`;
@@ -1277,24 +1331,24 @@ function montarEscolha(){
 montarEscolha();
 $('#btn-comecar').onclick = async () => {
   const nome = $('#campo-nome').value.trim();
-  const pin = $('#campo-pin').value.trim();
+  const senha = $('#campo-senha').value;
   const aviso = $('#aviso-conta');
   estado.apelido = nome || BICHOS[estado.tipo].nome;
-  if(pin){
-    if(!/^\d{4}$/.test(pin)){
-      aviso.textContent = 'O PIN precisa ter 4 números. Ou deixe em branco pra jogar sem salvar.';
+  if(senha){
+    if(senha.length < 4){
+      aviso.textContent = 'A senha precisa ter pelo menos 4 caracteres. Ou deixe em branco pra jogar sem salvar.';
       aviso.style.display = 'block';
       return;
     }
     $('#btn-comecar').disabled = true;
     aviso.style.display = 'none';
     try{
-      await entrarNoServidor(estado.apelido, pin);
+      await entrarNoServidor(estado.apelido, senha);
       await carregarDoServidor();
       logado = true;
     }catch(e){
       $('#btn-comecar').disabled = false;
-      aviso.textContent = e.message || 'Não deu pra entrar. Confira o PIN ou tente sem ele.';
+      aviso.textContent = e.message || 'Não deu pra entrar. Confira a senha ou tente sem ela.';
       aviso.style.display = 'block';
       return;
     }
@@ -1305,16 +1359,16 @@ $('#btn-comecar').onclick = async () => {
   ir('casa');
 };
 $('#campo-nome').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-comecar').click(); });
-$('#campo-pin').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-comecar').click(); });
+$('#campo-senha').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-comecar').click(); });
 
 /* ---------- 13. DADOS: conta opcional (salvar/carregar progresso no servidor) ----------
-   Sem PIN no onboarding, o jogo continua 100% local (nada muda aqui).
-   Com PIN, usa o back-end opcional (api/estado.php) documentado no README. */
+   Sem senha no onboarding, o jogo continua 100% local (nada muda aqui).
+   Com senha, usa o back-end opcional (api/estado.php) documentado no README. */
 let logado = false;
-async function entrarNoServidor(apelido, pin){
+async function entrarNoServidor(apelido, senha){
   const r = await fetch('api/estado.php?acao=entrar', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({apelido, pin})
+    body: JSON.stringify({apelido, senha})
   });
   const dados = await r.json().catch(()=>({}));
   if(!r.ok) throw new Error(dados.erro || 'Não deu pra entrar. Tente de novo.');
