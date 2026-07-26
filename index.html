@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bichoteca — a vila onde estudar é brincadeira</title>
+<meta name="description" content="Plataforma de estudos gamificada do fundamental ao médio, com bichinhos, minigames e trilhas.">
+<meta name="theme-color" content="#FFE9B8">
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --papel:#FFE9B8;
+  --papel-2:#FFF7E4;
+  --tinta:#33200F;
+  --mata:#2FA84F;
+  --mata-esc:#1E7A38;
+  --manga:#FF8A2B;
+  --jabuti:#8B45B5;
+  --ceu:#45BCE8;
+  --moeda:#FFC93C;
+  --rosa:#FF6FA5;
+  --erro:#E24B3B;
+  --borda:4px;
+  --r:22px;
+  --sombra:0 6px 0 var(--tinta);
+  --sombra-p:0 4px 0 var(--tinta);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:'Nunito',system-ui,sans-serif;
+  font-weight:700;
+  color:var(--tinta);
+  background-color:var(--papel);
+  background-image:
+    radial-gradient(circle at 12px 12px, rgba(51,32,15,.06) 2px, transparent 2px);
+  background-size:36px 36px;
+  min-height:100dvh;
+  overflow-x:hidden;
+}
+h1,h2,h3,.display{font-family:'Baloo 2',cursive;font-weight:800;margin:0;line-height:1.05}
+button{font-family:inherit;font-weight:900;color:inherit;cursor:pointer}
+img{max-width:100%}
+
+/* ---------- casca do app ---------- */
+#app{max-width:520px;margin:0 auto;padding:0 16px 118px;position:relative}
+@media(min-width:900px){
+  body{background-image:
+    radial-gradient(circle at 12px 12px, rgba(51,32,15,.06) 2px, transparent 2px),
+    linear-gradient(180deg,#FFE9B8,#FFD98F)}
+  #app{max-width:560px;border-left:var(--borda) dashed rgba(51,32,15,.25);border-right:var(--borda) dashed rgba(51,32,15,.25)}
+}
+
+/* ---------- peças de papel ---------- */
+.sticker{
+  background:var(--papel-2);
+  border:var(--borda) solid var(--tinta);
+  border-radius:var(--r);
+  box-shadow:var(--sombra);
+  padding:16px;
+}
+.sticker.tilt{transform:rotate(-1.2deg)}
+.sticker.tilt-r{transform:rotate(1deg)}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--mata);color:#fff;
+  border:var(--borda) solid var(--tinta);
+  border-radius:18px;
+  box-shadow:var(--sombra);
+  padding:13px 20px;
+  font-size:17px;letter-spacing:.2px;
+  transition:transform .06s, box-shadow .06s;
+  text-shadow:0 2px 0 rgba(0,0,0,.18);
+}
+.btn:active{transform:translateY(6px);box-shadow:0 0 0 var(--tinta)}
+.btn:focus-visible{outline:4px solid var(--jabuti);outline-offset:3px}
+.btn.laranja{background:var(--manga)}
+.btn.roxo{background:var(--jabuti)}
+.btn.azul{background:var(--ceu)}
+.btn.rosa{background:var(--rosa)}
+.btn.branco{background:#fff;color:var(--tinta);text-shadow:none}
+.btn.bloq{background:#C9BFAE;color:#6A5B48;text-shadow:none;box-shadow:var(--sombra)}
+.btn.grande{width:100%;font-size:19px;padding:16px}
+.btn.pequeno{padding:9px 14px;font-size:14px;border-radius:14px;box-shadow:var(--sombra-p)}
+.btn.pequeno:active{box-shadow:0 0 0 var(--tinta);transform:translateY(4px)}
+
+input:focus-visible{outline:4px solid var(--jabuti);outline-offset:2px}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;
+  background:#fff;border:3px solid var(--tinta);border-radius:999px;
+  padding:5px 12px;font-size:13px;font-weight:900;box-shadow:0 3px 0 var(--tinta);
+}
+
+/* ---------- topo ---------- */
+.topo{
+  position:sticky;top:0;z-index:40;
+  margin:0 -16px 14px;padding:10px 16px 12px;
+  background:var(--papel);
+  border-bottom:var(--borda) solid var(--tinta);
+  display:flex;align-items:center;gap:8px;
+}
+[hidden]{display:none!important}
+.topo .marca{font-family:'Baloo 2';font-size:22px;margin-right:auto;letter-spacing:-.5px}
+.topo .marca span{color:var(--mata-esc)}
+.contador{display:flex;align-items:center;gap:5px;background:#fff;border:3px solid var(--tinta);
+  border-radius:999px;padding:4px 11px 4px 5px;font-size:15px;font-weight:900;box-shadow:0 3px 0 var(--tinta)}
+.contador .bolha{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;
+  border:2px solid var(--tinta)}
+.bolha.ouro{background:var(--moeda)}
+.bolha.xp{background:var(--ceu)}
+
+/* ---------- navegação de baixo ---------- */
+nav.rodape{
+  position:fixed;left:0;right:0;bottom:0;z-index:50;
+  background:var(--papel-2);
+  border-top:var(--borda) solid var(--tinta);
+  padding:8px 8px calc(8px + env(safe-area-inset-bottom));
+  display:flex;justify-content:center;gap:6px;
+}
+nav.rodape .aba{
+  flex:1;max-width:96px;background:none;border:none;padding:6px 2px 4px;
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  font-size:11px;font-weight:900;color:#8A7355;border-radius:14px;
+}
+nav.rodape .aba .icone{
+  width:42px;height:38px;display:grid;place-items:center;font-size:22px;
+  border:3px solid transparent;border-radius:14px;transition:transform .12s;
+}
+nav.rodape .aba[aria-current="true"]{color:var(--tinta)}
+nav.rodape .aba[aria-current="true"] .icone{
+  background:var(--moeda);border-color:var(--tinta);box-shadow:0 3px 0 var(--tinta);transform:translateY(-3px)
+}
+nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
+
+/* ---------- telas ---------- */
+.tela{display:none;animation:entra .22s ease-out}
+.tela.ativa{display:block}
+@keyframes entra{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.titulo-secao{display:flex;align-items:baseline;gap:10px;margin:22px 4px 12px}
+.titulo-secao h2{font-size:27px}
+.titulo-secao small{font-size:13px;font-weight:900;color:#8A7355}
+
+/* ---------- bicho ---------- */
+.palco{
+  position:relative;text-align:center;padding:10px 0 0;
+  background:linear-gradient(180deg,#CFF0FF 0%,#CFF0FF 62%,#8FD97A 62%,#7ACB63 100%);
+  border:var(--borda) solid var(--tinta);border-radius:var(--r);box-shadow:var(--sombra);
+  overflow:hidden;
+}
+.palco .sol{position:absolute;top:12px;right:16px;width:46px;height:46px;background:var(--moeda);
+  border:3px solid var(--tinta);border-radius:50%}
+.palco .nuvem{position:absolute;top:26px;left:-70px;width:78px;height:26px;background:#fff;
+  border:3px solid var(--tinta);border-radius:999px;animation:passeia 26s linear infinite}
+@keyframes passeia{from{left:-90px}to{left:110%}}
+.bicho{width:200px;height:200px;display:block;margin:0 auto;position:relative;z-index:2}
+.bicho .corpo-todo{transform-origin:100px 190px;animation:pula 2.6s ease-in-out infinite}
+@keyframes pula{0%,100%{transform:translateY(0) scaleY(1)}45%{transform:translateY(-7px) scaleY(1.02)}55%{transform:translateY(0) scaleY(.98)}}
+.bicho .olho{animation:pisca 5.2s infinite}
+@keyframes pisca{0%,96%,100%{transform:scaleY(1)}98%{transform:scaleY(.08)}}
+.bicho.feliz .corpo-todo{animation-duration:1s}
+.placa-nome{
+  display:inline-flex;align-items:center;gap:6px;margin:-16px auto 0;position:relative;z-index:3;
+  background:#fff;border:3px solid var(--tinta);border-radius:14px;padding:5px 14px;
+  box-shadow:0 4px 0 var(--tinta);font-family:'Baloo 2';font-size:19px;
+}
+.barras{display:grid;gap:9px;margin-top:20px}
+.barra{display:flex;align-items:center;gap:9px}
+.barra .rotulo{width:78px;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.5px}
+.barra .trilho{flex:1;height:22px;background:#fff;border:3px solid var(--tinta);border-radius:999px;overflow:hidden}
+.barra .cheio{height:100%;border-radius:999px 0 0 999px;transition:width .5s cubic-bezier(.3,1.4,.5,1)}
+.barra .valor{width:38px;text-align:right;font-size:13px;font-weight:900}
+
+/* ---------- grades ---------- */
+.grade{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.grade-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.cartao-trilha{
+  border:var(--borda) solid var(--tinta);border-radius:var(--r);box-shadow:var(--sombra);
+  padding:14px;text-align:left;background:#fff;position:relative;overflow:hidden;
+  transition:transform .08s;
+}
+.cartao-trilha:active{transform:translateY(5px);box-shadow:0 1px 0 var(--tinta)}
+.cartao-trilha .emoji{font-size:34px;display:block;line-height:1}
+.cartao-trilha h3{font-size:19px;margin:6px 0 2px}
+.cartao-trilha p{margin:0;font-size:12px;font-weight:700;opacity:.75}
+.cartao-trilha .fita{
+  position:absolute;top:10px;right:-30px;transform:rotate(38deg);
+  background:var(--tinta);color:#FFE9B8;font-size:10px;padding:3px 32px;font-weight:900;
+}
+.escolha-bicho{
+  background:#fff;border:var(--borda) solid var(--tinta);border-radius:var(--r);
+  box-shadow:var(--sombra);padding:10px 8px 14px;text-align:center;transition:transform .1s;
+}
+.escolha-bicho svg{width:100%;height:auto}
+.escolha-bicho[aria-pressed="true"]{background:var(--moeda);transform:translateY(-6px) rotate(-2deg)}
+.escolha-bicho b{display:block;font-family:'Baloo 2';font-size:17px;margin-top:2px}
+
+/* ---------- lição / quiz ---------- */
+.leitura{font-weight:700;font-size:16px;line-height:1.6}
+.leitura p{margin:0 0 12px}
+.leitura .destaque{background:var(--moeda);padding:2px 6px;border-radius:6px;box-decoration-break:clone}
+.alternativa{
+  display:block;width:100%;text-align:left;background:#fff;
+  border:var(--borda) solid var(--tinta);border-radius:16px;box-shadow:var(--sombra-p);
+  padding:13px 15px;font-size:16px;font-weight:800;margin-bottom:10px;transition:transform .08s;
+}
+.alternativa:active{transform:translateY(4px);box-shadow:none}
+.alternativa.certa{background:var(--mata);color:#fff}
+.alternativa.errada{background:var(--erro);color:#fff}
+.alternativa[disabled]{cursor:default}
+.progresso-quiz{display:flex;gap:6px;margin-bottom:14px}
+.progresso-quiz i{flex:1;height:10px;background:#fff;border:3px solid var(--tinta);border-radius:999px}
+.progresso-quiz i.ok{background:var(--mata)}
+.progresso-quiz i.x{background:var(--erro)}
+
+/* ---------- loja ---------- */
+.item-loja{background:#fff;border:var(--borda) solid var(--tinta);border-radius:18px;
+  box-shadow:var(--sombra-p);padding:12px 8px;text-align:center}
+.item-loja .emoji{font-size:32px;display:block}
+.item-loja b{display:block;font-size:13px;margin:4px 0 6px}
+
+/* ---------- mural ---------- */
+.recado{background:#fff;border:var(--borda) solid var(--tinta);border-radius:18px;
+  box-shadow:var(--sombra-p);padding:12px 14px;margin-bottom:12px;display:flex;gap:10px}
+.recado .aut{font-family:'Baloo 2';font-size:16px;line-height:1.1}
+.recado .txt{font-size:15px;margin:2px 0 0}
+.recado .av{width:42px;height:42px;flex:none;border:3px solid var(--tinta);border-radius:50%;
+  display:grid;place-items:center;font-size:20px;background:var(--papel)}
+.blocos{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px}
+.bloco{background:#fff;border:3px solid var(--tinta);border-radius:12px;padding:8px 12px;
+  font-size:14px;font-weight:800;box-shadow:0 3px 0 var(--tinta)}
+.bloco[aria-pressed="true"]{background:var(--ceu);color:#fff}
+.previa{background:var(--papel);border:3px dashed var(--tinta);border-radius:14px;padding:12px;font-size:16px;min-height:52px}
+
+/* ---------- minigames ---------- */
+#tabuleiro-memoria{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.carta{aspect-ratio:3/4;border:var(--borda) solid var(--tinta);border-radius:14px;background:var(--jabuti);
+  box-shadow:var(--sombra-p);font-size:28px;display:grid;place-items:center;color:transparent}
+.carta.virada{background:#fff;color:inherit}
+.carta.par{background:var(--mata);color:#fff}
+canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--tinta);
+  border-radius:var(--r);box-shadow:var(--sombra);background:#CFF0FF;touch-action:none}
+
+/* ---------- perfil ---------- */
+.carteirinha{
+  background:linear-gradient(160deg,var(--moeda),var(--manga));
+  border:var(--borda) solid var(--tinta);border-radius:26px;box-shadow:var(--sombra);
+  padding:18px;position:relative;overflow:hidden;
+}
+.carteirinha::after{content:"";position:absolute;inset:8px;border:3px dashed rgba(51,32,15,.35);border-radius:18px;pointer-events:none}
+.carteirinha .selo{position:absolute;top:12px;right:14px;background:#fff;border:3px solid var(--tinta);
+  border-radius:50%;width:56px;height:56px;display:grid;place-items:center;font-family:'Baloo 2';
+  font-size:12px;line-height:1;text-align:center;transform:rotate(10deg)}
+.medalhas{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.medalha{background:#fff;border:3px solid var(--tinta);border-radius:14px;padding:8px 10px;
+  font-size:12px;font-weight:900;box-shadow:0 3px 0 var(--tinta);display:flex;align-items:center;gap:6px}
+.medalha.off{opacity:.42;filter:grayscale(1)}
+
+/* ---------- balão / aviso ---------- */
+#brinde{
+  position:fixed;left:50%;bottom:110px;transform:translateX(-50%) scale(.6);
+  background:var(--tinta);color:var(--papel);border-radius:999px;padding:12px 22px;
+  font-weight:900;font-size:16px;z-index:80;opacity:0;pointer-events:none;transition:.25s;
+  box-shadow:0 6px 0 rgba(0,0,0,.25);max-width:90vw;text-align:center
+}
+#brinde.ver{opacity:1;transform:translateX(-50%) scale(1)}
+.aviso{background:#fff;border:3px dashed var(--tinta);border-radius:16px;padding:12px 14px;font-size:13px;font-weight:700}
+.vazio{text-align:center;padding:26px 12px;font-size:15px}
+.vazio .emoji{font-size:44px;display:block;margin-bottom:8px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- ====== ONBOARDING ====== -->
+  <section id="tela-inicio" class="tela ativa">
+    <div style="text-align:center;padding:26px 0 10px">
+      <h1 style="font-size:46px;letter-spacing:-1.5px">Bicho<span style="color:var(--mata-esc)">teca</span></h1>
+      <p style="font-weight:900;margin:2px 0 0;font-size:15px">a vila onde estudar é brincadeira</p>
+    </div>
+    <div class="sticker tilt" style="margin-bottom:16px">
+      <h2 style="font-size:22px;margin-bottom:8px">Escolha seu bicho</h2>
+      <p style="margin:0 0 14px;font-size:14px">Ele mora com você, come, joga e aprende junto.</p>
+      <div class="grade-3" id="grade-bichos"></div>
+    </div>
+    <div class="sticker tilt-r">
+      <label for="campo-nome" style="display:block;font-family:'Baloo 2';font-size:20px;margin-bottom:6px">Como seu bicho se chama?</label>
+      <input id="campo-nome" maxlength="14" placeholder="Ex.: Tobias"
+        style="width:100%;font-family:'Baloo 2';font-size:22px;padding:10px 14px;border:4px solid var(--tinta);border-radius:16px;background:#fff;color:inherit">
+      <p style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Nada de nome verdadeiro, sobrenome ou escola. Aqui a gente usa apelido de bicho.</p>
+      <button class="btn grande" id="btn-comecar">Começar a aventura</button>
+    </div>
+  </section>
+
+  <!-- ====== TOPO + ABAS (aparecem depois do onboarding) ====== -->
+  <div class="topo" id="topo" hidden>
+    <div class="marca">Bicho<span>teca</span></div>
+    <div class="contador"><span class="bolha ouro">🪙</span><span id="hud-moedas">0</span></div>
+    <div class="contador"><span class="bolha xp">⭐</span><span id="hud-nivel">1</span></div>
+  </div>
+
+  <!-- ====== CASA ====== -->
+  <section id="tela-casa" class="tela"></section>
+  <!-- ====== TRILHAS ====== -->
+  <section id="tela-trilhas" class="tela"></section>
+  <!-- ====== LIÇÃO ====== -->
+  <section id="tela-licao" class="tela"></section>
+  <!-- ====== ARCADE ====== -->
+  <section id="tela-arcade" class="tela"></section>
+  <!-- ====== LOJA ====== -->
+  <section id="tela-loja" class="tela"></section>
+  <!-- ====== MURAL ====== -->
+  <section id="tela-mural" class="tela"></section>
+  <!-- ====== PERFIL ====== -->
+  <section id="tela-perfil" class="tela"></section>
+</div>
+
+<nav class="rodape" id="rodape" hidden>
+  <button class="aba" data-ir="casa"><span class="icone">🏠</span>Casa</button>
+  <button class="aba" data-ir="trilhas"><span class="icone">📚</span>Trilhas</button>
+  <button class="aba" data-ir="arcade"><span class="icone">🎮</span>Arcade</button>
+  <button class="aba" data-ir="loja"><span class="icone">🛒</span>Loja</button>
+  <button class="aba" data-ir="mural"><span class="icone">💬</span>Mural</button>
+</nav>
+
+<div id="brinde" role="status" aria-live="polite"></div>
+<script>
+/* =========================================================
+   BICHOTECA — protótipo funcional (100% front-end)
+   Roda em hospedagem compartilhada: é só subir os arquivos.
+   Persistência: memória (ver bloco Dados no fim do arquivo)
+   ========================================================= */
+
+/* ---------- 1. OS BICHOS (SVG desenhado à mão, sem imagem externa) ---------- */
+const T = '#33200F'; // tinta do contorno
+
+const BICHOS = {
+  capivara: {
+    nome:'Capivara', cor:'#C98A4B', ancora:{hx:100,hy:78,hr:44},
+    corpo:`
+      <ellipse cx="62" cy="172" rx="15" ry="14" fill="#A97038" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="138" cy="172" rx="15" ry="14" fill="#A97038" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="100" cy="140" rx="66" ry="44" fill="#C98A4B" stroke="${T}" stroke-width="6"/>
+      <circle cx="60" cy="50" r="13" fill="#A97038" stroke="${T}" stroke-width="6"/>
+      <circle cx="140" cy="50" r="13" fill="#A97038" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="100" cy="82" rx="50" ry="42" fill="#C98A4B" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="100" cy="100" rx="30" ry="21" fill="#B0763C" stroke="${T}" stroke-width="5"/>
+      <ellipse cx="90" cy="96" rx="4" ry="5" fill="${T}"/><ellipse cx="110" cy="96" rx="4" ry="5" fill="${T}"/>
+      <path d="M92 110 q8 7 16 0" stroke="${T}" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <ellipse class="olho" cx="80" cy="70" rx="7" ry="8" fill="${T}"/>
+      <ellipse class="olho" cx="120" cy="70" rx="7" ry="8" fill="${T}"/>
+      <circle cx="82" cy="67" r="2.4" fill="#fff"/><circle cx="122" cy="67" r="2.4" fill="#fff"/>`
+  },
+  salsicha: {
+    nome:'Salsicha', cor:'#B5651D', ancora:{hx:66,hy:80,hr:36},
+    corpo:`
+      <path d="M162 130 q22 -6 16 -30" stroke="${T}" stroke-width="10" fill="none" stroke-linecap="round"/>
+      <path d="M162 130 q22 -6 16 -30" stroke="#B5651D" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <rect x="52" y="122" width="52" height="46" rx="16" fill="#8E4E14" stroke="${T}" stroke-width="6"/>
+      <rect x="118" y="122" width="46" height="46" rx="16" fill="#8E4E14" stroke="${T}" stroke-width="6"/>
+      <rect x="40" y="112" width="128" height="52" rx="26" fill="#B5651D" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="66" cy="84" rx="38" ry="34" fill="#B5651D" stroke="${T}" stroke-width="6"/>
+      <rect x="18" y="86" width="44" height="26" rx="13" fill="#C97D33" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="24" cy="98" rx="9" ry="8" fill="${T}"/>
+      <ellipse cx="44" cy="104" rx="15" ry="32" fill="#7A4210" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="92" cy="102" rx="13" ry="28" fill="#7A4210" stroke="${T}" stroke-width="6"/>
+      <ellipse class="olho" cx="70" cy="76" rx="7" ry="8" fill="${T}"/>
+      <circle cx="72" cy="73" r="2.4" fill="#fff"/>
+      <path d="M40 112 q6 8 14 4" stroke="${T}" stroke-width="4" fill="none" stroke-linecap="round"/>`
+  },
+  gato: {
+    nome:'Gato', cor:'#8E9BAD', ancora:{hx:100,hy:80,hr:42},
+    corpo:`
+      <path d="M148 150 q34 -4 26 -44" stroke="${T}" stroke-width="16" fill="none" stroke-linecap="round"/>
+      <path d="M148 150 q34 -4 26 -44" stroke="#8E9BAD" stroke-width="9" fill="none" stroke-linecap="round"/>
+      <path d="M166 140 l10 4 M172 122 l11 2" stroke="${T}" stroke-width="5" stroke-linecap="round"/>
+      <ellipse cx="100" cy="146" rx="50" ry="40" fill="#8E9BAD" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="100" cy="158" rx="26" ry="24" fill="#E4E9F0" stroke="${T}" stroke-width="5"/>
+      <path d="M64 62 l-6 -34 32 16 z" fill="#8E9BAD" stroke="${T}" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M136 62 l6 -34 -32 16 z" fill="#8E9BAD" stroke="${T}" stroke-width="6" stroke-linejoin="round"/>
+      <circle cx="100" cy="84" r="44" fill="#8E9BAD" stroke="${T}" stroke-width="6"/>
+      <ellipse class="olho" cx="83" cy="80" rx="9" ry="10" fill="#fff" stroke="${T}" stroke-width="4"/>
+      <ellipse class="olho" cx="117" cy="80" rx="9" ry="10" fill="#fff" stroke="${T}" stroke-width="4"/>
+      <ellipse cx="83" cy="80" rx="4" ry="7" fill="${T}"/><ellipse cx="117" cy="80" rx="4" ry="7" fill="${T}"/>
+      <path d="M94 98 l12 0 -6 7 z" fill="#FF8FA8" stroke="${T}" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M100 105 q-7 8 -13 2 M100 105 q7 8 13 2" stroke="${T}" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M58 92 h-16 M60 102 h-16 M142 92 h16 M140 102 h16" stroke="${T}" stroke-width="4" stroke-linecap="round"/>`
+  }
+};
+
+function svgBicho(tipo, opcoes = {}){
+  const b = BICHOS[tipo]; if(!b) return '';
+  const {hx,hy,hr} = b.ancora;
+  let extra = '';
+  const eq = opcoes.equipado || [];
+  if(eq.includes('chapeu')){
+    extra += `<g transform="translate(${hx},${hy-hr+2})">
+      <rect x="-38" y="-6" width="76" height="12" rx="6" fill="#E24B3B" stroke="${T}" stroke-width="5"/>
+      <path d="M-22 -6 v-22 q22 -12 44 0 v22 z" fill="#E24B3B" stroke="${T}" stroke-width="5" stroke-linejoin="round"/>
+      <circle cx="0" cy="-30" r="7" fill="#FFC93C" stroke="${T}" stroke-width="4"/></g>`;
+  }
+  if(eq.includes('oculos')){
+    extra += `<g transform="translate(${hx},${hy-4})">
+      <circle cx="-19" cy="0" r="15" fill="rgba(69,188,232,.55)" stroke="${T}" stroke-width="5"/>
+      <circle cx="19" cy="0" r="15" fill="rgba(69,188,232,.55)" stroke="${T}" stroke-width="5"/>
+      <path d="M-4 0 h8" stroke="${T}" stroke-width="5"/></g>`;
+  }
+  if(eq.includes('cachecol')){
+    extra += `<g transform="translate(${hx},${hy+hr-6})">
+      <rect x="-34" y="-8" width="68" height="18" rx="9" fill="#8B45B5" stroke="${T}" stroke-width="5"/>
+      <rect x="10" y="4" width="18" height="30" rx="8" fill="#8B45B5" stroke="${T}" stroke-width="5"/></g>`;
+  }
+  return `<svg class="bicho ${opcoes.classe||''}" viewBox="0 0 200 200" role="img"
+    aria-label="Seu bichinho ${b.nome}" style="${opcoes.estilo||''}">
+    <g class="corpo-todo" stroke-linecap="round">${b.corpo}${extra}</g></svg>`;
+}
+
+/* ---------- 2. ESTADO DO JOGADOR ---------- */
+const estado = {
+  apelido:'', tipo:'capivara',
+  moedas:60, xp:0,
+  fome:72, felicidade:80, energia:90,
+  equipado:[], mochila:[],
+  licoesFeitas:[], recordes:{memoria:null, chuva:0},
+  recados:[
+    {av:'🦔', aut:'Nina_Ouriço', txt:'Terminei a trilha de Biologia! 🎉'},
+    {av:'🐢', aut:'Zeca_Jabuti', txt:'Alguém me ajuda no quiz de Português? 😄'},
+    {av:'🦜', aut:'Lila_Arara', txt:'Meu bicho subiu de nível! 🐾'}
+  ]
+};
+
+const nivel = () => Math.floor(estado.xp/120)+1;
+const xpNoNivel = () => estado.xp % 120;
+const lim = n => Math.max(0, Math.min(100, Math.round(n)));
+const $ = s => document.querySelector(s);
+// o apelido é digitado livremente pelo aluno — nunca interpolar em innerHTML sem escapar
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function ganhar(moedas=0, xp=0){
+  estado.moedas += moedas; 
+  const antes = nivel(); estado.xp += xp;
+  atualizarHud();
+  if(nivel() > antes) setTimeout(()=>brinde(`🎉 Nível ${nivel()}! Seu bicho está orgulhoso.`), 900);
+}
+function atualizarHud(){
+  $('#hud-moedas').textContent = estado.moedas;
+  $('#hud-nivel').textContent = nivel();
+}
+let brindeTimer;
+function brinde(msg){
+  const el = $('#brinde'); el.textContent = msg; el.classList.add('ver');
+  clearTimeout(brindeTimer); brindeTimer = setTimeout(()=>el.classList.remove('ver'), 2600);
+}
+
+/* ---------- 3. NAVEGAÇÃO ---------- */
+let telaAtual = 'inicio';
+const RENDER = {}; // preenchido abaixo por cada tela
+
+function ir(tela, dados){
+  if(pararLoops) pararLoops();
+  telaAtual = tela;
+  if(RENDER[tela]) RENDER[tela](dados);
+  document.querySelectorAll('.tela').forEach(s => s.classList.remove('ativa'));
+  $('#tela-'+tela).classList.add('ativa');
+  document.querySelectorAll('.aba').forEach(a =>
+    a.setAttribute('aria-current', String(a.dataset.ir === tela)));
+  window.scrollTo({top:0, behavior:'instant'});
+}
+document.querySelectorAll('.aba').forEach(a => a.onclick = () => ir(a.dataset.ir));
+let pararLoops = null;
+
+/* ---------- 4. TELA: CASA ---------- */
+const HUMORES = [
+  {min:70, txt:'está pulando de alegria', emoji:'😄'},
+  {min:40, txt:'está de boa, mas quer atenção', emoji:'🙂'},
+  {min:0,  txt:'está com saudade de você', emoji:'🥺'}
+];
+function humor(){
+  const media = (estado.fome + estado.felicidade + estado.energia)/3;
+  return HUMORES.find(h => media >= h.min);
+}
+function barra(rotulo, valor, cor){
+  return `<div class="barra"><span class="rotulo">${rotulo}</span>
+    <span class="trilho"><span class="cheio" style="width:${lim(valor)}%;background:${cor}"></span></span>
+    <span class="valor">${lim(valor)}</span></div>`;
+}
+RENDER.casa = () => {
+  const h = humor();
+  const pendentes = TRILHAS.flatMap(t=>t.licoes).filter(l=>!estado.licoesFeitas.includes(l.id));
+  const proxima = pendentes[0];
+  $('#tela-casa').innerHTML = `
+    <div class="palco">
+      <div class="sol"></div><div class="nuvem"></div>
+      ${svgBicho(estado.tipo,{equipado:estado.equipado, classe: h.min>=70?'feliz':''})}
+    </div>
+    <div style="text-align:center"><span class="placa-nome">${h.emoji} ${esc(estado.apelido)}</span></div>
+    <p style="text-align:center;margin:10px 0 0;font-size:15px">Seu ${BICHOS[estado.tipo].nome.toLowerCase()} ${h.txt}.</p>
+
+    <div class="sticker" style="margin-top:16px">${
+      barra('Fome', estado.fome, 'var(--manga)') +
+      barra('Alegria', estado.felicidade, 'var(--rosa)') +
+      barra('Energia', estado.energia, 'var(--ceu)') +
+      barra('Nível '+nivel(), xpNoNivel()/120*100, 'var(--mata)')
+    }</div>
+
+    <div class="titulo-secao"><h2>Hoje na vila</h2></div>
+    <div class="sticker tilt-r" style="display:flex;gap:14px;align-items:center">
+      <div style="font-size:40px">${proxima ? proxima.emoji : '🏆'}</div>
+      <div style="flex:1">
+        <b style="font-family:'Baloo 2';font-size:19px;display:block">${proxima ? proxima.titulo : 'Tudo estudado!'}</b>
+        <span style="font-size:13px">${proxima ? 'Vale 🪙 25 e ⭐ 40' : 'Você zerou as trilhas do protótipo.'}</span>
+      </div>
+      <button class="btn pequeno laranja" onclick="${proxima ? `ir('licao','${proxima.id}')` : `ir('arcade')`}">Ir</button>
+    </div>
+
+    <div class="grade" style="margin-top:14px">
+      <button class="btn azul grande" onclick="ir('arcade')">🎮 Jogar</button>
+      <button class="btn roxo grande" onclick="ir('loja')">🍉 Alimentar</button>
+    </div>
+    <div style="margin-top:12px"><button class="btn branco grande" onclick="ir('perfil')">🪪 Ver minha carteirinha</button></div>`;
+};
+
+/* desgaste suave: o bicho nunca "morre", só fica com saudade */
+setInterval(()=>{
+  estado.fome = lim(estado.fome - 2);
+  estado.felicidade = lim(estado.felicidade - 1);
+  estado.energia = lim(estado.energia + 3);
+  if(telaAtual === 'casa') RENDER.casa();
+}, 25000);
+
+/* ---------- 5. CONTEÚDO DAS TRILHAS ---------- */
+const TRILHAS = [
+  { id:'his', nome:'História', emoji:'🏺', cor:'var(--manga)', licoes:[
+    { id:'his1', emoji:'👑', titulo:'A Independência do Brasil', serie:'8º ano',
+      leitura:[
+        'Em 1808 a família real portuguesa fugiu de Napoleão e desembarcou no Rio de Janeiro. O Brasil deixou de ser só colônia: ganhou bancos, imprensa e escolas.',
+        'Quando as Cortes de Lisboa tentaram devolver o Brasil à condição de colônia, o príncipe D. Pedro decidiu ficar. Foi o <span class="destaque">Dia do Fico</span>, em 9 de janeiro de 1822.',
+        'Em 7 de setembro de 1822, às margens do Ipiranga, D. Pedro rompeu com Portugal. A independência foi declarada sem grande guerra no Sudeste, mas houve combates na Bahia, no Piauí e no Pará.'
+      ],
+      perguntas:[
+        {p:'Por que a família real veio para o Brasil em 1808?', alts:['Para fugir das tropas de Napoleão','Para explorar ouro em Minas','Porque Portugal afundou','Por causa de uma seca'], certa:0},
+        {p:'O que foi o Dia do Fico?', alts:['A chegada de Cabral','A recusa de D. Pedro em voltar a Portugal','A abolição da escravidão','A criação do Império Romano'], certa:1},
+        {p:'Em que ano o Brasil declarou independência?', alts:['1500','1889','1822','1930'], certa:2}
+      ]},
+    { id:'his2', emoji:'⚙️', titulo:'Revolução Industrial', serie:'9º ano',
+      leitura:[
+        'A partir de 1760, na Inglaterra, máquinas movidas a vapor começaram a substituir o trabalho manual. Tecidos que levavam dias passaram a sair em horas.',
+        'As pessoas saíram do campo e foram para as cidades trabalhar nas fábricas. Surgiram duas classes sociais novas: a <span class="destaque">burguesia industrial</span>, dona das máquinas, e o proletariado, que vendia o próprio trabalho.',
+        'A jornada chegava a 16 horas e crianças trabalhavam nas máquinas. Foi dessa revolta que nasceram os primeiros sindicatos e as leis trabalhistas.'
+      ],
+      perguntas:[
+        {p:'Qual invenção simboliza a Primeira Revolução Industrial?', alts:['O computador','A máquina a vapor','O celular','A roda'], certa:1},
+        {p:'Em que país ela começou?', alts:['Inglaterra','Brasil','Japão','Egito'], certa:0},
+        {p:'Que grupo social vendia sua força de trabalho nas fábricas?', alts:['A nobreza','O clero','O proletariado','Os faraós'], certa:2}
+      ]}
+  ]},
+  { id:'por', nome:'Português', emoji:'✏️', cor:'var(--rosa)', licoes:[
+    { id:'por1', emoji:'🧩', titulo:'Sujeito e predicado', serie:'6º ano',
+      leitura:[
+        'Toda oração conta alguma coisa sobre alguém. Esse alguém é o <span class="destaque">sujeito</span>; o que se diz dele é o predicado.',
+        'Em "A capivara nadou no rio", quem nadou? A capivara. Logo, ela é o sujeito e "nadou no rio" é o predicado.',
+        'Um truque: pergunte ao verbo "quem?" ou "o quê?". A resposta é o sujeito. Se ninguém responde, como em "Choveu ontem", a oração é sem sujeito.'
+      ],
+      perguntas:[
+        {p:'Em "O salsicha comeu a ração", qual é o sujeito?', alts:['a ração','comeu','O salsicha','a ração toda'], certa:2},
+        {p:'Qual frase é oração sem sujeito?', alts:['Choveu a noite inteira','O gato dormiu','Nós estudamos','Ela chegou'], certa:0},
+        {p:'O predicado é...', alts:['quem pratica a ação','o que se declara sobre o sujeito','sempre um adjetivo','o ponto final'], certa:1}
+      ]},
+    { id:'por2', emoji:'🎭', titulo:'Figuras de linguagem', serie:'1º ano do médio',
+      leitura:[
+        'Figuras de linguagem são desvios criativos do sentido comum. Na <span class="destaque">metáfora</span>, uma coisa é dita como se fosse outra: "meu irmão é um leão".',
+        'Na comparação existe o conectivo: "meu irmão é como um leão". Na hipérbole há exagero proposital: "chorei um rio".',
+        'Na personificação, coisas e bichos ganham traços humanos: "o vento sussurrou meu nome".'
+      ],
+      perguntas:[
+        {p:'"Chorei um rio de lágrimas" é exemplo de...', alts:['Hipérbole','Metonímia','Pleonasmo','Aliteração'], certa:0},
+        {p:'O que diferencia comparação de metáfora?', alts:['O tamanho da frase','A presença do conectivo (como, tal qual)','A pontuação','O tempo verbal'], certa:1},
+        {p:'"A lua espiava pela janela" usa qual figura?', alts:['Ironia','Antítese','Personificação','Eufemismo'], certa:2}
+      ]}
+  ]},
+  { id:'bio', nome:'Biologia', emoji:'🔬', cor:'var(--mata)', licoes:[
+    { id:'bio1', emoji:'🧫', titulo:'A célula por dentro', serie:'7º ano',
+      leitura:[
+        'A célula é a menor parte viva de um ser. Você tem cerca de 30 trilhões delas trabalhando agora.',
+        'A membrana controla o que entra e sai. O citoplasma é o gel onde tudo flutua. O <span class="destaque">núcleo</span> guarda o DNA, o manual de instruções.',
+        'As mitocôndrias transformam alimento em energia. Bactérias, ao contrário de nós, não têm núcleo separado: são procariontes.'
+      ],
+      perguntas:[
+        {p:'Onde fica guardado o DNA na célula humana?', alts:['Na membrana','No núcleo','Na mitocôndria','No vacúolo'], certa:1},
+        {p:'Qual organela produz energia?', alts:['Mitocôndria','Ribossomo','Parede celular','Cloroplasto'], certa:0},
+        {p:'Células sem núcleo definido são chamadas de...', alts:['Eucariontes','Vertebradas','Procariontes','Fungos'], certa:2}
+      ]},
+    { id:'bio2', emoji:'🌱', titulo:'Fotossíntese', serie:'8º ano',
+      leitura:[
+        'A planta não come: ela fabrica o próprio alimento. Para isso usa luz do sol, água da raiz e gás carbônico do ar.',
+        'O processo acontece nos <span class="destaque">cloroplastos</span>, cheios de clorofila, o pigmento verde que captura a luz.',
+        'O resultado é glicose, que alimenta a planta, e oxigênio, que sobra e a gente respira. Sem fotossíntese, não haveria ar respirável.'
+      ],
+      perguntas:[
+        {p:'Qual gás a planta absorve na fotossíntese?', alts:['Oxigênio','Gás carbônico','Nitrogênio','Hélio'], certa:1},
+        {p:'Qual pigmento captura a luz?', alts:['Clorofila','Hemoglobina','Melanina','Caroteno'], certa:0},
+        {p:'O que a planta produz como alimento?', alts:['Proteína','Areia','Glicose','Sal'], certa:2}
+      ]}
+  ]},
+  { id:'mat', nome:'Matemática', emoji:'📐', cor:'var(--ceu)', licoes:[
+    { id:'mat1', emoji:'🍕', titulo:'Frações sem medo', serie:'6º ano',
+      leitura:[
+        'Fração é um jeito de dizer "parte de um todo". Em 3/4, o 4 (denominador) diz em quantos pedaços a pizza foi cortada e o 3 (numerador) diz quantos você pegou.',
+        'Para somar frações de mesmo denominador, some só os de cima: 1/5 + 2/5 = 3/5.',
+        'Se os denominadores forem diferentes, iguale-os antes. Frações <span class="destaque">equivalentes</span> valem o mesmo: 1/2 = 2/4 = 50/100.'
+      ],
+      perguntas:[
+        {p:'Quanto é 1/5 + 2/5?', alts:['3/10','3/5','2/25','1/2'], certa:1},
+        {p:'Qual fração é equivalente a 1/2?', alts:['3/4','2/5','4/8','1/3'], certa:2},
+        {p:'No número 3/4, o que significa o 4?', alts:['Em quantas partes o todo foi dividido','Quantas partes eu peguei','O resultado da conta','O resto da divisão'], certa:0}
+      ]},
+    { id:'mat2', emoji:'📏', titulo:'Teorema de Pitágoras', serie:'9º ano',
+      leitura:[
+        'Em todo triângulo retângulo, o lado maior se chama hipotenusa e fica de frente para o ângulo de 90 graus. Os outros dois são os catetos.',
+        'A regra: <span class="destaque">a² = b² + c²</span>. O quadrado da hipotenusa é igual à soma dos quadrados dos catetos.',
+        'Com catetos 3 e 4: 9 + 16 = 25, então a hipotenusa é 5. Pedreiros usam isso até hoje para deixar paredes no esquadro.'
+      ],
+      perguntas:[
+        {p:'Catetos 3 e 4. Quanto mede a hipotenusa?', alts:['7','12','5','6'], certa:2},
+        {p:'A hipotenusa é o lado...', alts:['oposto ao ângulo reto','menor do triângulo','sempre horizontal','que vale zero'], certa:0},
+        {p:'O teorema vale para qual triângulo?', alts:['Qualquer um','Só o retângulo','Só o equilátero','Só o obtusângulo'], certa:1}
+      ]}
+  ]},
+  { id:'geo', nome:'Geografia', emoji:'🌎', cor:'var(--jabuti)', licoes:[
+    { id:'geo1', emoji:'🌦️', titulo:'Os climas do Brasil', serie:'7º ano',
+      leitura:[
+        'O Brasil é enorme e por isso tem vários climas. O equatorial, na Amazônia, é quente e chuvoso o ano inteiro.',
+        'O <span class="destaque">semiárido</span> do sertão nordestino tem chuvas escassas e irregulares. Já o subtropical, no Sul, tem as quatro estações bem marcadas e chega a nevar.',
+        'Altitude, distância do mar e correntes de ar mudam tudo: por isso Campos do Jordão é fria e Santos, ao lado, é quente.'
+      ],
+      perguntas:[
+        {p:'Qual clima predomina na Região Sul?', alts:['Equatorial','Subtropical','Semiárido','Desértico'], certa:1},
+        {p:'O sertão nordestino tem clima...', alts:['Semiárido','Polar','Tropical de altitude','Mediterrâneo'], certa:0},
+        {p:'O que NÃO influencia o clima de um lugar?', alts:['A altitude','A distância do mar','A cor da bandeira do estado','As massas de ar'], certa:2}
+      ]},
+    { id:'geo2', emoji:'🌋', titulo:'Placas tectônicas', serie:'6º ano',
+      leitura:[
+        'A crosta terrestre é quebrada em grandes placas que boiam sobre o manto e se movem alguns centímetros por ano.',
+        'Quando duas placas se chocam, a crosta enruga e forma montanhas, como a <span class="destaque">Cordilheira dos Andes</span>. Quando escorregam de lado, provocam terremotos.',
+        'O Brasil fica no meio da placa Sul-Americana, longe das bordas. Por isso quase não temos terremotos fortes nem vulcões ativos.'
+      ],
+      perguntas:[
+        {p:'Por que o Brasil tem poucos terremotos?', alts:['Porque é plano','Porque fica no meio de uma placa','Porque tem muitas árvores','Porque é quente'], certa:1},
+        {p:'O choque entre placas pode formar...', alts:['Cordilheiras','Nuvens','Marés','Eclipses'], certa:0},
+        {p:'As placas tectônicas flutuam sobre qual camada?', alts:['A atmosfera','O oceano','O manto','O núcleo interno sólido'], certa:2}
+      ]}
+  ]}
+];
+const acharLicao = id => TRILHAS.flatMap(t=>t.licoes).find(l=>l.id===id);
+
+/* ---------- 6. TELA: TRILHAS ---------- */
+RENDER.trilhas = () => {
+  $('#tela-trilhas').innerHTML = `
+    <div class="titulo-secao"><h2>Trilhas</h2><small>do fundamental ao médio</small></div>
+    ${TRILHAS.map(t => {
+      const feitas = t.licoes.filter(l=>estado.licoesFeitas.includes(l.id)).length;
+      return `<div class="sticker" style="margin-bottom:14px;border-left:14px solid ${t.cor}">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-size:28px">${t.emoji}</span>
+          <h3 style="font-size:22px;flex:1">${t.nome}</h3>
+          <span class="chip">${feitas}/${t.licoes.length}</span>
+        </div>
+        <div class="grade">
+        ${t.licoes.map(l => {
+          const ok = estado.licoesFeitas.includes(l.id);
+          return `<button class="cartao-trilha" onclick="ir('licao','${l.id}')">
+            ${ok?'<span class="fita">FEITA</span>':''}
+            <span class="emoji">${l.emoji}</span>
+            <h3>${l.titulo}</h3><p>${l.serie}</p></button>`;
+        }).join('')}
+        </div></div>`;
+    }).join('')}
+    <p class="aviso">Cada lição tem uma leitura curta e um quiz de 3 perguntas. Errou? Sem drama: dá pra refazer quantas vezes quiser.</p>`;
+};
+
+/* ---------- 7. TELA: LIÇÃO (leitura + quiz) ---------- */
+let quiz = null;
+RENDER.licao = (id) => {
+  const l = acharLicao(id);
+  quiz = {licao:l, i:0, acertos:0, marcas:l.perguntas.map(()=>'')};
+  $('#tela-licao').innerHTML = `
+    <button class="btn pequeno branco" onclick="ir('trilhas')">← Trilhas</button>
+    <div class="titulo-secao"><h2>${l.emoji} ${l.titulo}</h2></div>
+    <div class="sticker leitura">${l.leitura.map(p=>`<p>${p}</p>`).join('')}</div>
+    <button class="btn grande laranja" style="margin-top:16px" onclick="mostrarPergunta()">Fazer o quiz →</button>`;
+};
+function mostrarPergunta(){
+  const q = quiz.licao.perguntas[quiz.i];
+  $('#tela-licao').innerHTML = `
+    <div class="progresso-quiz">${quiz.marcas.map(m=>`<i class="${m}"></i>`).join('')}</div>
+    <div class="sticker">
+      <small style="font-weight:900;opacity:.6">PERGUNTA ${quiz.i+1} DE ${quiz.licao.perguntas.length}</small>
+      <h2 style="font-size:23px;margin:6px 0 16px">${q.p}</h2>
+      <div id="alts">${q.alts.map((a,i)=>
+        `<button class="alternativa" onclick="responder(${i})">${a}</button>`).join('')}</div>
+      <div id="retorno"></div>
+    </div>`;
+}
+function responder(i){
+  const q = quiz.licao.perguntas[quiz.i];
+  const botoes = document.querySelectorAll('#alts .alternativa');
+  botoes.forEach((b,j)=>{ b.disabled = true;
+    if(j===q.certa) b.classList.add('certa');
+    if(j===i && i!==q.certa) b.classList.add('errada'); });
+  const acertou = i === q.certa;
+  if(acertou) quiz.acertos++;
+  quiz.marcas[quiz.i] = acertou ? 'ok' : 'x';
+  estado.felicidade = lim(estado.felicidade + (acertou?4:1));
+  $('#retorno').innerHTML = `
+    <p style="font-size:16px;margin:14px 0 12px">${acertou
+      ? '✅ Isso aí! Seu bicho deu um pulo.'
+      : '💡 Quase. A resposta certa está em verde — dá uma olhada na leitura de novo.'}</p>
+    <button class="btn grande ${acertou?'':'roxo'}" onclick="proximaPergunta()">
+      ${quiz.i+1 < quiz.licao.perguntas.length ? 'Próxima' : 'Ver resultado'}</button>`;
+}
+function proximaPergunta(){
+  quiz.i++;
+  if(quiz.i < quiz.licao.perguntas.length) return mostrarPergunta();
+  const total = quiz.licao.perguntas.length;
+  const primeiraVez = !estado.licoesFeitas.includes(quiz.licao.id);
+  const moedas = quiz.acertos * (primeiraVez ? 10 : 3);
+  const xp = quiz.acertos * (primeiraVez ? 15 : 5);
+  if(primeiraVez && quiz.acertos >= 2) estado.licoesFeitas.push(quiz.licao.id);
+  ganhar(moedas, xp);
+  $('#tela-licao').innerHTML = `
+    <div class="sticker tilt" style="text-align:center;margin-top:24px">
+      <div style="font-size:56px">${quiz.acertos===total?'🏆':quiz.acertos>=2?'🎉':'💪'}</div>
+      <h2 style="font-size:28px;margin:6px 0">${quiz.acertos} de ${total}</h2>
+      <p style="font-size:15px">${quiz.acertos===total ? 'Gabaritou! Isso vale medalha.'
+        : quiz.acertos>=2 ? 'Boa! Lição concluída.' : 'Faltou pouco. Releia e tente de novo — vale ponto igual.'}</p>
+      <div style="display:flex;gap:10px;justify-content:center;margin:14px 0 18px">
+        <span class="chip">🪙 +${moedas}</span><span class="chip">⭐ +${xp}</span>
+      </div>
+      <button class="btn grande" onclick="ir('licao','${quiz.licao.id}')">Refazer</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="ir('trilhas')">Voltar às trilhas</button>
+    </div>`;
+}
+
+/* ---------- 8. TELA: ARCADE ---------- */
+RENDER.arcade = () => {
+  $('#tela-arcade').innerHTML = `
+    <div class="titulo-secao"><h2>Arcade</h2><small>ganhe moedas pro seu bicho</small></div>
+    <div class="grade">
+      <button class="cartao-trilha" onclick="jogoMemoria()">
+        <span class="emoji">🃏</span><h3>Memória do Bicho</h3><p>Ache os pares. Recorde: ${estado.recordes.memoria ?? '—'} jogadas</p></button>
+      <button class="cartao-trilha" onclick="jogoChuva()">
+        <span class="emoji">🍉</span><h3>Chuva de Frutas</h3><p>Recorde: ${estado.recordes.chuva} pontos</p></button>
+    </div>
+    <p class="aviso" style="margin-top:16px">Minigame gasta energia do bicho — mas ela volta sozinha com o tempo.</p>`;
+};
+
+/* --- minigame 1: memória --- */
+function jogoMemoria(){
+  const naipes = ['🍉','🐟','🦴','🧀','🍎','🍪'];
+  const cartas = [...naipes, ...naipes].sort(()=>Math.random()-.5)
+    .map((e,i)=>({i, e, aberta:false, feita:false}));
+  let a=null, b=null, jogadas=0, travado=false;
+  const pinta = () => {
+    $('#tabuleiro-memoria').innerHTML = cartas.map(c=>
+      `<button class="carta ${c.feita?'par':c.aberta?'virada':''}" onclick="window._vira(${c.i})">${c.e}</button>`).join('');
+    $('#placar-mem').textContent = jogadas;
+  };
+  window._vira = i => {
+    const c = cartas[i];
+    if(travado || c.aberta || c.feita) return;
+    c.aberta = true;
+    if(!a){ a=c; pinta(); return; }
+    b=c; jogadas++; travado=true; pinta();
+    setTimeout(()=>{
+      if(a.e===b.e){ a.feita=b.feita=true; }
+      else { a.aberta=b.aberta=false; }
+      a=b=null; travado=false; pinta();
+      if(cartas.every(x=>x.feita)){
+        const premio = Math.max(12, 60 - jogadas*2);
+        if(estado.recordes.memoria===null || jogadas < estado.recordes.memoria) estado.recordes.memoria = jogadas;
+        estado.energia = lim(estado.energia - 10);
+        estado.felicidade = lim(estado.felicidade + 12);
+        ganhar(premio, 20);
+        $('#fim-mem').innerHTML = `<div class="sticker tilt" style="text-align:center;margin-top:16px">
+          <h2 style="font-size:24px">Todos os pares! 🎉</h2>
+          <p style="margin:6px 0 12px">Você fez em ${jogadas} jogadas.</p>
+          <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +20</span>
+          <button class="btn grande" style="margin-top:14px" onclick="jogoMemoria()">Jogar de novo</button>
+          <button class="btn grande branco" style="margin-top:10px" onclick="ir('arcade')">Voltar ao arcade</button></div>`;
+      }
+    }, a.e===c.e ? 260 : 700);
+  };
+  $('#tela-arcade').innerHTML = `
+    <button class="btn pequeno branco" onclick="ir('arcade')">← Arcade</button>
+    <div class="titulo-secao"><h2>🃏 Memória do Bicho</h2><small>jogadas: <b id="placar-mem">0</b></small></div>
+    <div id="tabuleiro-memoria"></div><div id="fim-mem"></div>`;
+  pinta();
+}
+
+/* --- minigame 2: chuva de frutas --- */
+function jogoChuva(){
+  $('#tela-arcade').innerHTML = `
+    <button class="btn pequeno branco" onclick="ir('arcade')">← Arcade</button>
+    <div class="titulo-secao"><h2>🍉 Chuva de Frutas</h2><small id="cronometro">30s</small></div>
+    <canvas id="tela-jogo" width="340" height="440"></canvas>
+    <p class="aviso" style="margin-top:12px">Arraste o dedo (ou use ← →) para mover a cesta. Fruta vale ponto, lata tira ponto.</p>
+    <div id="fim-chuva"></div>`;
+  const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
+  const L = cv.width, A = cv.height;
+  let cesta = {x:L/2, l:74}, itens=[], pontos=0, t0=Date.now(), rodando=true, spawn=0, esq=false, dir=false;
+  const TIPOS = [{e:'🍉',v:1},{e:'🍎',v:1},{e:'🍌',v:1},{e:'🍓',v:2},{e:'🥫',v:-2}];
+
+  const px = ev => {
+    const r = cv.getBoundingClientRect();
+    const cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+    cesta.x = Math.max(cesta.l/2, Math.min(L-cesta.l/2, cx * (L/r.width)));
+  };
+  const mover = ev => { ev.preventDefault(); px(ev); };
+  cv.addEventListener('pointermove', mover);
+  cv.addEventListener('pointerdown', mover);
+  const tecla = (e,v) => { if(e.key==='ArrowLeft') esq=v; if(e.key==='ArrowRight') dir=v; };
+  const kd = e=>tecla(e,true), ku = e=>tecla(e,false);
+  addEventListener('keydown', kd); addEventListener('keyup', ku);
+
+  function encerra(){
+    rodando = false;
+    removeEventListener('keydown', kd); removeEventListener('keyup', ku);
+    const premio = Math.max(0, pontos) * 3;
+    if(pontos > estado.recordes.chuva) estado.recordes.chuva = pontos;
+    estado.energia = lim(estado.energia - 14);
+    estado.felicidade = lim(estado.felicidade + 10);
+    estado.fome = lim(estado.fome - 5);
+    ganhar(premio, 15);
+    const el = $('#fim-chuva'); if(!el) return;
+    el.innerHTML = `<div class="sticker tilt-r" style="text-align:center;margin-top:16px">
+      <h2 style="font-size:24px">Acabou o tempo!</h2>
+      <p style="margin:6px 0 12px">${pontos} ponto(s) — seu bicho está lambendo os beiços.</p>
+      <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
+      <button class="btn grande" style="margin-top:14px" onclick="jogoChuva()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="ir('arcade')">Voltar ao arcade</button></div>`;
+  }
+  pararLoops = () => { rodando = false; removeEventListener('keydown',kd); removeEventListener('keyup',ku); };
+
+  (function laco(){
+    if(!rodando) return;
+    const restante = 30 - (Date.now()-t0)/1000;
+    const crono = $('#cronometro'); if(crono) crono.textContent = Math.max(0, restante).toFixed(0)+'s';
+    if(restante <= 0) return encerra();
+
+    if(esq) cesta.x = Math.max(cesta.l/2, cesta.x-7);
+    if(dir) cesta.x = Math.min(L-cesta.l/2, cesta.x+7);
+    if(--spawn <= 0){
+      spawn = 26 + Math.random()*20;
+      const t = TIPOS[Math.floor(Math.random()*TIPOS.length)];
+      itens.push({x:24+Math.random()*(L-48), y:-24, vy:1.9+Math.random()*1.8, ...t});
+    }
+    ctx.clearRect(0,0,L,A);
+    ctx.fillStyle = '#7ACB63'; ctx.fillRect(0, A-40, L, 40);
+    ctx.strokeStyle = '#33200F'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(0,A-40); ctx.lineTo(L,A-40); ctx.stroke();
+
+    itens.forEach(it => { it.y += it.vy; ctx.font='30px serif'; ctx.textAlign='center'; ctx.fillText(it.e, it.x, it.y); });
+    itens = itens.filter(it => {
+      if(it.y > A-58 && it.y < A-18 && Math.abs(it.x - cesta.x) < cesta.l/2 + 10){
+        pontos += it.v; return false;
+      }
+      return it.y < A+30;
+    });
+    // cesta
+    ctx.fillStyle = '#C98A4B'; ctx.strokeStyle = '#33200F'; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.roundRect(cesta.x-cesta.l/2, A-64, cesta.l, 30, 10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#33200F'; ctx.font = '900 20px Nunito, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('Pontos: '+pontos, 14, 32);
+    requestAnimationFrame(laco);
+  })();
+}
+
+/* ---------- 9. TELA: LOJA ---------- */
+const ITENS = [
+  {id:'melancia', emoji:'🍉', nome:'Melancia', preco:15, tipo:'comida', fome:22, alegria:6},
+  {id:'racao',    emoji:'🥣', nome:'Ração boa', preco:10, tipo:'comida', fome:16, alegria:2},
+  {id:'peixe',    emoji:'🐟', nome:'Peixe fresco', preco:22, tipo:'comida', fome:30, alegria:10},
+  {id:'bolo',     emoji:'🍰', nome:'Bolo de aniversário', preco:40, tipo:'comida', fome:18, alegria:26},
+  {id:'chapeu',   emoji:'🎩', nome:'Chapéu de festa', preco:70, tipo:'acessorio'},
+  {id:'oculos',   emoji:'🕶️', nome:'Óculos maneiro', preco:90, tipo:'acessorio'},
+  {id:'cachecol', emoji:'🧣', nome:'Cachecol roxo', preco:110, tipo:'acessorio'}
+];
+RENDER.loja = () => {
+  $('#tela-loja').innerHTML = `
+    <div class="titulo-secao"><h2>Loja da vila</h2><small>você tem 🪙 ${estado.moedas}</small></div>
+    <div class="sticker" style="text-align:center;padding-bottom:8px">
+      ${svgBicho(estado.tipo,{equipado:estado.equipado, estilo:'width:130px;height:130px'})}
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:-6px">
+        <span class="chip">🍖 fome ${lim(estado.fome)}</span><span class="chip">💗 alegria ${lim(estado.felicidade)}</span>
+      </div>
+    </div>
+    <div class="titulo-secao"><h2 style="font-size:21px">Comidas</h2></div>
+    <div class="grade-3">${ITENS.filter(i=>i.tipo==='comida').map(cartaoItem).join('')}</div>
+    <div class="titulo-secao"><h2 style="font-size:21px">Acessórios</h2></div>
+    <div class="grade-3">${ITENS.filter(i=>i.tipo==='acessorio').map(cartaoItem).join('')}</div>`;
+};
+function cartaoItem(i){
+  const tem = estado.mochila.includes(i.id);
+  const posto = estado.equipado.includes(i.id);
+  const podePagar = estado.moedas >= i.preco;
+  let rot, cls;
+  if(i.tipo==='acessorio' && tem){ rot = posto ? 'Tirar' : 'Vestir'; cls = posto ? 'roxo' : 'azul'; }
+  else { rot = '🪙 '+i.preco; cls = podePagar ? '' : 'bloq'; }
+  return `<div class="item-loja"><span class="emoji">${i.emoji}</span><b>${i.nome}</b>
+    <button class="btn pequeno ${cls}" onclick="usarItem('${i.id}')">${rot}</button></div>`;
+}
+function usarItem(id){
+  const i = ITENS.find(x=>x.id===id);
+  if(i.tipo==='acessorio' && estado.mochila.includes(id)){
+    const posto = estado.equipado.includes(id);
+    estado.equipado = posto ? estado.equipado.filter(x=>x!==id) : [...estado.equipado, id];
+    brinde(posto ? 'Guardado na mochila.' : 'Ficou um charme! 😎');
+    return RENDER.loja();
+  }
+  if(estado.moedas < i.preco) return brinde('Faltam 🪙 ' + (i.preco-estado.moedas) + '. Bora jogar um minigame!');
+  estado.moedas -= i.preco;
+  if(i.tipo==='comida'){
+    estado.fome = lim(estado.fome + i.fome);
+    estado.felicidade = lim(estado.felicidade + i.alegria);
+    brinde(i.emoji + ' Nhac! Fome em ' + lim(estado.fome) + '.');
+  } else {
+    estado.mochila.push(id); estado.equipado.push(id);
+    brinde('Novo acessório desbloqueado!');
+  }
+  atualizarHud(); RENDER.loja();
+}
+
+/* ---------- 10. TELA: MURAL (interação segura por blocos) ---------- */
+const BLOCOS = {
+  inicio:['Oi, gente!','Mandei bem!','Alguém me ajuda?','Boa sorte pra todo mundo!'],
+  meio:['terminei a trilha de História','gabaritei o quiz de Biologia','meu bicho subiu de nível','estou treinando frações','achei todos os pares no Memória'],
+  fim:['😄','🎉','🐾','💪','🌟']
+};
+let recadoNovo = {inicio:null, meio:null, fim:null};
+RENDER.mural = () => {
+  const previa = [recadoNovo.inicio, recadoNovo.meio, recadoNovo.fim].filter(Boolean).join(' ');
+  const blocos = (chave) => BLOCOS[chave].map(t =>
+    `<button class="bloco" aria-pressed="${recadoNovo[chave]===t}" onclick="escolherBloco('${chave}',this.textContent)">${t}</button>`).join('');
+  $('#tela-mural').innerHTML = `
+    <div class="titulo-secao"><h2>Mural da vila</h2><small>só frases prontas</small></div>
+    <div class="sticker">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.5px">1. Comece assim</p>
+      <div class="blocos">${blocos('inicio')}</div>
+      <p style="margin:0 0 4px;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.5px">2. Conte o que rolou</p>
+      <div class="blocos">${blocos('meio')}</div>
+      <p style="margin:0 0 4px;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.5px">3. Termine com</p>
+      <div class="blocos">${blocos('fim')}</div>
+      <div class="previa">${previa || 'Monte seu recado tocando nos blocos acima.'}</div>
+      <button class="btn grande" style="margin-top:12px" onclick="publicarRecado()">Publicar no mural</button>
+      <p style="font-size:12px;font-weight:700;opacity:.75;margin:10px 0 0">Não existe caixa de texto livre aqui. Ninguém consegue mandar mensagem privada, link, foto ou combinar encontro.</p>
+    </div>
+    <div class="titulo-secao"><h2 style="font-size:21px">Recados de hoje</h2></div>
+    ${estado.recados.map(r=>`<div class="recado">
+      <span class="av">${r.av}</span>
+      <div><span class="aut">${esc(r.aut)}</span><p class="txt">${esc(r.txt)}</p></div></div>`).join('')}`;
+};
+function escolherBloco(chave, texto){
+  recadoNovo[chave] = recadoNovo[chave] === texto ? null : texto;
+  RENDER.mural();
+}
+function publicarRecado(){
+  const {inicio, meio, fim} = recadoNovo;
+  if(!inicio || !meio) return brinde('Escolha um bloco do passo 1 e do passo 2.');
+  const emoji = {capivara:'🦫', salsicha:'🐶', gato:'🐱'}[estado.tipo];
+  estado.recados.unshift({av:emoji, aut:estado.apelido, txt:[inicio, meio, fim].filter(Boolean).join(' ')});
+  recadoNovo = {inicio:null, meio:null, fim:null};
+  ganhar(3, 5); brinde('Recado publicado! 💬');
+  RENDER.mural();
+}
+
+/* ---------- 11. TELA: PERFIL ---------- */
+const MEDALHAS = [
+  {id:'primeira', emoji:'🌱', nome:'Primeira lição', ok:()=>estado.licoesFeitas.length>=1},
+  {id:'cinco',    emoji:'📚', nome:'5 lições', ok:()=>estado.licoesFeitas.length>=5},
+  {id:'rico',     emoji:'💰', nome:'100 moedas', ok:()=>estado.moedas>=100},
+  {id:'nivel3',   emoji:'⭐', nome:'Nível 3', ok:()=>nivel()>=3},
+  {id:'memoria',  emoji:'🃏', nome:'Memória em 12 jogadas', ok:()=>estado.recordes.memoria!==null && estado.recordes.memoria<=12},
+  {id:'estiloso', emoji:'😎', nome:'Bicho estiloso', ok:()=>estado.equipado.length>=1}
+];
+RENDER.perfil = () => {
+  const totalLicoes = TRILHAS.flatMap(t=>t.licoes).length;
+  $('#tela-perfil').innerHTML = `
+    <div class="titulo-secao"><h2>Minha carteirinha</h2></div>
+    <div class="carteirinha">
+      <div class="selo">NÍVEL<br><span style="font-size:22px">${nivel()}</span></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="background:#fff;border:4px solid var(--tinta);border-radius:20px;padding:4px">
+          ${svgBicho(estado.tipo,{equipado:estado.equipado, estilo:'width:96px;height:96px'})}
+        </div>
+        <div>
+          <h2 style="font-size:26px">${esc(estado.apelido)}</h2>
+          <p style="margin:2px 0 0;font-size:14px;font-weight:900">${BICHOS[estado.tipo].nome} da Bichoteca</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+        <span class="chip">📚 ${estado.licoesFeitas.length}/${totalLicoes} lições</span>
+        <span class="chip">🪙 ${estado.moedas}</span>
+        <span class="chip">⭐ ${estado.xp} XP</span>
+      </div>
+    </div>
+    <div class="titulo-secao"><h2 style="font-size:21px">Medalhas</h2><small>${MEDALHAS.filter(m=>m.ok()).length}/${MEDALHAS.length}</small></div>
+    <div class="medalhas">${MEDALHAS.map(m=>
+      `<span class="medalha ${m.ok()?'':'off'}">${m.emoji} ${m.nome}</span>`).join('')}</div>
+    <div style="margin-top:18px"><button class="btn grande rosa" onclick="compartilhar()">🔗 Compartilhar carteirinha</button></div>
+    <p class="aviso" style="margin-top:12px">O link mostra só apelido, bicho, nível e medalhas. Nada de nome real, idade, escola ou cidade.</p>`;
+};
+function compartilhar(){
+  const texto = `Meu bicho ${estado.apelido} está no nível ${nivel()} na Bichoteca! 🐾`;
+  if(navigator.share) navigator.share({title:'Bichoteca', text:texto}).catch(()=>{});
+  else brinde('Link copiado! (no protótipo é só demonstração)');
+}
+
+/* ---------- 12. ONBOARDING ---------- */
+function montarEscolha(){
+  $('#grade-bichos').innerHTML = Object.entries(BICHOS).map(([k,b])=>
+    `<button class="escolha-bicho" data-tipo="${k}" aria-pressed="${estado.tipo===k}">
+      ${svgBicho(k,{estilo:'width:100%;height:auto'})}<b>${b.nome}</b></button>`).join('');
+  document.querySelectorAll('.escolha-bicho').forEach(b => b.onclick = () => {
+    estado.tipo = b.dataset.tipo; montarEscolha();
+  });
+}
+montarEscolha();
+$('#btn-comecar').onclick = () => {
+  const nome = $('#campo-nome').value.trim();
+  estado.apelido = nome || BICHOS[estado.tipo].nome;
+  $('#topo').hidden = false; $('#rodape').hidden = false;
+  atualizarHud();
+  brinde('Bem-vindo à Bichoteca, ' + estado.apelido + '! 🐾');
+  ir('casa');
+};
+$('#campo-nome').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-comecar').click(); });
+
+/* ---------- 13. DADOS: onde plugar o back-end na hospedagem ----------
+   O protótipo guarda tudo na memória (recarregou, zerou).
+   Na Hostinger, crie /api/estado.php lendo e gravando no MySQL e troque
+   as duas funções abaixo. É o único ponto do código que precisa mudar. */
+async function salvarNoServidor(){
+  // await fetch('api/estado.php', {method:'POST', headers:{'Content-Type':'application/json'},
+  //   body: JSON.stringify(estado)});
+}
+async function carregarDoServidor(){
+  // const r = await fetch('api/estado.php'); Object.assign(estado, await r.json());
+}
+
+/* ---------- 14. PWA: instalar como aplicativo ---------- */
+if('serviceWorker' in navigator){
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
