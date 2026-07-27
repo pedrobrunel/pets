@@ -2,7 +2,7 @@
   "name": "Bichoteca — a vila onde estudar é brincadeira",
   "short_name": "Bichoteca",
   "description": "Trilhas de estudo gamificadas do fundamental ao médio, com bichinhos e minigames.",
-  "start_url": "./index.html",
+  "start_url": "./app.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
