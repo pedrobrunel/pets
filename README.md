@@ -15,7 +15,7 @@ O aluno adota uma capivara, um salsicha ou um gato. Para alimentar e vestir o bi
 ```bash
 git clone https://github.com/pedrobrunel/pets.git
 cd pets
-python3 -m http.server 8000   # ou abra o index.html direto no navegador
+python3 -m http.server 8000   # http://localhost:8000/ é a home; o jogo fica em /app.html
 ```
 
 Para publicar: joga tudo dentro de `public_html/` na hospedagem compartilhada e acabou. Também roda de graça no GitHub Pages (*Settings → Pages → branch `main`*) — o protótipo inteiro funciona sem back-end.
@@ -29,8 +29,9 @@ Para publicar: joga tudo dentro de `public_html/` na hospedagem compartilhada e 
 ```
 .github/workflows/
   deploy.yml          publica na Hostinger a cada push na main
-index.html            protótipo inteiro — interface, conteúdo, minigames e estado
-manifest.json         identidade do PWA (nome, ícones, cor, tela cheia)
+index.html            home pública — objetivos do projeto e CTA de entrar/cadastrar
+app.html              o jogo em si — onboarding, trilhas, minigames, loja, mural, perfil
+manifest.json         identidade do PWA (nome, ícones, cor, tela cheia; start_url aponta pro app.html)
 sw.js                 service worker: funciona offline depois da 1ª visita
 icone-*.png           ícones do app instalado
 .htaccess             HTTPS forçado, cache e proteção das credenciais
@@ -51,7 +52,8 @@ api/
 - Minigame **Memória do Bicho** e **Chuva de Frutas** (canvas, com toque e teclado)
 - Loja com comidas (viram item de mochila) e acessórios que aparecem vestidos no bicho; a comida comprada só faz efeito quando o jogador escolhe "Dar pro bicho" — comprar e usar são coisas separadas
 - Mural de recados montados por blocos prontos
-- Carteirinha com trilha de conquistas em sequência, estilo álbum de figurinha
+- Perfil com retrato do bicho, estatísticas e trilha de conquistas em sequência, estilo álbum de figurinha
+- Home pública explicando o projeto pros responsáveis, com CTA de entrar/cadastrar
 - Instalável como aplicativo no Android e no iOS
 - Salvar progresso (opcional): com usuário + senha, o jogo sincroniza com o banco — sem conta, continua 100% local
 
@@ -141,7 +143,7 @@ CREATE TABLE jogadores (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-Com o banco pronto, o front-end já está ligado: a tela inicial tem um campo de senha opcional — em branco, o jogo continua 100% local igual antes; preenchido, `entrarNoServidor()`/`carregarDoServidor()`/`salvarNoServidor()` (fim do `index.html`) cuidam de criar a conta, restaurar progresso salvo e sincronizar a cada ação relevante (lição concluída, item comprado, item consumido, recado publicado).
+Com o banco pronto, o front-end já está ligado: a tela de onboarding do `app.html` tem um campo de senha opcional — em branco, o jogo continua 100% local igual antes; preenchido, `entrarNoServidor()`/`carregarDoServidor()`/`salvarNoServidor()` (fim do `app.html`) cuidam de criar a conta, restaurar progresso salvo e sincronizar a cada ação relevante (lição concluída, item comprado, item consumido, recado publicado).
 
 > ⚠️ **Moedas e XP hoje são calculados no navegador.** Qualquer aluno com o console aberto vira milionário. Quando isso passar a valer alguma coisa (ranking, item raro), a conta precisa subir para o PHP: o cliente manda *"respondi a alternativa 2 da pergunta 3 da lição bio1"*, o servidor confere e credita.
 
