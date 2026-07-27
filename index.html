@@ -518,6 +518,7 @@ const estado = {
   fome:72, felicidade:80, energia:90,
   equipado:[], mochila:[], inventario:{},
   licoesFeitas:[], recordes:{memoria:null, chuva:0, toca:0},
+  streak:{atual:0, melhor:0, ultimoDia:null},
   recados:[
     {av:'🦔', aut:'Nina_Ouriço', txt:'Terminei a trilha de Biologia! 🎉'},
     {av:'🐢', aut:'Zeca_Jabuti', txt:'Alguém me ajuda no quiz de Português? 😄'},
@@ -538,6 +539,31 @@ function ganhar(moedas=0, xp=0){
   atualizarHud();
   if(nivel() > antes) setTimeout(()=>brinde(`🎉 Nível ${nivel()}! Seu bicho está orgulhoso.`), 900);
   agendarSalvar();
+}
+
+/* ---------- sequência diária (streak) ---------- */
+const hojeStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+const diffDias = (de, ate) => Math.round((new Date(ate+'T00:00:00') - new Date(de+'T00:00:00')) / 86400000);
+// chamada uma vez por sessão (boot ou onboarding); idempotente — rodar de novo no mesmo
+// dia não faz nada, então é seguro chamar em qualquer entrada sem controlar duplicação
+function atualizarStreak(){
+  const hoje = hojeStr();
+  if(estado.streak.ultimoDia === hoje) return;
+  const primeiraVezDeSempre = !estado.streak.ultimoDia;
+  const manteveSequencia = !primeiraVezDeSempre && diffDias(estado.streak.ultimoDia, hoje) === 1;
+  estado.streak.atual = manteveSequencia ? estado.streak.atual + 1 : 1;
+  estado.streak.melhor = Math.max(estado.streak.melhor, estado.streak.atual);
+  estado.streak.ultimoDia = hoje;
+  if(primeiraVezDeSempre){ agendarSalvar(); return; } // já ganhou o "bem-vindo", sem prêmio duplicado
+  const premio = Math.min(10 + estado.streak.atual * 5, 60);
+  ganhar(premio, 10);
+  setTimeout(() => modal(`<h2 style="font-size:24px">🔥 ${estado.streak.atual} dia${estado.streak.atual===1?'':'s'} seguido${estado.streak.atual===1?'':'s'}!</h2>
+    <p style="margin:6px 0 12px">${manteveSequencia ? 'Sua ofensiva continua firme.' : 'Ofensiva reiniciada — volte amanhã pra crescer de novo!'}</p>
+    <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +10</span>
+    <button class="btn grande" style="margin-top:14px" onclick="fecharModal()">Bora estudar!</button>`), 600);
 }
 function atualizarHud(){
   $('#hud-moedas').textContent = estado.moedas;
@@ -614,6 +640,8 @@ RENDER.casa = () => {
       ${svgBicho(estado.tipo,{equipado:estado.equipado, classe: h.min>=70?'feliz':''})}
     </div>
     <div style="text-align:center"><span class="placa-nome">${h.emoji} ${esc(estado.apelido)}</span></div>
+    ${estado.streak.atual >= 1 ? `<div style="text-align:center;margin-top:6px">
+      <span class="chip">🔥 ${estado.streak.atual} dia${estado.streak.atual===1?'':'s'} seguido${estado.streak.atual===1?'':'s'}</span></div>` : ''}
     <p style="text-align:center;margin:10px 0 0;font-size:15px">Seu ${BICHOS[estado.tipo].nome.toLowerCase()} ${h.txt}.</p>
 
     <div class="sticker" style="margin-top:16px">${
@@ -654,15 +682,22 @@ setInterval(()=>{
 const TRILHAS = [
   { id:'his', nome:'História', emoji:'🏺', cor:'var(--manga)', licoes:[
     { id:'his1', emoji:'👑', titulo:'A Independência do Brasil', serie:'8º ano',
-      leitura:[
-        'Em 1808 a família real portuguesa fugiu de Napoleão e desembarcou no Rio de Janeiro. O Brasil deixou de ser só colônia: ganhou bancos, imprensa e escolas.',
-        'Quando as Cortes de Lisboa tentaram devolver o Brasil à condição de colônia, o príncipe D. Pedro decidiu ficar. Foi o <span class="destaque">Dia do Fico</span>, em 9 de janeiro de 1822.',
-        'Em 7 de setembro de 1822, às margens do Ipiranga, D. Pedro rompeu com Portugal. A independência foi declarada sem grande guerra no Sudeste, mas houve combates na Bahia, no Piauí e no Pará.'
-      ],
-      perguntas:[
-        {p:'Por que a família real veio para o Brasil em 1808?', alts:['Para fugir das tropas de Napoleão','Para explorar ouro em Minas','Porque Portugal afundou','Por causa de uma seca'], certa:0},
-        {p:'O que foi o Dia do Fico?', alts:['A chegada de Cabral','A recusa de D. Pedro em voltar a Portugal','A abolição da escravidão','A criação do Império Romano'], certa:1},
-        {p:'Em que ano o Brasil declarou independência?', alts:['1500','1889','1822','1930'], certa:2}
+      blocos:[
+        { tipo:'texto', paragrafos:[
+          'Em 1808 a família real portuguesa fugiu de Napoleão e desembarcou no Rio de Janeiro. O Brasil deixou de ser só colônia: ganhou bancos, imprensa e escolas.',
+          'Quando as Cortes de Lisboa tentaram devolver o Brasil à condição de colônia, o príncipe D. Pedro decidiu ficar. Foi o [[Dia do Fico|9 de janeiro de 1822 — D. Pedro recusou voltar a Portugal e ficou no Brasil.]].',
+          'Em 7 de setembro de 1822, às margens do Ipiranga, D. Pedro rompeu com Portugal. A independência foi declarada sem grande guerra no Sudeste, mas houve combates na Bahia, no Piauí e no Pará.'
+        ]},
+        { tipo:'flashcard', cartas:[
+          {frente:'1808', verso:'A família real portuguesa chega ao Brasil, fugindo de Napoleão.'},
+          {frente:'Dia do Fico', verso:'9 de janeiro de 1822 — D. Pedro recusa voltar a Portugal.'},
+          {frente:'7 de setembro de 1822', verso:'D. Pedro rompe com Portugal às margens do rio Ipiranga.'}
+        ]},
+        { tipo:'cloze', frase:'D. Pedro declarou a independência às margens do rio ___.',
+          opcoes:['Ipiranga','Amazonas','São Francisco'], certa:'Ipiranga' },
+        {tipo:'pergunta', p:'Por que a família real veio para o Brasil em 1808?', alts:['Para fugir das tropas de Napoleão','Para explorar ouro em Minas','Porque Portugal afundou','Por causa de uma seca'], certa:0},
+        {tipo:'pergunta', p:'O que foi o Dia do Fico?', alts:['A chegada de Cabral','A recusa de D. Pedro em voltar a Portugal','A abolição da escravidão','A criação do Império Romano'], certa:1},
+        {tipo:'pergunta', p:'Em que ano o Brasil declarou independência?', alts:['1500','1889','1822','1930'], certa:2}
       ]},
     { id:'his2', emoji:'⚙️', titulo:'Revolução Industrial', serie:'9º ano',
       leitura:[
@@ -839,7 +874,7 @@ let progresso = null;
 RENDER.licao = (id) => {
   const l = acharLicao(id);
   const blocos = blocosDaLicao(l);
-  progresso = {licao:l, blocos, i:0, acertos:0,
+  progresso = {licao:l, blocos, i:0, acertos:0, respostas:[],
     totalPerguntas: blocos.filter(b=>b.tipo==='pergunta').length,
     marcas: blocos.map(()=>'')};
   mostrarBloco();
@@ -859,14 +894,37 @@ function avancarBloco(marca){
   if(progresso.i < progresso.blocos.length) return mostrarBloco();
   concluirLicao();
 }
-function concluirLicao(){
-  const licao = progresso.licao, total = progresso.totalPerguntas, acertos = progresso.acertos;
+async function concluirLicao(){
+  const licao = progresso.licao, total = progresso.totalPerguntas, acertosLocais = progresso.acertos;
+  // com conta, quem manda no crédito é o servidor (confere o gabarito de verdade);
+  // sem conta — ou se o servidor estiver fora do ar — cai no cálculo local de sempre
+  if(logado){
+    try{
+      const dados = await enviarConclusao(licao.id, progresso.respostas);
+      if(Array.isArray(dados.licoesFeitas)) estado.licoesFeitas = dados.licoesFeitas;
+      ganhar(dados.moedas, dados.xp);
+      return mostrarResumoLicao(licao, dados.total, dados.acertos, dados.moedas, dados.xp);
+    }catch(e){ /* servidor indisponível: não trava o jogador, segue pro cálculo local */ }
+  }
   const meta = Math.ceil(total * 2/3);
   const primeiraVez = !estado.licoesFeitas.includes(licao.id);
-  const moedas = acertos * (primeiraVez ? 10 : 3);
-  const xp = acertos * (primeiraVez ? 15 : 5);
-  if(primeiraVez && acertos >= meta) estado.licoesFeitas.push(licao.id);
+  const moedas = acertosLocais * (primeiraVez ? 10 : 3);
+  const xp = acertosLocais * (primeiraVez ? 15 : 5);
+  if(primeiraVez && acertosLocais >= meta) estado.licoesFeitas.push(licao.id);
   ganhar(moedas, xp);
+  mostrarResumoLicao(licao, total, acertosLocais, moedas, xp);
+}
+async function enviarConclusao(licaoId, respostas){
+  const r = await fetch('api/estado.php?acao=completar_licao', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({licaoId, respostas})
+  });
+  const dados = await r.json();
+  if(!r.ok) throw new Error(dados.erro || 'falha ao confirmar a lição');
+  return dados;
+}
+function mostrarResumoLicao(licao, total, acertos, moedas, xp){
+  const meta = Math.ceil(total * 2/3);
   $('#tela-licao').innerHTML = `
     <div class="sticker tilt" style="text-align:center;margin-top:24px">
       <div style="font-size:56px">${acertos===total?'🏆':acertos>=meta?'🎉':'💪'}</div>
@@ -1050,6 +1108,7 @@ function responderBloco(i){
   const b = progresso.blocos[progresso.i];
   const acertou = i===b.certa;
   if(acertou) progresso.acertos++;
+  progresso.respostas.push(i);
   estado.felicidade = lim(estado.felicidade + (acertou?4:1));
   pintarPergunta(b, i);
 }
@@ -1414,6 +1473,7 @@ const MEDALHAS = [
   {id:'nivel3',   emoji:'⭐', nome:'Nível 3', ok:()=>nivel()>=3},
   {id:'memoria',  emoji:'🃏', nome:'Memória em 12 jogadas', ok:()=>estado.recordes.memoria!==null && estado.recordes.memoria<=12},
   {id:'reflexo',  emoji:'⚡', nome:'10 pontos na Toca', ok:()=>estado.recordes.toca>=10},
+  {id:'chama',    emoji:'🔥', nome:'7 dias seguidos', ok:()=>estado.streak.melhor>=7},
   {id:'estiloso', emoji:'😎', nome:'Bicho estiloso', ok:()=>estado.equipado.length>=1}
 ];
 RENDER.perfil = () => {
@@ -1435,6 +1495,7 @@ RENDER.perfil = () => {
         <span class="chip">📚 ${estado.licoesFeitas.length}/${totalLicoes} lições</span>
         <span class="chip">🪙 ${estado.moedas}</span>
         <span class="chip">⭐ ${estado.xp} XP</span>
+        <span class="chip">🔥 ${estado.streak.melhor}</span>
       </div>
     </div>
     <div class="titulo-secao" style="margin:12px 4px 6px"><h2 style="font-size:19px">Conquistas</h2><small>${MEDALHAS.filter(m=>m.ok()).length}/${MEDALHAS.length}</small></div>
@@ -1485,7 +1546,11 @@ $('#btn-comecar').onclick = async () => {
       aviso.style.display = 'block';
       return;
     }
+  } else {
+    salvandoLocal = true;
+    salvarLocal();
   }
+  atualizarStreak();
   $('#topo').hidden = false; $('#rodape').hidden = false;
   atualizarHud();
   brinde('Bem-vindo à Bichoteca, ' + estado.apelido + '! 🐾');
@@ -1494,10 +1559,12 @@ $('#btn-comecar').onclick = async () => {
 $('#campo-nome').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-comecar').click(); });
 $('#campo-senha').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-comecar').click(); });
 
-/* ---------- 13. DADOS: conta opcional (salvar/carregar progresso no servidor) ----------
-   Sem senha no onboarding, o jogo continua 100% local (nada muda aqui).
-   Com senha, usa o back-end opcional (api/estado.php) documentado no README. */
+/* ---------- 13. DADOS: conta opcional (salvar/carregar progresso no servidor ou no navegador) ----------
+   Sem senha no onboarding, o jogo salva sozinho no localStorage do navegador — sem
+   servidor, mas sem perder tudo a cada recarregada. Com senha, usa o back-end opcional
+   (api/estado.php) documentado no README, que tem prioridade quando os dois existem. */
 let logado = false;
+let salvandoLocal = false;
 async function entrarNoServidor(apelido, senha){
   const r = await fetch('api/estado.php?acao=entrar', {
     method:'POST', headers:{'Content-Type':'application/json'},
@@ -1515,11 +1582,24 @@ async function carregarDoServidor(){
     return true;
   }catch(e){ return false; }
 }
+const CHAVE_LOCAL = 'bichoteca-estado';
+function salvarLocal(){
+  try{ localStorage.setItem(CHAVE_LOCAL, JSON.stringify(estado)); }
+  catch(e){ /* localStorage bloqueado (ex.: aba anônima) — o jogo segue, só não persiste */ }
+}
+function carregarLocal(){
+  try{
+    const salvo = localStorage.getItem(CHAVE_LOCAL);
+    if(!salvo) return false;
+    Object.assign(estado, JSON.parse(salvo));
+    return true;
+  }catch(e){ return false; }
+}
 let salvarTimer;
 function agendarSalvar(){
-  if(!logado) return;
+  if(!logado && !salvandoLocal) return;
   clearTimeout(salvarTimer);
-  salvarTimer = setTimeout(salvarNoServidor, 2000);
+  salvarTimer = setTimeout(logado ? salvarNoServidor : salvarLocal, 2000);
 }
 async function salvarNoServidor(){
   try{
@@ -1530,11 +1610,19 @@ async function salvarNoServidor(){
   }catch(e){ /* offline: o jogo continua local, tenta salvar de novo na próxima ação */ }
 }
 
-/* sessão de retorno: se o navegador já tem um login válido, pula o onboarding */
+/* sessão de retorno: se o navegador já tem login ou save local, pula o onboarding.
+   O servidor tem prioridade — se a conta existir lá, é ela que vale. */
 (async () => {
-  const restaurado = await carregarDoServidor();
-  if(restaurado && estado.apelido){
+  const restauradoServidor = await carregarDoServidor();
+  if(restauradoServidor && estado.apelido){
     logado = true;
+    atualizarStreak();
+    $('#topo').hidden = false; $('#rodape').hidden = false;
+    atualizarHud();
+    ir('casa');
+  } else if(carregarLocal() && estado.apelido){
+    salvandoLocal = true;
+    atualizarStreak();
     $('#topo').hidden = false; $('#rodape').hidden = false;
     atualizarHud();
     ir('casa');
