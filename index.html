@@ -330,6 +330,31 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--tint
 #brinde.ver{opacity:1;transform:translateX(-50%) scale(1)}
 .aviso{background:#fff;border:3px dashed var(--tinta);border-radius:16px;padding:12px 14px;font-size:13px;font-weight:700}
 .vazio{text-align:center;padding:26px 12px;font-size:15px}
+
+/* ---------- modal (fim de minigame etc.) ---------- */
+.modal-fundo{position:fixed;inset:0;z-index:95;background:rgba(51,32,15,.6);
+  display:flex;align-items:center;justify-content:center;padding:20px;animation:entra .18s ease-out}
+.modal-fundo[hidden]{display:none}
+.modal-fundo .cartao-modal{max-width:340px;width:100%;max-height:82vh;overflow-y:auto;text-align:center}
+
+/* ---------- toca do bicho (minigame 3) ---------- */
+.grade-toca{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:300px;margin:4px auto 0}
+.buraco{aspect-ratio:1;border:var(--borda) solid var(--tinta);border-radius:50%;
+  background:radial-gradient(circle at 50% 62%, #7A4210 0%, #7A4210 55%, #B5651D 56%, #B5651D 100%);
+  box-shadow:var(--sombra-p);font-size:28px;display:grid;place-items:center;padding:0}
+.buraco.ativo{animation:pop .15s ease-out}
+@keyframes pop{0%{transform:scale(.4)}70%{transform:scale(1.15)}100%{transform:scale(1)}}
+.placar-toca{text-align:center;font-weight:900;font-size:15px;margin:2px 0 6px}
+
+/* ---------- abas da loja / filtro de série nas trilhas ---------- */
+.abas-loja{display:flex;gap:8px;margin:16px 0 4px}
+.aba-loja{flex:1;background:#fff;border:3px solid var(--tinta);border-radius:14px;padding:10px 8px;
+  font-size:14px;font-weight:900;box-shadow:0 3px 0 var(--tinta)}
+.aba-loja.ativa{background:var(--moeda)}
+.filtro-series{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 14px;-webkit-overflow-scrolling:touch}
+.chip-filtro{flex:0 0 auto;background:#fff;border:3px solid var(--tinta);border-radius:999px;
+  padding:7px 14px;font-size:13px;font-weight:900;box-shadow:0 3px 0 var(--tinta)}
+.chip-filtro.ativo{background:var(--jabuti);color:#fff}
 .vazio .emoji{font-size:44px;display:block;margin-bottom:8px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -394,6 +419,7 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--tint
 </nav>
 
 <div id="brinde" role="status" aria-live="polite"></div>
+<div id="modal-fundo" class="modal-fundo" hidden onclick="if(event.target===this) fecharModal()"></div>
 <script>
 /* =========================================================
    BICHOTECA — protótipo funcional (100% front-end)
@@ -491,7 +517,8 @@ const estado = {
   moedas:60, xp:0,
   fome:72, felicidade:80, energia:90,
   equipado:[], mochila:[], inventario:{},
-  licoesFeitas:[], recordes:{memoria:null, chuva:0},
+  licoesFeitas:[], recordes:{memoria:null, chuva:0, toca:0},
+  streak:{atual:0, melhor:0, ultimoDia:null},
   recados:[
     {av:'🦔', aut:'Nina_Ouriço', txt:'Terminei a trilha de Biologia! 🎉'},
     {av:'🐢', aut:'Zeca_Jabuti', txt:'Alguém me ajuda no quiz de Português? 😄'},
@@ -513,6 +540,31 @@ function ganhar(moedas=0, xp=0){
   if(nivel() > antes) setTimeout(()=>brinde(`🎉 Nível ${nivel()}! Seu bicho está orgulhoso.`), 900);
   agendarSalvar();
 }
+
+/* ---------- sequência diária (streak) ---------- */
+const hojeStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+const diffDias = (de, ate) => Math.round((new Date(ate+'T00:00:00') - new Date(de+'T00:00:00')) / 86400000);
+// chamada uma vez por sessão (boot ou onboarding); idempotente — rodar de novo no mesmo
+// dia não faz nada, então é seguro chamar em qualquer entrada sem controlar duplicação
+function atualizarStreak(){
+  const hoje = hojeStr();
+  if(estado.streak.ultimoDia === hoje) return;
+  const primeiraVezDeSempre = !estado.streak.ultimoDia;
+  const manteveSequencia = !primeiraVezDeSempre && diffDias(estado.streak.ultimoDia, hoje) === 1;
+  estado.streak.atual = manteveSequencia ? estado.streak.atual + 1 : 1;
+  estado.streak.melhor = Math.max(estado.streak.melhor, estado.streak.atual);
+  estado.streak.ultimoDia = hoje;
+  if(primeiraVezDeSempre){ agendarSalvar(); return; } // já ganhou o "bem-vindo", sem prêmio duplicado
+  const premio = Math.min(10 + estado.streak.atual * 5, 60);
+  ganhar(premio, 10);
+  setTimeout(() => modal(`<h2 style="font-size:24px">🔥 ${estado.streak.atual} dia${estado.streak.atual===1?'':'s'} seguido${estado.streak.atual===1?'':'s'}!</h2>
+    <p style="margin:6px 0 12px">${manteveSequencia ? 'Sua ofensiva continua firme.' : 'Ofensiva reiniciada — volte amanhã pra crescer de novo!'}</p>
+    <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +10</span>
+    <button class="btn grande" style="margin-top:14px" onclick="fecharModal()">Bora estudar!</button>`), 600);
+}
 function atualizarHud(){
   $('#hud-moedas').textContent = estado.moedas;
   $('#hud-nivel').textContent = nivel();
@@ -521,6 +573,17 @@ let brindeTimer;
 function brinde(msg, duracao=2600){
   const el = $('#brinde'); el.textContent = msg; el.classList.add('ver');
   clearTimeout(brindeTimer); brindeTimer = setTimeout(()=>el.classList.remove('ver'), duracao);
+}
+// modal usado pelas telas de fim de minigame — fica sobreposto, então nunca
+// briga com a altura fixa de arcade/perfil nem gera barra de rolagem no fundo
+function modal(html){
+  const el = $('#modal-fundo');
+  el.innerHTML = `<div class="cartao-modal">${html}</div>`;
+  el.hidden = false;
+}
+function fecharModal(){
+  $('#modal-fundo').hidden = true;
+  $('#modal-fundo').innerHTML = '';
 }
 
 /* ---------- 3. NAVEGAÇÃO ---------- */
@@ -547,7 +610,7 @@ function ajustarAlturaTela(secao){
   const rodapeEl = $('#rodape');
   const disponivel = rodapeEl.getBoundingClientRect().top - topoEl.getBoundingClientRect().bottom - 12;
   secao.style.height = Math.max(200, disponivel) + 'px';
-  secao.style.overflowY = 'auto'; // rede de segurança: some aparelho fora do comum não deveria depender disso
+  secao.style.overflowY = 'hidden'; // arcade e perfil nunca mostram barra de rolagem, nem como fallback
 }
 document.querySelectorAll('.aba').forEach(a => a.onclick = () => ir(a.dataset.ir));
 let pararLoops = null;
@@ -577,6 +640,8 @@ RENDER.casa = () => {
       ${svgBicho(estado.tipo,{equipado:estado.equipado, classe: h.min>=70?'feliz':''})}
     </div>
     <div style="text-align:center"><span class="placa-nome">${h.emoji} ${esc(estado.apelido)}</span></div>
+    ${estado.streak.atual >= 1 ? `<div style="text-align:center;margin-top:6px">
+      <span class="chip">🔥 ${estado.streak.atual} dia${estado.streak.atual===1?'':'s'} seguido${estado.streak.atual===1?'':'s'}</span></div>` : ''}
     <p style="text-align:center;margin:10px 0 0;font-size:15px">Seu ${BICHOS[estado.tipo].nome.toLowerCase()} ${h.txt}.</p>
 
     <div class="sticker" style="margin-top:16px">${
@@ -617,15 +682,22 @@ setInterval(()=>{
 const TRILHAS = [
   { id:'his', nome:'História', emoji:'🏺', cor:'var(--manga)', licoes:[
     { id:'his1', emoji:'👑', titulo:'A Independência do Brasil', serie:'8º ano',
-      leitura:[
-        'Em 1808 a família real portuguesa fugiu de Napoleão e desembarcou no Rio de Janeiro. O Brasil deixou de ser só colônia: ganhou bancos, imprensa e escolas.',
-        'Quando as Cortes de Lisboa tentaram devolver o Brasil à condição de colônia, o príncipe D. Pedro decidiu ficar. Foi o <span class="destaque">Dia do Fico</span>, em 9 de janeiro de 1822.',
-        'Em 7 de setembro de 1822, às margens do Ipiranga, D. Pedro rompeu com Portugal. A independência foi declarada sem grande guerra no Sudeste, mas houve combates na Bahia, no Piauí e no Pará.'
-      ],
-      perguntas:[
-        {p:'Por que a família real veio para o Brasil em 1808?', alts:['Para fugir das tropas de Napoleão','Para explorar ouro em Minas','Porque Portugal afundou','Por causa de uma seca'], certa:0},
-        {p:'O que foi o Dia do Fico?', alts:['A chegada de Cabral','A recusa de D. Pedro em voltar a Portugal','A abolição da escravidão','A criação do Império Romano'], certa:1},
-        {p:'Em que ano o Brasil declarou independência?', alts:['1500','1889','1822','1930'], certa:2}
+      blocos:[
+        { tipo:'texto', paragrafos:[
+          'Em 1808 a família real portuguesa fugiu de Napoleão e desembarcou no Rio de Janeiro. O Brasil deixou de ser só colônia: ganhou bancos, imprensa e escolas.',
+          'Quando as Cortes de Lisboa tentaram devolver o Brasil à condição de colônia, o príncipe D. Pedro decidiu ficar. Foi o [[Dia do Fico|9 de janeiro de 1822 — D. Pedro recusou voltar a Portugal e ficou no Brasil.]].',
+          'Em 7 de setembro de 1822, às margens do Ipiranga, D. Pedro rompeu com Portugal. A independência foi declarada sem grande guerra no Sudeste, mas houve combates na Bahia, no Piauí e no Pará.'
+        ]},
+        { tipo:'flashcard', cartas:[
+          {frente:'1808', verso:'A família real portuguesa chega ao Brasil, fugindo de Napoleão.'},
+          {frente:'Dia do Fico', verso:'9 de janeiro de 1822 — D. Pedro recusa voltar a Portugal.'},
+          {frente:'7 de setembro de 1822', verso:'D. Pedro rompe com Portugal às margens do rio Ipiranga.'}
+        ]},
+        { tipo:'cloze', frase:'D. Pedro declarou a independência às margens do rio ___.',
+          opcoes:['Ipiranga','Amazonas','São Francisco'], certa:'Ipiranga' },
+        {tipo:'pergunta', p:'Por que a família real veio para o Brasil em 1808?', alts:['Para fugir das tropas de Napoleão','Para explorar ouro em Minas','Porque Portugal afundou','Por causa de uma seca'], certa:0},
+        {tipo:'pergunta', p:'O que foi o Dia do Fico?', alts:['A chegada de Cabral','A recusa de D. Pedro em voltar a Portugal','A abolição da escravidão','A criação do Império Romano'], certa:1},
+        {tipo:'pergunta', p:'Em que ano o Brasil declarou independência?', alts:['1500','1889','1822','1930'], certa:2}
       ]},
     { id:'his2', emoji:'⚙️', titulo:'Revolução Industrial', serie:'9º ano',
       leitura:[
@@ -758,19 +830,34 @@ function blocosDaLicao(l){
 }
 
 /* ---------- 6. TELA: TRILHAS ---------- */
+// ordem de exibição do filtro por ano — assim que o currículo crescer (BNCC completa),
+// as séries aparecem na ordem certa em vez da ordem em que os dados foram escritos
+const ORDEM_SERIES = ['6º ano','7º ano','8º ano','9º ano','1º ano do médio','2º ano do médio','3º ano do médio'];
+let filtroSerie = 'todos';
+function filtrarSerie(s){ filtroSerie = s; RENDER.trilhas(); }
 RENDER.trilhas = () => {
+  const seriesUsadas = [...new Set(TRILHAS.flatMap(t=>t.licoes.map(l=>l.serie)))]
+    .sort((a,b) => ORDEM_SERIES.indexOf(a) - ORDEM_SERIES.indexOf(b));
+  const trilhasVisiveis = TRILHAS.map(t => ({
+    ...t, licoesVisiveis: t.licoes.filter(l => filtroSerie==='todos' || l.serie===filtroSerie)
+  })).filter(t => t.licoesVisiveis.length);
   $('#tela-trilhas').innerHTML = `
     <div class="titulo-secao"><h2>Trilhas</h2><small>do fundamental ao médio</small></div>
-    ${TRILHAS.map(t => {
-      const feitas = t.licoes.filter(l=>estado.licoesFeitas.includes(l.id)).length;
+    <div class="filtro-series">
+      <button class="chip-filtro ${filtroSerie==='todos'?'ativo':''}" onclick="filtrarSerie('todos')">Todos os anos</button>
+      ${seriesUsadas.map(s=>
+        `<button class="chip-filtro ${filtroSerie===s?'ativo':''}" onclick="filtrarSerie('${s}')">${s}</button>`).join('')}
+    </div>
+    ${trilhasVisiveis.length ? trilhasVisiveis.map(t => {
+      const feitas = t.licoesVisiveis.filter(l=>estado.licoesFeitas.includes(l.id)).length;
       return `<div class="sticker" style="margin-bottom:14px;border-left:14px solid ${t.cor}">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
           <span style="font-size:28px">${t.emoji}</span>
           <h3 style="font-size:22px;flex:1">${t.nome}</h3>
-          <span class="chip">${feitas}/${t.licoes.length}</span>
+          <span class="chip">${feitas}/${t.licoesVisiveis.length}</span>
         </div>
         <div class="grade">
-        ${t.licoes.map(l => {
+        ${t.licoesVisiveis.map(l => {
           const ok = estado.licoesFeitas.includes(l.id);
           return `<button class="cartao-trilha" onclick="ir('licao','${l.id}')">
             ${ok?'<span class="fita">FEITA</span>':''}
@@ -778,7 +865,7 @@ RENDER.trilhas = () => {
             <h3>${l.titulo}</h3><p>${l.serie}</p></button>`;
         }).join('')}
         </div></div>`;
-    }).join('')}
+    }).join('') : `<p class="vazio"><span class="emoji">🔍</span>Nenhuma lição pra esse ano ainda.</p>`}
     <p class="aviso">Cada lição tem leitura, atividades e um quizzinho no final. Errou? Sem drama: dá pra refazer quantas vezes quiser.</p>`;
 };
 
@@ -787,7 +874,7 @@ let progresso = null;
 RENDER.licao = (id) => {
   const l = acharLicao(id);
   const blocos = blocosDaLicao(l);
-  progresso = {licao:l, blocos, i:0, acertos:0,
+  progresso = {licao:l, blocos, i:0, acertos:0, respostas:[],
     totalPerguntas: blocos.filter(b=>b.tipo==='pergunta').length,
     marcas: blocos.map(()=>'')};
   mostrarBloco();
@@ -807,14 +894,37 @@ function avancarBloco(marca){
   if(progresso.i < progresso.blocos.length) return mostrarBloco();
   concluirLicao();
 }
-function concluirLicao(){
-  const licao = progresso.licao, total = progresso.totalPerguntas, acertos = progresso.acertos;
+async function concluirLicao(){
+  const licao = progresso.licao, total = progresso.totalPerguntas, acertosLocais = progresso.acertos;
+  // com conta, quem manda no crédito é o servidor (confere o gabarito de verdade);
+  // sem conta — ou se o servidor estiver fora do ar — cai no cálculo local de sempre
+  if(logado){
+    try{
+      const dados = await enviarConclusao(licao.id, progresso.respostas);
+      if(Array.isArray(dados.licoesFeitas)) estado.licoesFeitas = dados.licoesFeitas;
+      ganhar(dados.moedas, dados.xp);
+      return mostrarResumoLicao(licao, dados.total, dados.acertos, dados.moedas, dados.xp);
+    }catch(e){ /* servidor indisponível: não trava o jogador, segue pro cálculo local */ }
+  }
   const meta = Math.ceil(total * 2/3);
   const primeiraVez = !estado.licoesFeitas.includes(licao.id);
-  const moedas = acertos * (primeiraVez ? 10 : 3);
-  const xp = acertos * (primeiraVez ? 15 : 5);
-  if(primeiraVez && acertos >= meta) estado.licoesFeitas.push(licao.id);
+  const moedas = acertosLocais * (primeiraVez ? 10 : 3);
+  const xp = acertosLocais * (primeiraVez ? 15 : 5);
+  if(primeiraVez && acertosLocais >= meta) estado.licoesFeitas.push(licao.id);
   ganhar(moedas, xp);
+  mostrarResumoLicao(licao, total, acertosLocais, moedas, xp);
+}
+async function enviarConclusao(licaoId, respostas){
+  const r = await fetch('api/estado.php?acao=completar_licao', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({licaoId, respostas})
+  });
+  const dados = await r.json();
+  if(!r.ok) throw new Error(dados.erro || 'falha ao confirmar a lição');
+  return dados;
+}
+function mostrarResumoLicao(licao, total, acertos, moedas, xp){
+  const meta = Math.ceil(total * 2/3);
   $('#tela-licao').innerHTML = `
     <div class="sticker tilt" style="text-align:center;margin-top:24px">
       <div style="font-size:56px">${acertos===total?'🏆':acertos>=meta?'🎉':'💪'}</div>
@@ -998,6 +1108,7 @@ function responderBloco(i){
   const b = progresso.blocos[progresso.i];
   const acertou = i===b.certa;
   if(acertou) progresso.acertos++;
+  progresso.respostas.push(i);
   estado.felicidade = lim(estado.felicidade + (acertou?4:1));
   pintarPergunta(b, i);
 }
@@ -1020,6 +1131,8 @@ RENDER.arcade = () => {
         <span class="emoji">🃏</span><h3>Memória do Bicho</h3><p>Ache os pares. Recorde: ${estado.recordes.memoria ?? '—'} jogadas</p></button>
       <button class="cartao-trilha" onclick="jogoChuva()">
         <span class="emoji">🍉</span><h3>Chuva de Frutas</h3><p>Recorde: ${estado.recordes.chuva} pontos</p></button>
+      <button class="cartao-trilha" style="grid-column:1 / -1" onclick="jogoToca()">
+        <span class="emoji">🕳️</span><h3>Toca do Bicho</h3><p>Toque rápido, evite o raio. Recorde: ${estado.recordes.toca} pontos</p></button>
     </div>
     <p class="aviso" style="margin-top:16px">Minigame gasta energia do bicho — mas ela volta sozinha com o tempo.</p>`;
 };
@@ -1051,19 +1164,18 @@ function jogoMemoria(){
         estado.energia = lim(estado.energia - 10);
         estado.felicidade = lim(estado.felicidade + 12);
         ganhar(premio, 20);
-        $('#fim-mem').innerHTML = `<div class="sticker tilt" style="text-align:center;margin-top:16px">
-          <h2 style="font-size:24px">Todos os pares! 🎉</h2>
+        modal(`<h2 style="font-size:24px">Todos os pares! 🎉</h2>
           <p style="margin:6px 0 12px">Você fez em ${jogadas} jogadas.</p>
           <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +20</span>
-          <button class="btn grande" style="margin-top:14px" onclick="jogoMemoria()">Jogar de novo</button>
-          <button class="btn grande branco" style="margin-top:10px" onclick="ir('arcade')">Voltar ao arcade</button></div>`;
+          <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoMemoria()">Jogar de novo</button>
+          <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
       }
     }, a.e===c.e ? 260 : 700);
   };
   $('#tela-arcade').innerHTML = `
     <button class="btn pequeno branco" onclick="ir('arcade')">← Arcade</button>
     <div class="titulo-secao"><h2>🃏 Memória do Bicho</h2><small>jogadas: <b id="placar-mem">0</b></small></div>
-    <div id="tabuleiro-memoria"></div><div id="fim-mem"></div>`;
+    <div id="tabuleiro-memoria"></div>`;
   pinta();
 }
 
@@ -1073,8 +1185,7 @@ function jogoChuva(){
     <button class="btn pequeno branco" onclick="ir('arcade')">← Arcade</button>
     <div class="titulo-secao"><h2>🍉 Chuva de Frutas</h2><small id="cronometro">30s</small></div>
     <canvas id="tela-jogo"></canvas>
-    <p class="aviso" style="margin-top:12px">Arraste o dedo (ou use ← →) para mover a cesta. Fruta vale ponto, lata tira ponto.</p>
-    <div id="fim-chuva"></div>`;
+    <p class="aviso" style="margin-top:12px">Arraste o dedo (ou use ← →) para mover a cesta. Fruta vale ponto, lata tira ponto.</p>`;
   const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
   // tamanho calculado pelo espaço real que sobra dentro da #tela-arcade (já limitada por
   // ajustarAlturaTela) — sem isso o canvas fixo de 340x440 estourava em celulares menores
@@ -1113,13 +1224,11 @@ function jogoChuva(){
     estado.felicidade = lim(estado.felicidade + 10);
     estado.fome = lim(estado.fome - 5);
     ganhar(premio, 15);
-    const el = $('#fim-chuva'); if(!el) return;
-    el.innerHTML = `<div class="sticker tilt-r" style="text-align:center;margin-top:16px">
-      <h2 style="font-size:24px">Acabou o tempo!</h2>
+    modal(`<h2 style="font-size:24px">Acabou o tempo!</h2>
       <p style="margin:6px 0 12px">${pontos} ponto(s) — seu bicho está lambendo os beiços.</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
-      <button class="btn grande" style="margin-top:14px" onclick="jogoChuva()">Jogar de novo</button>
-      <button class="btn grande branco" style="margin-top:10px" onclick="ir('arcade')">Voltar ao arcade</button></div>`;
+      <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoChuva()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
   pararLoops = () => { rodando = false; removeEventListener('keydown',kd); removeEventListener('keyup',ku); };
 
@@ -1156,6 +1265,73 @@ function jogoChuva(){
   })();
 }
 
+/* --- minigame 3: toca do bicho (whack-a-mole) --- */
+function jogoToca(){
+  const emojiAlvo = {capivara:'🦫', salsicha:'🐶', gato:'🐱'}[estado.tipo];
+  const N = 9, DURACAO = 25;
+  let buracos = Array(N).fill(null); // null | 'alvo' | 'decoy'
+  let sumiTimers = Array(N).fill(null);
+  let pontos = 0, t0 = Date.now(), rodando = true, spawnTimer = null, cronoTimer = null;
+
+  const pinta = () => {
+    $('#buracos-toca').innerHTML = buracos.map((b,i) =>
+      `<button class="buraco ${b?'ativo':''}" onclick="window._toca(${i})">${b==='alvo'?emojiAlvo:b==='decoy'?'⚡':''}</button>`).join('');
+    $('#placar-toca').textContent = pontos;
+  };
+  window._toca = i => {
+    const b = buracos[i];
+    if(!b) return;
+    pontos = b==='alvo' ? pontos+1 : Math.max(0, pontos-1);
+    clearTimeout(sumiTimers[i]); sumiTimers[i] = null;
+    buracos[i] = null;
+    pinta();
+  };
+  function spawnUm(){
+    if(!rodando) return;
+    const decorrido = (Date.now()-t0)/1000;
+    const vazios = buracos.map((b,i)=>b?-1:i).filter(i=>i>=0);
+    if(vazios.length){
+      const i = vazios[Math.floor(Math.random()*vazios.length)];
+      buracos[i] = Math.random() < 0.72 ? 'alvo' : 'decoy';
+      pinta();
+      const tempoVisivel = Math.max(450, 1000 - decorrido*18);
+      sumiTimers[i] = setTimeout(()=>{ buracos[i] = null; sumiTimers[i] = null; pinta(); }, tempoVisivel);
+    }
+    const proximoSpawn = Math.max(320, 850 - decorrido*18);
+    spawnTimer = setTimeout(spawnUm, proximoSpawn);
+  }
+  function encerra(){
+    rodando = false;
+    clearTimeout(spawnTimer); clearInterval(cronoTimer);
+    sumiTimers.forEach(t => t && clearTimeout(t));
+    const premio = pontos * 4;
+    if(pontos > estado.recordes.toca) estado.recordes.toca = pontos;
+    estado.energia = lim(estado.energia - 12);
+    estado.felicidade = lim(estado.felicidade + 10);
+    ganhar(premio, 15);
+    modal(`<h2 style="font-size:24px">Toca fechada! 🕳️</h2>
+      <p style="margin:6px 0 12px">Você fez ${pontos} ponto(s).</p>
+      <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
+      <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoToca()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+  }
+  pararLoops = () => { rodando = false; clearTimeout(spawnTimer); clearInterval(cronoTimer); sumiTimers.forEach(t => t && clearTimeout(t)); };
+
+  $('#tela-arcade').innerHTML = `
+    <button class="btn pequeno branco" onclick="ir('arcade')">← Arcade</button>
+    <div class="titulo-secao"><h2>🕳️ Toca do Bicho</h2><small id="cronometro-toca">${DURACAO}s</small></div>
+    <div class="placar-toca">Pontos: <span id="placar-toca">0</span></div>
+    <div id="buracos-toca" class="grade-toca"></div>
+    <p class="aviso" style="margin-top:12px">Toque no ${emojiAlvo} rápido! Se tocar no ⚡ perde ponto.</p>`;
+  pinta();
+  cronoTimer = setInterval(()=>{
+    const restante = DURACAO - (Date.now()-t0)/1000;
+    const el = $('#cronometro-toca'); if(el) el.textContent = Math.max(0, restante).toFixed(0)+'s';
+    if(restante <= 0) encerra();
+  }, 200);
+  spawnUm();
+}
+
 /* ---------- 9. TELA: LOJA ---------- */
 const ITENS = [
   {id:'melancia', emoji:'🍉', nome:'Melancia', preco:15, tipo:'comida', fome:22, alegria:6},
@@ -1166,8 +1342,12 @@ const ITENS = [
   {id:'oculos',   emoji:'🕶️', nome:'Óculos maneiro', preco:90, tipo:'acessorio'},
   {id:'cachecol', emoji:'🧣', nome:'Cachecol roxo', preco:110, tipo:'acessorio'}
 ];
+let lojaAba = 'comprar';
+function trocarAbaLoja(aba){ lojaAba = aba; RENDER.loja(); }
 RENDER.loja = () => {
   const comidasNaMochila = ITENS.filter(i => i.tipo==='comida' && estado.inventario[i.id] > 0);
+  const acessoriosNaMochila = ITENS.filter(i => i.tipo==='acessorio' && estado.mochila.includes(i.id));
+  const mochilaVazia = !comidasNaMochila.length && !acessoriosNaMochila.length;
   $('#tela-loja').innerHTML = `
     <div class="titulo-secao"><h2>Loja da vila</h2><small>você tem 🪙 ${estado.moedas}</small></div>
     <div class="sticker" style="text-align:center;padding-bottom:8px">
@@ -1176,13 +1356,24 @@ RENDER.loja = () => {
         <span class="chip">🍖 fome ${lim(estado.fome)}</span><span class="chip">💗 alegria ${lim(estado.felicidade)}</span>
       </div>
     </div>
-    ${comidasNaMochila.length ? `
-      <div class="titulo-secao"><h2 style="font-size:21px">Minha mochila</h2><small>toque pra dar pro bicho</small></div>
-      <div class="grade-3">${comidasNaMochila.map(cartaoMochila).join('')}</div>` : ''}
-    <div class="titulo-secao"><h2 style="font-size:21px">Comidas</h2></div>
-    <div class="grade-3">${ITENS.filter(i=>i.tipo==='comida').map(cartaoItem).join('')}</div>
-    <div class="titulo-secao"><h2 style="font-size:21px">Acessórios</h2></div>
-    <div class="grade-3">${ITENS.filter(i=>i.tipo==='acessorio').map(cartaoItem).join('')}</div>`;
+    <div class="abas-loja">
+      <button class="aba-loja ${lojaAba==='comprar'?'ativa':''}" onclick="trocarAbaLoja('comprar')">🛒 Comprar</button>
+      <button class="aba-loja ${lojaAba==='mochila'?'ativa':''}" onclick="trocarAbaLoja('mochila')">🎒 Mochila</button>
+    </div>
+    ${lojaAba==='comprar' ? `
+      <div class="titulo-secao"><h2 style="font-size:21px">Comidas</h2></div>
+      <div class="grade-3">${ITENS.filter(i=>i.tipo==='comida').map(cartaoItem).join('')}</div>
+      <div class="titulo-secao"><h2 style="font-size:21px">Acessórios</h2></div>
+      <div class="grade-3">${ITENS.filter(i=>i.tipo==='acessorio').map(cartaoItem).join('')}</div>
+    ` : `
+      ${comidasNaMochila.length ? `
+        <div class="titulo-secao"><h2 style="font-size:21px">Comida guardada</h2><small>toque pra dar pro bicho</small></div>
+        <div class="grade-3">${comidasNaMochila.map(cartaoMochila).join('')}</div>` : ''}
+      ${acessoriosNaMochila.length ? `
+        <div class="titulo-secao"><h2 style="font-size:21px">Acessórios</h2></div>
+        <div class="grade-3">${acessoriosNaMochila.map(cartaoItem).join('')}</div>` : ''}
+      ${mochilaVazia ? `<p class="vazio"><span class="emoji">🎒</span>Sua mochila tá vazia. Compre algo na aba Comprar!</p>` : ''}
+    `}`;
 };
 function cartaoItem(i){
   const tem = estado.mochila.includes(i.id);
@@ -1281,6 +1472,8 @@ const MEDALHAS = [
   {id:'rico',     emoji:'💰', nome:'100 moedas', ok:()=>estado.moedas>=100},
   {id:'nivel3',   emoji:'⭐', nome:'Nível 3', ok:()=>nivel()>=3},
   {id:'memoria',  emoji:'🃏', nome:'Memória em 12 jogadas', ok:()=>estado.recordes.memoria!==null && estado.recordes.memoria<=12},
+  {id:'reflexo',  emoji:'⚡', nome:'10 pontos na Toca', ok:()=>estado.recordes.toca>=10},
+  {id:'chama',    emoji:'🔥', nome:'7 dias seguidos', ok:()=>estado.streak.melhor>=7},
   {id:'estiloso', emoji:'😎', nome:'Bicho estiloso', ok:()=>estado.equipado.length>=1}
 ];
 RENDER.perfil = () => {
@@ -1302,6 +1495,7 @@ RENDER.perfil = () => {
         <span class="chip">📚 ${estado.licoesFeitas.length}/${totalLicoes} lições</span>
         <span class="chip">🪙 ${estado.moedas}</span>
         <span class="chip">⭐ ${estado.xp} XP</span>
+        <span class="chip">🔥 ${estado.streak.melhor}</span>
       </div>
     </div>
     <div class="titulo-secao" style="margin:12px 4px 6px"><h2 style="font-size:19px">Conquistas</h2><small>${MEDALHAS.filter(m=>m.ok()).length}/${MEDALHAS.length}</small></div>
@@ -1352,7 +1546,11 @@ $('#btn-comecar').onclick = async () => {
       aviso.style.display = 'block';
       return;
     }
+  } else {
+    salvandoLocal = true;
+    salvarLocal();
   }
+  atualizarStreak();
   $('#topo').hidden = false; $('#rodape').hidden = false;
   atualizarHud();
   brinde('Bem-vindo à Bichoteca, ' + estado.apelido + '! 🐾');
@@ -1361,10 +1559,12 @@ $('#btn-comecar').onclick = async () => {
 $('#campo-nome').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-comecar').click(); });
 $('#campo-senha').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-comecar').click(); });
 
-/* ---------- 13. DADOS: conta opcional (salvar/carregar progresso no servidor) ----------
-   Sem senha no onboarding, o jogo continua 100% local (nada muda aqui).
-   Com senha, usa o back-end opcional (api/estado.php) documentado no README. */
+/* ---------- 13. DADOS: conta opcional (salvar/carregar progresso no servidor ou no navegador) ----------
+   Sem senha no onboarding, o jogo salva sozinho no localStorage do navegador — sem
+   servidor, mas sem perder tudo a cada recarregada. Com senha, usa o back-end opcional
+   (api/estado.php) documentado no README, que tem prioridade quando os dois existem. */
 let logado = false;
+let salvandoLocal = false;
 async function entrarNoServidor(apelido, senha){
   const r = await fetch('api/estado.php?acao=entrar', {
     method:'POST', headers:{'Content-Type':'application/json'},
@@ -1382,11 +1582,24 @@ async function carregarDoServidor(){
     return true;
   }catch(e){ return false; }
 }
+const CHAVE_LOCAL = 'bichoteca-estado';
+function salvarLocal(){
+  try{ localStorage.setItem(CHAVE_LOCAL, JSON.stringify(estado)); }
+  catch(e){ /* localStorage bloqueado (ex.: aba anônima) — o jogo segue, só não persiste */ }
+}
+function carregarLocal(){
+  try{
+    const salvo = localStorage.getItem(CHAVE_LOCAL);
+    if(!salvo) return false;
+    Object.assign(estado, JSON.parse(salvo));
+    return true;
+  }catch(e){ return false; }
+}
 let salvarTimer;
 function agendarSalvar(){
-  if(!logado) return;
+  if(!logado && !salvandoLocal) return;
   clearTimeout(salvarTimer);
-  salvarTimer = setTimeout(salvarNoServidor, 2000);
+  salvarTimer = setTimeout(logado ? salvarNoServidor : salvarLocal, 2000);
 }
 async function salvarNoServidor(){
   try{
@@ -1397,11 +1610,19 @@ async function salvarNoServidor(){
   }catch(e){ /* offline: o jogo continua local, tenta salvar de novo na próxima ação */ }
 }
 
-/* sessão de retorno: se o navegador já tem um login válido, pula o onboarding */
+/* sessão de retorno: se o navegador já tem login ou save local, pula o onboarding.
+   O servidor tem prioridade — se a conta existir lá, é ela que vale. */
 (async () => {
-  const restaurado = await carregarDoServidor();
-  if(restaurado && estado.apelido){
+  const restauradoServidor = await carregarDoServidor();
+  if(restauradoServidor && estado.apelido){
     logado = true;
+    atualizarStreak();
+    $('#topo').hidden = false; $('#rodape').hidden = false;
+    atualizarHud();
+    ir('casa');
+  } else if(carregarLocal() && estado.apelido){
+    salvandoLocal = true;
+    atualizarStreak();
     $('#topo').hidden = false; $('#rodape').hidden = false;
     atualizarHud();
     ir('casa');
