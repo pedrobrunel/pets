@@ -219,6 +219,14 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
   box-shadow:inset 0 2px 0 rgba(255,255,255,.55),inset 0 -4px 5px -1px rgba(0,0,0,.2)}
 .barra .valor{width:38px;text-align:right;font-size:13px;font-weight:900}
 
+.trilha-emoji{
+  width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-size:22px;
+  position:relative;overflow:hidden;flex:none;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--tc) 45%,#fff 55%),var(--tc));
+  border:2.5px solid var(--contorno);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6);
+}
+
 /* ---------- grades ---------- */
 .grade{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 .grade-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -514,59 +522,84 @@ const BICHOS = {
   capivara: {
     nome:'Capivara', cor:'#C98A4B', ancora:{hx:100,hy:78,hr:44},
     corpo:`
-      <ellipse cx="62" cy="172" rx="15" ry="14" fill="#A97038" stroke="${T}" stroke-width="6"/>
-      <ellipse cx="138" cy="172" rx="15" ry="14" fill="#A97038" stroke="${T}" stroke-width="6"/>
-      <ellipse cx="100" cy="140" rx="66" ry="44" fill="#C98A4B" stroke="${T}" stroke-width="6"/>
-      <circle cx="60" cy="50" r="13" fill="#A97038" stroke="${T}" stroke-width="6"/>
-      <circle cx="140" cy="50" r="13" fill="#A97038" stroke="${T}" stroke-width="6"/>
-      <ellipse cx="100" cy="82" rx="50" ry="42" fill="#C98A4B" stroke="${T}" stroke-width="6"/>
-      <ellipse cx="100" cy="100" rx="30" ry="21" fill="#B0763C" stroke="${T}" stroke-width="5"/>
+      <defs>
+        <radialGradient id="capivara-corpo" cx="35%" cy="25%" r="80%"><stop offset="0%" stop-color="#F2D1A0"/><stop offset="100%" stop-color="#C98A4B"/></radialGradient>
+        <radialGradient id="capivara-pata" cx="35%" cy="25%" r="80%"><stop offset="0%" stop-color="#D9A868"/><stop offset="100%" stop-color="#A97038"/></radialGradient>
+        <radialGradient id="capivara-focinho" cx="35%" cy="25%" r="80%"><stop offset="0%" stop-color="#DDA76C"/><stop offset="100%" stop-color="#B0763C"/></radialGradient>
+      </defs>
+      <ellipse cx="62" cy="172" rx="15" ry="14" fill="url(#capivara-pata)" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="138" cy="172" rx="15" ry="14" fill="url(#capivara-pata)" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="100" cy="140" rx="66" ry="44" fill="url(#capivara-corpo)" stroke="${T}" stroke-width="6"/>
+      <circle cx="60" cy="50" r="13" fill="url(#capivara-pata)" stroke="${T}" stroke-width="6"/>
+      <circle cx="140" cy="50" r="13" fill="url(#capivara-pata)" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="100" cy="82" rx="50" ry="42" fill="url(#capivara-corpo)" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="100" cy="100" rx="30" ry="21" fill="url(#capivara-focinho)" stroke="${T}" stroke-width="5"/>
       <ellipse cx="90" cy="96" rx="4" ry="5" fill="${T}"/><ellipse cx="110" cy="96" rx="4" ry="5" fill="${T}"/>
       <path d="M92 110 q8 7 16 0" stroke="${T}" stroke-width="5" fill="none" stroke-linecap="round"/>
       <ellipse class="olho" cx="80" cy="70" rx="7" ry="8" fill="${T}"/>
       <ellipse class="olho" cx="120" cy="70" rx="7" ry="8" fill="${T}"/>
-      <circle cx="82" cy="67" r="2.4" fill="#fff"/><circle cx="122" cy="67" r="2.4" fill="#fff"/>`
+      <circle cx="82" cy="67" r="2.4" fill="#fff"/><circle cx="122" cy="67" r="2.4" fill="#fff"/>
+      <ellipse cx="82" cy="66" rx="16" ry="9" fill="#fff" opacity=".18"/>`
   },
   salsicha: {
     nome:'Salsicha', cor:'#B5651D', ancora:{hx:66,hy:80,hr:36},
     corpo:`
+      <defs>
+        <radialGradient id="salsicha-corpo" cx="35%" cy="25%" r="80%"><stop offset="0%" stop-color="#E39A55"/><stop offset="100%" stop-color="#B5651D"/></radialGradient>
+        <radialGradient id="salsicha-pata" cx="35%" cy="25%" r="80%"><stop offset="0%" stop-color="#C0803D"/><stop offset="100%" stop-color="#8E4E14"/></radialGradient>
+        <radialGradient id="salsicha-focinho" cx="35%" cy="25%" r="80%"><stop offset="0%" stop-color="#F0AD68"/><stop offset="100%" stop-color="#C97D33"/></radialGradient>
+        <radialGradient id="salsicha-orelha" cx="35%" cy="25%" r="80%"><stop offset="0%" stop-color="#A96A2E"/><stop offset="100%" stop-color="#7A4210"/></radialGradient>
+      </defs>
       <path d="M162 130 q22 -6 16 -30" stroke="${T}" stroke-width="10" fill="none" stroke-linecap="round"/>
-      <path d="M162 130 q22 -6 16 -30" stroke="#B5651D" stroke-width="4" fill="none" stroke-linecap="round"/>
-      <rect x="52" y="122" width="52" height="46" rx="16" fill="#8E4E14" stroke="${T}" stroke-width="6"/>
-      <rect x="118" y="122" width="46" height="46" rx="16" fill="#8E4E14" stroke="${T}" stroke-width="6"/>
-      <rect x="40" y="112" width="128" height="52" rx="26" fill="#B5651D" stroke="${T}" stroke-width="6"/>
-      <ellipse cx="66" cy="84" rx="38" ry="34" fill="#B5651D" stroke="${T}" stroke-width="6"/>
-      <rect x="18" y="86" width="44" height="26" rx="13" fill="#C97D33" stroke="${T}" stroke-width="6"/>
+      <path d="M162 130 q22 -6 16 -30" stroke="url(#salsicha-corpo)" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <rect x="52" y="122" width="52" height="46" rx="16" fill="url(#salsicha-pata)" stroke="${T}" stroke-width="6"/>
+      <rect x="118" y="122" width="46" height="46" rx="16" fill="url(#salsicha-pata)" stroke="${T}" stroke-width="6"/>
+      <rect x="40" y="112" width="128" height="52" rx="26" fill="url(#salsicha-corpo)" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="66" cy="84" rx="38" ry="34" fill="url(#salsicha-corpo)" stroke="${T}" stroke-width="6"/>
+      <rect x="18" y="86" width="44" height="26" rx="13" fill="url(#salsicha-focinho)" stroke="${T}" stroke-width="6"/>
       <ellipse cx="24" cy="98" rx="9" ry="8" fill="${T}"/>
-      <ellipse cx="44" cy="104" rx="15" ry="32" fill="#7A4210" stroke="${T}" stroke-width="6"/>
-      <ellipse cx="92" cy="102" rx="13" ry="28" fill="#7A4210" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="44" cy="104" rx="15" ry="32" fill="url(#salsicha-orelha)" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="92" cy="102" rx="13" ry="28" fill="url(#salsicha-orelha)" stroke="${T}" stroke-width="6"/>
       <ellipse class="olho" cx="70" cy="76" rx="7" ry="8" fill="${T}"/>
       <circle cx="72" cy="73" r="2.4" fill="#fff"/>
-      <path d="M40 112 q6 8 14 4" stroke="${T}" stroke-width="4" fill="none" stroke-linecap="round"/>`
+      <path d="M40 112 q6 8 14 4" stroke="${T}" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <ellipse cx="56" cy="70" rx="14" ry="8" fill="#fff" opacity=".16"/>`
   },
   gato: {
     nome:'Gato', cor:'#8E9BAD', ancora:{hx:100,hy:80,hr:42},
     corpo:`
+      <defs>
+        <radialGradient id="gato-corpo" cx="35%" cy="25%" r="80%"><stop offset="0%" stop-color="#C3CCD8"/><stop offset="100%" stop-color="#8E9BAD"/></radialGradient>
+        <radialGradient id="gato-barriga" cx="35%" cy="25%" r="80%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="100%" stop-color="#E4E9F0"/></radialGradient>
+        <radialGradient id="gato-nariz" cx="35%" cy="25%" r="80%"><stop offset="0%" stop-color="#FFC2D2"/><stop offset="100%" stop-color="#FF8FA8"/></radialGradient>
+      </defs>
       <path d="M148 150 q34 -4 26 -44" stroke="${T}" stroke-width="16" fill="none" stroke-linecap="round"/>
-      <path d="M148 150 q34 -4 26 -44" stroke="#8E9BAD" stroke-width="9" fill="none" stroke-linecap="round"/>
+      <path d="M148 150 q34 -4 26 -44" stroke="url(#gato-corpo)" stroke-width="9" fill="none" stroke-linecap="round"/>
       <path d="M166 140 l10 4 M172 122 l11 2" stroke="${T}" stroke-width="5" stroke-linecap="round"/>
-      <ellipse cx="100" cy="146" rx="50" ry="40" fill="#8E9BAD" stroke="${T}" stroke-width="6"/>
-      <ellipse cx="100" cy="158" rx="26" ry="24" fill="#E4E9F0" stroke="${T}" stroke-width="5"/>
-      <path d="M64 62 l-6 -34 32 16 z" fill="#8E9BAD" stroke="${T}" stroke-width="6" stroke-linejoin="round"/>
-      <path d="M136 62 l6 -34 -32 16 z" fill="#8E9BAD" stroke="${T}" stroke-width="6" stroke-linejoin="round"/>
-      <circle cx="100" cy="84" r="44" fill="#8E9BAD" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="100" cy="146" rx="50" ry="40" fill="url(#gato-corpo)" stroke="${T}" stroke-width="6"/>
+      <ellipse cx="100" cy="158" rx="26" ry="24" fill="url(#gato-barriga)" stroke="${T}" stroke-width="5"/>
+      <path d="M64 62 l-6 -34 32 16 z" fill="url(#gato-corpo)" stroke="${T}" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M136 62 l6 -34 -32 16 z" fill="url(#gato-corpo)" stroke="${T}" stroke-width="6" stroke-linejoin="round"/>
+      <circle cx="100" cy="84" r="44" fill="url(#gato-corpo)" stroke="${T}" stroke-width="6"/>
       <ellipse class="olho" cx="83" cy="80" rx="9" ry="10" fill="#fff" stroke="${T}" stroke-width="4"/>
       <ellipse class="olho" cx="117" cy="80" rx="9" ry="10" fill="#fff" stroke="${T}" stroke-width="4"/>
       <ellipse cx="83" cy="80" rx="4" ry="7" fill="${T}"/><ellipse cx="117" cy="80" rx="4" ry="7" fill="${T}"/>
-      <path d="M94 98 l12 0 -6 7 z" fill="#FF8FA8" stroke="${T}" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M94 98 l12 0 -6 7 z" fill="url(#gato-nariz)" stroke="${T}" stroke-width="4" stroke-linejoin="round"/>
       <path d="M100 105 q-7 8 -13 2 M100 105 q7 8 13 2" stroke="${T}" stroke-width="4" fill="none" stroke-linecap="round"/>
-      <path d="M58 92 h-16 M60 102 h-16 M142 92 h16 M140 102 h16" stroke="${T}" stroke-width="4" stroke-linecap="round"/>`
+      <path d="M58 92 h-16 M60 102 h-16 M142 92 h16 M140 102 h16" stroke="${T}" stroke-width="4" stroke-linecap="round"/>
+      <ellipse cx="82" cy="68" rx="16" ry="9" fill="#fff" opacity=".16"/>`
   }
 };
 
+let bichoUID = 0;
 function svgBicho(tipo, opcoes = {}){
   const b = BICHOS[tipo]; if(!b) return '';
   const {hx,hy,hr} = b.ancora;
+  // cada chamada precisa de IDs de gradiente únicos: se a mesma espécie aparecer
+  // escondida em outra tela (ex.: grade de escolha após o onboarding), o Chromium
+  // não resolve url(#id) quando a definição "original" está num ancestral display:none
+  const uid = 'u' + (bichoUID++);
+  const corpo = b.corpo.replace(/(id="|url\(#)([\w-]+)/g, (m, pre, nome) => pre + nome + '-' + uid);
   let extra = '';
   const eq = opcoes.equipado || [];
   if(eq.includes('chapeu')){
@@ -588,7 +621,7 @@ function svgBicho(tipo, opcoes = {}){
   }
   return `<svg class="bicho ${opcoes.classe||''}" viewBox="0 0 200 200" role="img"
     aria-label="Seu bichinho ${b.nome}" style="${opcoes.estilo||''}">
-    <g class="corpo-todo" stroke-linecap="round">${b.corpo}${extra}</g></svg>`;
+    <g class="corpo-todo" stroke-linecap="round">${corpo}${extra}</g></svg>`;
 }
 
 /* ---------- 2. ESTADO DO JOGADOR ---------- */
@@ -989,7 +1022,7 @@ RENDER.trilhas = () => {
       const feitas = t.licoesVisiveis.filter(l=>estado.licoesFeitas.includes(l.id)).length;
       return `<div class="sticker" style="margin-bottom:14px;border-left:14px solid ${t.cor}">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-          <span style="font-size:28px">${t.emoji}</span>
+          <span class="trilha-emoji" style="--tc:${t.cor}">${t.emoji}</span>
           <h3 style="font-size:22px;flex:1">${t.nome}</h3>
           <span class="chip">${feitas}/${t.licoesVisiveis.length}</span>
         </div>
