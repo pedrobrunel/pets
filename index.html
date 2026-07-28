@@ -281,19 +281,25 @@ footer{text-align:center;margin-top:30px;font-size:12px;font-weight:700;opacity:
     <div class="palco-hero">
       <div class="sol"></div><div class="nuvem"></div>
       <svg class="bicho" viewBox="0 0 200 200" role="img" aria-label="Capivara mascote da Bichoteca">
+        <defs>
+          <radialGradient id="capivara-corpo" cx="35%" cy="25%" r="80%"><stop offset="0%" stop-color="#F2D1A0"/><stop offset="100%" stop-color="#C98A4B"/></radialGradient>
+          <radialGradient id="capivara-pata" cx="35%" cy="25%" r="80%"><stop offset="0%" stop-color="#D9A868"/><stop offset="100%" stop-color="#A97038"/></radialGradient>
+          <radialGradient id="capivara-focinho" cx="35%" cy="25%" r="80%"><stop offset="0%" stop-color="#DDA76C"/><stop offset="100%" stop-color="#B0763C"/></radialGradient>
+        </defs>
         <g class="corpo-todo" stroke-linecap="round">
-          <ellipse cx="62" cy="172" rx="15" ry="14" fill="#A97038" stroke="#33200F" stroke-width="6"/>
-          <ellipse cx="138" cy="172" rx="15" ry="14" fill="#A97038" stroke="#33200F" stroke-width="6"/>
-          <ellipse cx="100" cy="140" rx="66" ry="44" fill="#C98A4B" stroke="#33200F" stroke-width="6"/>
-          <circle cx="60" cy="50" r="13" fill="#A97038" stroke="#33200F" stroke-width="6"/>
-          <circle cx="140" cy="50" r="13" fill="#A97038" stroke="#33200F" stroke-width="6"/>
-          <ellipse cx="100" cy="82" rx="50" ry="42" fill="#C98A4B" stroke="#33200F" stroke-width="6"/>
-          <ellipse cx="100" cy="100" rx="30" ry="21" fill="#B0763C" stroke="#33200F" stroke-width="5"/>
+          <ellipse cx="62" cy="172" rx="15" ry="14" fill="url(#capivara-pata)" stroke="#33200F" stroke-width="6"/>
+          <ellipse cx="138" cy="172" rx="15" ry="14" fill="url(#capivara-pata)" stroke="#33200F" stroke-width="6"/>
+          <ellipse cx="100" cy="140" rx="66" ry="44" fill="url(#capivara-corpo)" stroke="#33200F" stroke-width="6"/>
+          <circle cx="60" cy="50" r="13" fill="url(#capivara-pata)" stroke="#33200F" stroke-width="6"/>
+          <circle cx="140" cy="50" r="13" fill="url(#capivara-pata)" stroke="#33200F" stroke-width="6"/>
+          <ellipse cx="100" cy="82" rx="50" ry="42" fill="url(#capivara-corpo)" stroke="#33200F" stroke-width="6"/>
+          <ellipse cx="100" cy="100" rx="30" ry="21" fill="url(#capivara-focinho)" stroke="#33200F" stroke-width="5"/>
           <ellipse cx="90" cy="96" rx="4" ry="5" fill="#33200F"/><ellipse cx="110" cy="96" rx="4" ry="5" fill="#33200F"/>
           <path d="M92 110 q8 7 16 0" stroke="#33200F" stroke-width="5" fill="none" stroke-linecap="round"/>
           <ellipse class="olho" cx="80" cy="70" rx="7" ry="8" fill="#33200F"/>
           <ellipse class="olho" cx="120" cy="70" rx="7" ry="8" fill="#33200F"/>
           <circle cx="82" cy="67" r="2.4" fill="#fff"/><circle cx="122" cy="67" r="2.4" fill="#fff"/>
+          <ellipse cx="82" cy="66" rx="16" ry="9" fill="#fff" opacity=".18"/>
         </g>
       </svg>
       <div style="text-align:center"><span class="placa-hero">🦫 Oi, eu sou a Capi!</span></div>
