@@ -744,8 +744,12 @@ setInterval(()=>{
   if(telaAtual === 'casa') RENDER.casa();
 }, 25000);
 
-/* ---------- 5. CONTEÚDO DAS TRILHAS ---------- */
-const TRILHAS = [
+/* ---------- 5. CONTEÚDO DAS TRILHAS ----------
+   Este array é só o fallback: funciona sozinho em hospedagem estática
+   (GitHub Pages, "sem back-end") mesmo sem api/. Quando o back-end existe
+   e tem conteúdo publicado, carregarConteudo() (seção 13) troca TRILHAS
+   pelo que o painel do Hostmaster (admin.html) publicou no banco. */
+let TRILHAS = [
   { id:'his', nome:'História', emoji:'🏺', cor:'var(--manga)', licoes:[
     { id:'his1', emoji:'👑', titulo:'A Independência do Brasil', serie:'8º ano',
       blocos:[
@@ -1703,6 +1707,7 @@ $('#btn-comecar').onclick = async () => {
     salvandoLocal = true;
     salvarLocal();
   }
+  await conteudoPronto;
   atualizarStreak();
   $('#topo').hidden = false; $('#rodape').hidden = false;
   atualizarHud();
@@ -1718,6 +1723,20 @@ $('#campo-senha').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn
    (api/estado.php) documentado no README, que tem prioridade quando os dois existem. */
 let logado = false;
 let salvandoLocal = false;
+/* busca o conteúdo publicado no painel (api/admin.php); sem back-end ou banco vazio,
+   a chamada falha ou volta vazia e o jogo segue com o TRILHAS fallback acima —
+   nunca trava a inicialização por causa disso */
+async function carregarConteudo(){
+  try{
+    const r = await fetch('api/conteudo.php', {cache:'no-store'});
+    if(!r.ok) return;
+    const dados = await r.json();
+    if(Array.isArray(dados) && dados.length) TRILHAS = dados;
+  }catch(e){ /* offline ou hospedagem sem PHP: fica com o conteúdo embutido */ }
+}
+// dispara já no carregamento da página — some com a espera perceptível, porque
+// roda em paralelo com o aluno digitando o apelido na tela de onboarding
+const conteudoPronto = carregarConteudo();
 async function entrarNoServidor(apelido, senha){
   const r = await fetch('api/estado.php?acao=entrar', {
     method:'POST', headers:{'Content-Type':'application/json'},
@@ -1766,6 +1785,7 @@ async function salvarNoServidor(){
 /* sessão de retorno: se o navegador já tem login ou save local, pula o onboarding.
    O servidor tem prioridade — se a conta existir lá, é ela que vale. */
 (async () => {
+  await conteudoPronto;
   const restauradoServidor = await carregarDoServidor();
   if(restauradoServidor && estado.apelido){
     logado = true;

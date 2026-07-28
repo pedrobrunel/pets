@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bichoteca — painel do Hostmaster</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --papel:#ECF0F1; --papel-2:#FFFFFF; --tinta:#2C3E50;
+  --mata:#2ECC71; --manga:#E67E22; --jabuti:#9B59B6; --ceu:#3498DB;
+  --moeda:#F1C40F; --rosa:#FF6F91; --erro:#E74C3C; --contorno:#BDC3C7;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Nunito',system-ui,sans-serif;font-weight:600;color:var(--tinta);background:var(--papel);min-height:100vh}
+h1,h2,h3{font-family:'Baloo 2',sans-serif;margin:0}
+button,input,select,textarea{font-family:inherit;font-size:14px}
+.oculto{display:none !important}
+
+/* --- login --- */
+#tela-login{max-width:360px;margin:14vh auto;padding:0 20px}
+#tela-login .cartao{background:#fff;border:1px solid var(--contorno);border-radius:12px;padding:28px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+#tela-login h1{font-size:22px;margin-bottom:2px}
+#tela-login p.sub{margin:0 0 18px;font-size:13px;color:#7F8C8D;font-weight:700}
+
+/* --- shell --- */
+#shell{display:none}
+#shell.ativo{display:flex;min-height:100vh}
+aside{width:210px;flex:none;background:var(--tinta);color:#fff;padding:18px 14px;display:flex;flex-direction:column}
+aside h1{font-size:18px;color:#fff;margin-bottom:2px}
+aside .marca{font-size:11px;opacity:.6;font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin-bottom:22px}
+aside nav{display:flex;flex-direction:column;gap:4px}
+aside nav button{
+  text-align:left;background:none;border:none;color:#fff;opacity:.75;padding:10px 12px;border-radius:8px;
+  font-weight:800;cursor:pointer;font-size:14px;
+}
+aside nav button:hover{opacity:1;background:rgba(255,255,255,.08)}
+aside nav button.ativo{opacity:1;background:rgba(255,255,255,.16)}
+aside .rodape-lateral{margin-top:auto;font-size:12px;opacity:.7}
+aside .rodape-lateral button{width:100%;margin-top:10px;background:rgba(255,255,255,.1);border:none;color:#fff;padding:9px;border-radius:8px;font-weight:800;cursor:pointer}
+main{flex:1;padding:26px 32px;max-width:980px}
+main h2{font-size:24px;margin-bottom:4px}
+main .sub{color:#7F8C8D;font-weight:700;font-size:13px;margin:0 0 20px}
+
+.painel{background:#fff;border:1px solid var(--contorno);border-radius:12px;padding:20px;margin-bottom:18px}
+.grade-metricas{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:8px}
+.metrica{background:#fff;border:1px solid var(--contorno);border-radius:12px;padding:16px}
+.metrica b{display:block;font-family:'Baloo 2';font-size:28px;line-height:1.1}
+.metrica span{font-size:12px;color:#7F8C8D;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid #ECF0F1}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#7F8C8D}
+tr:hover td{background:#FAFBFC}
+.swatch{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:6px;border:1px solid rgba(0,0,0,.15)}
+.selo{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800}
+.selo.on{background:#D5F5E3;color:#1E8449}
+.selo.off{background:#FDEBD0;color:#9C640C}
+
+.btn{background:var(--tinta);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer}
+.btn:hover{opacity:.9}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.linha{padding:5px 10px;font-size:12px;border-radius:6px}
+.btn.branco{background:#fff;color:var(--tinta);border:1px solid var(--contorno)}
+.btn.erro{background:var(--erro)}
+.btn.mata{background:var(--mata)}
+.acoes{display:flex;gap:6px;flex-wrap:wrap}
+
+label{display:block;font-size:12px;font-weight:800;color:#566573;margin:12px 0 4px}
+label:first-child{margin-top:0}
+input[type=text],input[type=number],input[type=password],select,textarea{
+  width:100%;padding:9px 10px;border:1px solid var(--contorno);border-radius:8px;background:#fff;color:var(--tinta);
+}
+textarea{font-family:'DejaVu Sans Mono',Consolas,monospace;font-size:12.5px;min-height:220px;resize:vertical;line-height:1.5}
+.linha2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.linha3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px}
+.check{display:flex;align-items:center;gap:8px;margin-top:14px}
+.check input{width:auto}
+.aviso-form{font-size:12px;font-weight:700;padding:9px 12px;border-radius:8px;margin-top:12px;display:none}
+.aviso-form.erro{display:block;background:#FDEDEC;color:#C0392B}
+.aviso-form.ok{display:block;background:#EAFAF1;color:#1E8449}
+
+.editor-blocos{margin-top:16px;border-top:1px dashed var(--contorno);padding-top:14px}
+.editor-blocos .cabecalho{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.editor-blocos .exemplo{font-size:12px;background:none;border:none;color:var(--ceu);cursor:pointer;font-weight:800;padding:0}
+details.ajuda{margin:8px 0;font-size:12px}
+details.ajuda summary{cursor:pointer;font-weight:800;color:#566573}
+details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:auto;font-size:11px}
+
+.preview{margin-top:14px;border:1px dashed var(--contorno);border-radius:10px;padding:14px;background:#FAFBFC}
+.preview h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:#7F8C8D}
+.bloco-preview{background:#fff;border:1px solid #ECF0F1;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px}
+.bloco-preview b.tag{display:inline-block;font-size:10px;text-transform:uppercase;background:var(--tinta);color:#fff;padding:2px 7px;border-radius:5px;margin-bottom:6px}
+.bloco-preview .certa{color:#1E8449;font-weight:900}
+.bloco-preview .op{display:inline-block;background:#F4F6F7;border-radius:6px;padding:2px 8px;margin:2px 4px 2px 0;font-size:12px}
+.bloco-preview .op.certa{background:#D5F5E3}
+
+.upload{border:2px dashed var(--contorno);border-radius:10px;padding:14px;text-align:center;font-size:12px;color:#7F8C8D;font-weight:800;cursor:pointer}
+.upload:hover{border-color:var(--ceu)}
+
+#form-mundo, #form-licao{background:#fff;border:1px solid var(--contorno);border-radius:12px;padding:18px;margin-bottom:18px}
+
+.busca{margin-bottom:12px}
+.busca input{max-width:280px}
+.rodape-form{display:flex;gap:8px;margin-top:16px}
+</style>
+</head>
+<body>
+
+<div id="tela-login">
+  <div class="cartao">
+    <h1>🐾 Bichoteca</h1>
+    <p class="sub">Painel do Hostmaster</p>
+    <label>Usuário</label>
+    <input type="text" id="login-usuario" autocomplete="username">
+    <label>Senha</label>
+    <input type="password" id="login-senha" autocomplete="current-password">
+    <div id="login-aviso" class="aviso-form erro"></div>
+    <button class="btn" id="btn-login" style="margin-top:16px;width:100%">Entrar</button>
+  </div>
+</div>
+
+<div id="shell">
+  <aside>
+    <h1>🐾 Bichoteca</h1>
+    <div class="marca">Painel do Hostmaster</div>
+    <nav>
+      <button data-aba="painel" class="ativo">📊 Painel</button>
+      <button data-aba="mundos">🗺️ Mundos</button>
+      <button data-aba="licoes">📚 Lições</button>
+      <button data-aba="jogadores">🧒 Jogadores</button>
+      <button data-aba="backup">💾 Backup</button>
+    </nav>
+    <div class="rodape-lateral">
+      Logado como <b id="usuario-logado"></b>
+      <button id="btn-sair">Sair</button>
+    </div>
+  </aside>
+  <main>
+
+    <section id="aba-painel">
+      <h2>Painel</h2>
+      <p class="sub">visão geral da Bichoteca</p>
+      <div class="grade-metricas" id="grade-metricas"></div>
+    </section>
+
+    <section id="aba-mundos" class="oculto">
+      <h2>Mundos</h2>
+      <p class="sub">cada mundo é uma matéria no mapa que o aluno vê</p>
+      <button class="btn" id="btn-novo-mundo" style="margin-bottom:14px">+ Novo mundo</button>
+      <form id="form-mundo" class="oculto">
+        <h3 id="titulo-form-mundo" style="font-size:16px">Novo mundo</h3>
+        <div class="linha3">
+          <div><label>id (fixo, não dá pra editar depois)</label><input type="text" id="mundo-id" placeholder="ex.: ing"></div>
+          <div><label>emoji</label><input type="text" id="mundo-emoji" placeholder="🗣️"></div>
+          <div><label>ordem no mapa</label><input type="number" id="mundo-ordem" value="0"></div>
+        </div>
+        <label>nome</label>
+        <input type="text" id="mundo-nome" placeholder="ex.: Inglês">
+        <label>cor</label>
+        <select id="mundo-cor"></select>
+        <div class="check"><input type="checkbox" id="mundo-publicado" checked><label style="margin:0" for="mundo-publicado">publicado (aparece pro aluno)</label></div>
+        <div id="mundo-aviso" class="aviso-form"></div>
+        <div class="rodape-form">
+          <button type="submit" class="btn mata">Salvar mundo</button>
+          <button type="button" class="btn branco" id="btn-cancelar-mundo">Cancelar</button>
+        </div>
+      </form>
+      <div class="painel"><table id="tabela-mundos"></table></div>
+    </section>
+
+    <section id="aba-licoes" class="oculto">
+      <h2>Lições</h2>
+      <p class="sub">suba o JSON dos blocos (leitura, flashcard, cloze, caça-palavras, vídeo, quiz)</p>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
+        <select id="filtro-mundo-licoes" style="max-width:220px"></select>
+        <button class="btn" id="btn-nova-licao">+ Nova lição</button>
+      </div>
+
+      <form id="form-licao" class="oculto">
+        <h3 id="titulo-form-licao" style="font-size:16px">Nova lição</h3>
+        <div class="linha3">
+          <div><label>id (fixo)</label><input type="text" id="licao-id" placeholder="ex.: ing1"></div>
+          <div><label>emoji</label><input type="text" id="licao-emoji" placeholder="🗣️"></div>
+          <div><label>ordem</label><input type="number" id="licao-ordem" value="0"></div>
+        </div>
+        <div class="linha2">
+          <div><label>mundo</label><select id="licao-mundo"></select></div>
+          <div><label>série</label><select id="licao-serie"></select></div>
+        </div>
+        <label>título</label>
+        <input type="text" id="licao-titulo" placeholder="ex.: Verb to be">
+        <div class="check"><input type="checkbox" id="licao-publicado" checked><label style="margin:0" for="licao-publicado">publicada (aparece pro aluno)</label></div>
+
+        <div class="editor-blocos">
+          <div class="cabecalho">
+            <label style="margin:0">JSON dos blocos (array)</label>
+            <button type="button" class="exemplo" id="btn-exemplo-json">usar exemplo</button>
+          </div>
+          <div class="upload" id="zona-upload">📄 Arraste um arquivo .json aqui, ou clique pra escolher — ou cole o JSON direto no campo abaixo</div>
+          <input type="file" id="input-arquivo-json" accept=".json,application/json" class="oculto">
+          <textarea id="licao-blocos" spellcheck="false" placeholder='[{"tipo":"texto","paragrafos":["..."]}, {"tipo":"pergunta","p":"...","alts":["...","..."],"certa":0}]'></textarea>
+          <details class="ajuda">
+            <summary>tipos de bloco aceitos</summary>
+            <pre>texto        { paragrafos: [string, ...] }   -- use [[termo|explicação]] pra criar um popup clicável
+flashcard    { cartas: [{frente, verso}, ...] }
+video        { videoId: "ID do YouTube", titulo }
+cloze        { frase: "...___...", opcoes: [string,...], certa: "texto igual a uma opção" }
+cacapalavras { palavras: ["PALAVRA", ...] }   -- 3 a 10 letras MAIÚSCULAS cada
+pergunta     { p: "...", alts: [string,...], certa: índice numérico da alternativa certa }</pre>
+          </details>
+          <div style="margin-top:8px"><button type="button" class="btn branco linha" id="btn-validar-json">Validar e pré-visualizar</button></div>
+          <div id="licao-preview" class="preview oculto"><h4>Pré-visualização</h4><div id="licao-preview-corpo"></div></div>
+        </div>
+
+        <div id="licao-aviso" class="aviso-form"></div>
+        <div class="rodape-form">
+          <button type="submit" class="btn mata">Salvar lição</button>
+          <button type="button" class="btn branco" id="btn-cancelar-licao">Cancelar</button>
+        </div>
+      </form>
+
+      <div class="painel"><table id="tabela-licoes"></table></div>
+    </section>
+
+    <section id="aba-jogadores" class="oculto">
+      <h2>Jogadores</h2>
+      <p class="sub">contas com progresso salvo no servidor</p>
+      <div class="busca"><input type="text" id="busca-jogador" placeholder="buscar por apelido..."></div>
+      <div class="painel"><table id="tabela-jogadores"></table></div>
+    </section>
+
+    <section id="aba-backup" class="oculto">
+      <h2>Backup</h2>
+      <p class="sub">exporte tudo (mundos + lições) como um JSON, ou restaure a partir de um</p>
+      <div class="painel">
+        <h3 style="font-size:15px;margin-bottom:8px">Exportar</h3>
+        <p style="font-size:13px;color:#566573;margin:0 0 10px">Baixa um único arquivo com todo o conteúdo publicado e em rascunho.</p>
+        <button class="btn" id="btn-exportar">Baixar backup completo (.json)</button>
+      </div>
+      <div class="painel">
+        <h3 style="font-size:15px;margin-bottom:8px">Importar / restaurar</h3>
+        <p style="font-size:13px;color:#566573;margin:0 0 10px">
+          ⚠️ Sobrescreve qualquer mundo ou lição com o mesmo <code>id</code> que já existir. Só grava se o arquivo inteiro for válido.
+        </p>
+        <div class="upload" id="zona-upload-backup">📄 Arraste o arquivo de backup aqui, ou clique pra escolher</div>
+        <input type="file" id="input-arquivo-backup" accept=".json,application/json" class="oculto">
+        <textarea id="backup-json" placeholder='{"mundos":[...]}' style="margin-top:10px"></textarea>
+        <div id="backup-aviso" class="aviso-form"></div>
+        <button class="btn erro" id="btn-importar" style="margin-top:10px">Importar backup</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const CORES = [
+  {v:'var(--manga)', nome:'laranja'}, {v:'var(--rosa)', nome:'rosa'}, {v:'var(--mata)', nome:'verde'},
+  {v:'var(--ceu)', nome:'azul'}, {v:'var(--jabuti)', nome:'roxo'}, {v:'var(--moeda)', nome:'amarelo'}, {v:'var(--erro)', nome:'vermelho'},
+];
+const SERIES = ['6º ano','7º ano','8º ano','9º ano','1º ano do médio','2º ano do médio','3º ano do médio'];
+const TIPOS_BLOCO = ['texto','flashcard','video','cloze','cacapalavras','pergunta'];
+
+async function api(acao, {method='GET', corpo=null, query=''} = {}){
+  const r = await fetch(`api/admin.php?acao=${acao}${query}`, {
+    method, headers: corpo ? {'Content-Type':'application/json'} : undefined,
+    body: corpo ? JSON.stringify(corpo) : undefined,
+  });
+  const dados = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+  if(!r.ok) throw new Error(dados.erro || 'Erro desconhecido.');
+  return dados;
+}
+
+/* ---------- login ---------- */
+async function checarSessao(){
+  try{
+    const d = await api('admin_eu');
+    if(d.logado){ entrarNoPainel(d.usuario); return; }
+  }catch(e){}
+  $('#tela-login').style.display = 'block';
+}
+function entrarNoPainel(usuario){
+  $('#tela-login').style.display = 'none';
+  $('#shell').classList.add('ativo');
+  $('#usuario-logado').textContent = usuario;
+  carregarPainel(); carregarMundos(); carregarJogadores();
+}
+$('#btn-login').onclick = async () => {
+  const usuario = $('#login-usuario').value.trim();
+  const senha = $('#login-senha').value;
+  const aviso = $('#login-aviso');
+  aviso.style.display = 'none';
+  try{
+    const d = await api('admin_entrar', {method:'POST', corpo:{usuario, senha}});
+    entrarNoPainel(d.usuario);
+  }catch(e){ aviso.textContent = e.message; aviso.style.display = 'block'; }
+};
+$('#login-senha').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-login').click(); });
+$('#btn-sair').onclick = async () => {
+  await api('admin_sair', {method:'POST'});
+  location.reload();
+};
+
+/* ---------- navegação por abas ---------- */
+$$('aside nav button').forEach(b => b.onclick = () => {
+  $$('aside nav button').forEach(x => x.classList.remove('ativo'));
+  b.classList.add('ativo');
+  $$('main > section').forEach(s => s.classList.add('oculto'));
+  $('#aba-' + b.dataset.aba).classList.remove('oculto');
+  if(b.dataset.aba === 'licoes') carregarLicoes();
+  if(b.dataset.aba === 'jogadores') carregarJogadores();
+  if(b.dataset.aba === 'painel') carregarPainel();
+});
+
+/* ---------- painel (métricas) ---------- */
+async function carregarPainel(){
+  const m = await api('metricas').catch(() => null);
+  if(!m) return;
+  $('#grade-metricas').innerHTML = `
+    <div class="metrica"><b>${m.totalJogadores}</b><span>Jogadores</span></div>
+    <div class="metrica"><b>${m.ativos7d}</b><span>Ativos em 7 dias</span></div>
+    <div class="metrica"><b>${m.totalMundos}</b><span>Mundos</span></div>
+    <div class="metrica"><b>${m.licoesPublicadas}</b><span>Lições publicadas</span></div>
+    <div class="metrica"><b>${m.licoesRascunho}</b><span>Lições em rascunho</span></div>
+    <div class="metrica"><b>${m.totalConclusoes}</b><span>Lições concluídas (total)</span></div>`;
+}
+
+/* ---------- mundos ---------- */
+let mundosCache = [];
+function opcoesCor(selecionada){
+  return CORES.map(c => `<option value="${c.v}" ${c.v===selecionada?'selected':''}>${c.nome}</option>`).join('');
+}
+async function carregarMundos(){
+  const d = await api('mundos_listar').catch(() => ({mundos:[]}));
+  mundosCache = d.mundos;
+  $('#tabela-mundos').innerHTML = `
+    <tr><th>Ordem</th><th>Mundo</th><th>Lições</th><th>Status</th><th></th></tr>
+    ${mundosCache.map(m => `<tr>
+      <td>${m.ordem}</td>
+      <td><span class="swatch" style="background:${m.cor}"></span>${m.emoji} ${esc(m.nome)} <code style="opacity:.5">${m.id}</code></td>
+      <td>${m.licoes}</td>
+      <td><span class="selo ${m.publicado?'on':'off'}">${m.publicado?'publicado':'rascunho'}</span></td>
+      <td class="acoes">
+        <button class="btn linha branco" onclick="editarMundo('${m.id}')">Editar</button>
+        <button class="btn linha erro" onclick="excluirMundo('${m.id}','${esc(m.nome)}')">Excluir</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="5">Nenhum mundo ainda.</td></tr>'}`;
+  atualizarSelectsMundo();
+}
+function atualizarSelectsMundo(){
+  const opcoes = mundosCache.map(m => `<option value="${m.id}">${m.emoji} ${esc(m.nome)}</option>`).join('');
+  $('#licao-mundo').innerHTML = opcoes;
+  $('#filtro-mundo-licoes').innerHTML = `<option value="">Todos os mundos</option>` + opcoes;
+}
+$('#mundo-cor').innerHTML = opcoesCor();
+$('#licao-serie').innerHTML = SERIES.map(s => `<option>${s}</option>`).join('');
+
+$('#btn-novo-mundo').onclick = () => {
+  $('#form-mundo').reset();
+  $('#mundo-id').disabled = false;
+  $('#titulo-form-mundo').textContent = 'Novo mundo';
+  $('#mundo-aviso').style.display = 'none';
+  $('#form-mundo').classList.remove('oculto');
+};
+$('#btn-cancelar-mundo').onclick = () => $('#form-mundo').classList.add('oculto');
+window.editarMundo = (id) => {
+  const m = mundosCache.find(x => x.id === id);
+  $('#mundo-id').value = m.id; $('#mundo-id').disabled = true;
+  $('#mundo-nome').value = m.nome; $('#mundo-emoji').value = m.emoji;
+  $('#mundo-ordem').value = m.ordem; $('#mundo-cor').value = m.cor;
+  $('#mundo-publicado').checked = m.publicado;
+  $('#titulo-form-mundo').textContent = 'Editar mundo';
+  $('#mundo-aviso').style.display = 'none';
+  $('#form-mundo').classList.remove('oculto');
+  $('#form-mundo').scrollIntoView({behavior:'smooth'});
+};
+window.excluirMundo = async (id, nome) => {
+  if(!confirm(`Excluir o mundo "${nome}"? Todas as lições dele somem junto.`)) return;
+  await api('mundo_excluir', {method:'POST', corpo:{id}});
+  carregarMundos();
+};
+$('#form-mundo').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const aviso = $('#mundo-aviso');
+  try{
+    await api('mundo_salvar', {method:'POST', corpo:{
+      id: $('#mundo-id').value.trim(), nome: $('#mundo-nome').value.trim(), emoji: $('#mundo-emoji').value.trim(),
+      cor: $('#mundo-cor').value, ordem: Number($('#mundo-ordem').value) || 0, publicado: $('#mundo-publicado').checked,
+    }});
+    $('#form-mundo').classList.add('oculto');
+    carregarMundos();
+  }catch(err){ aviso.textContent = err.message; aviso.style.display = 'block'; }
+});
+
+/* ---------- lições ---------- */
+let licoesCache = [];
+$('#filtro-mundo-licoes').addEventListener('change', carregarLicoes);
+async function carregarLicoes(){
+  const mundo = $('#filtro-mundo-licoes').value;
+  const d = await api('licoes_listar', {query: mundo ? `&mundo=${mundo}` : ''}).catch(() => ({licoes:[]}));
+  licoesCache = d.licoes;
+  $('#tabela-licoes').innerHTML = `
+    <tr><th>Ordem</th><th>Lição</th><th>Mundo</th><th>Série</th><th>Status</th><th></th></tr>
+    ${licoesCache.map(l => {
+      const m = mundosCache.find(x => x.id === l.mundoId);
+      return `<tr>
+        <td>${l.ordem}</td>
+        <td>${l.emoji} ${esc(l.titulo)} <code style="opacity:.5">${l.id}</code></td>
+        <td>${m ? m.emoji+' '+esc(m.nome) : l.mundoId}</td>
+        <td>${esc(l.serie)}</td>
+        <td><span class="selo ${l.publicado?'on':'off'}">${l.publicado?'publicada':'rascunho'}</span></td>
+        <td class="acoes">
+          <button class="btn linha branco" onclick="editarLicao('${l.id}')">Editar</button>
+          <button class="btn linha branco" onclick="baixarLicao('${l.id}')">Baixar JSON</button>
+          <button class="btn linha erro" onclick="excluirLicao('${l.id}','${esc(l.titulo)}')">Excluir</button>
+        </td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6">Nenhuma lição ainda.</td></tr>'}`;
+}
+
+const EXEMPLO_BLOCOS = [
+  {tipo:'texto', paragrafos:['Explique o assunto aqui. Use [[termo|uma explicação que aparece num popup]] pra destacar uma palavra-chave.']},
+  {tipo:'flashcard', cartas:[{frente:'Pergunta rápida', verso:'Resposta da carta'}]},
+  {tipo:'cloze', frase:'Complete a frase ___.', opcoes:['certa','errada 1','errada 2'], certa:'certa'},
+  {tipo:'cacapalavras', palavras:['EXEMPLO','PALAVRA']},
+  {tipo:'pergunta', p:'Pergunta do quiz?', alts:['Certa','Errada 1','Errada 2'], certa:0},
+];
+$('#btn-exemplo-json').onclick = () => { $('#licao-blocos').value = JSON.stringify(EXEMPLO_BLOCOS, null, 2); };
+
+function limparFormLicao(){
+  $('#form-licao').reset();
+  $('#licao-id').disabled = false;
+  $('#licao-blocos').value = '';
+  $('#licao-preview').classList.add('oculto');
+  $('#licao-aviso').style.display = 'none';
+}
+$('#btn-nova-licao').onclick = () => {
+  limparFormLicao();
+  $('#titulo-form-licao').textContent = 'Nova lição';
+  if($('#filtro-mundo-licoes').value) $('#licao-mundo').value = $('#filtro-mundo-licoes').value;
+  $('#form-licao').classList.remove('oculto');
+  $('#form-licao').scrollIntoView({behavior:'smooth'});
+};
+$('#btn-cancelar-licao').onclick = () => $('#form-licao').classList.add('oculto');
+
+window.editarLicao = async (id) => {
+  const l = await api('licao_obter', {query:`&id=${id}`}).catch(() => null);
+  if(!l) return;
+  limparFormLicao();
+  $('#licao-id').value = l.id; $('#licao-id').disabled = true;
+  $('#licao-mundo').value = l.mundoId; $('#licao-emoji').value = l.emoji;
+  $('#licao-ordem').value = l.ordem; $('#licao-titulo').value = l.titulo;
+  $('#licao-serie').value = l.serie; $('#licao-publicado').checked = l.publicado;
+  $('#licao-blocos').value = JSON.stringify(l.blocos, null, 2);
+  $('#titulo-form-licao').textContent = 'Editar lição';
+  $('#form-licao').classList.remove('oculto');
+  $('#form-licao').scrollIntoView({behavior:'smooth'});
+};
+window.baixarLicao = async (id) => {
+  const l = await api('licao_obter', {query:`&id=${id}`}).catch(() => null);
+  if(!l) return;
+  baixarArquivo(`${id}.json`, JSON.stringify(l, null, 2));
+};
+window.excluirLicao = async (id, titulo) => {
+  if(!confirm(`Excluir a lição "${titulo}"?`)) return;
+  await api('licao_excluir', {method:'POST', corpo:{id}});
+  carregarLicoes(); carregarMundos();
+};
+
+/* validação client-side (espelha api/admin.php, só pra dar feedback na hora —
+   quem manda de verdade é o servidor, que valida de novo ao salvar) */
+function validarBlocosLocal(blocos){
+  if(!Array.isArray(blocos) || !blocos.length) return 'Precisa ser uma lista com ao menos 1 bloco.';
+  for(let i=0;i<blocos.length;i++){
+    const b = blocos[i];
+    if(!b || typeof b !== 'object') return `Bloco ${i}: precisa ser um objeto.`;
+    if(!TIPOS_BLOCO.includes(b.tipo)) return `Bloco ${i}: "tipo" ausente ou desconhecido.`;
+    if(b.tipo==='texto' && (!Array.isArray(b.paragrafos) || !b.paragrafos.length)) return `Bloco ${i} (texto): falta "paragrafos".`;
+    if(b.tipo==='flashcard' && (!Array.isArray(b.cartas) || !b.cartas.length || b.cartas.some(c=>!c.frente||!c.verso))) return `Bloco ${i} (flashcard): cada carta precisa de frente e verso.`;
+    if(b.tipo==='video' && (!b.videoId || !b.titulo)) return `Bloco ${i} (video): falta "videoId" ou "titulo".`;
+    if(b.tipo==='cloze' && (!b.frase || !b.frase.includes('___') || !Array.isArray(b.opcoes) || !b.opcoes.includes(b.certa))) return `Bloco ${i} (cloze): confira "frase" (com ___), "opcoes" e "certa".`;
+    if(b.tipo==='cacapalavras' && (!Array.isArray(b.palavras) || b.palavras.length<2)) return `Bloco ${i} (cacapalavras): precisa de ao menos 2 palavras.`;
+    if(b.tipo==='pergunta' && (!b.p || !Array.isArray(b.alts) || b.alts.length<2 || typeof b.certa!=='number' || b.certa<0 || b.certa>=b.alts.length)) return `Bloco ${i} (pergunta): confira "p", "alts" e "certa" (índice numérico).`;
+  }
+  return null;
+}
+function pintarPreviewBlocos(blocos){
+  $('#licao-preview-corpo').innerHTML = blocos.map(b => {
+    if(b.tipo==='texto') return `<div class="bloco-preview"><b class="tag">texto</b>${b.paragrafos.map(p=>`<p>${esc(p).replace(/\[\[([^|]+)\|([^\]]+)\]\]/g,'<u title="$2">$1</u>')}</p>`).join('')}</div>`;
+    if(b.tipo==='flashcard') return `<div class="bloco-preview"><b class="tag">flashcard</b>${b.cartas.map(c=>`<div>🔹 <b>${esc(c.frente)}</b> → ${esc(c.verso)}</div>`).join('')}</div>`;
+    if(b.tipo==='video') return `<div class="bloco-preview"><b class="tag">vídeo</b>${esc(b.titulo)} — <code>${esc(b.videoId)}</code></div>`;
+    if(b.tipo==='cloze') return `<div class="bloco-preview"><b class="tag">cloze</b>${esc(b.frase)}<br>${b.opcoes.map(o=>`<span class="op ${o===b.certa?'certa':''}">${esc(o)}</span>`).join('')}</div>`;
+    if(b.tipo==='cacapalavras') return `<div class="bloco-preview"><b class="tag">caça-palavras</b>${b.palavras.map(p=>`<span class="op">${esc(p)}</span>`).join('')}</div>`;
+    if(b.tipo==='pergunta') return `<div class="bloco-preview"><b class="tag">pergunta</b>${esc(b.p)}<br>${b.alts.map((a,i)=>`<span class="op ${i===b.certa?'certa':''}">${esc(a)}</span>`).join('')}</div>`;
+    return '';
+  }).join('');
+  $('#licao-preview').classList.remove('oculto');
+}
+function lerBlocosDoCampo(){
+  let blocos;
+  try{ blocos = JSON.parse($('#licao-blocos').value); }
+  catch(e){ throw new Error('JSON inválido: ' + e.message); }
+  const erro = validarBlocosLocal(blocos);
+  if(erro) throw new Error(erro);
+  return blocos;
+}
+$('#btn-validar-json').onclick = () => {
+  const aviso = $('#licao-aviso');
+  try{
+    const blocos = lerBlocosDoCampo();
+    aviso.style.display = 'none';
+    pintarPreviewBlocos(blocos);
+  }catch(e){ aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block'; $('#licao-preview').classList.add('oculto'); }
+};
+
+function lerArquivoNoCampo(arquivo, campoTextarea){
+  const leitor = new FileReader();
+  leitor.onload = () => { $(campoTextarea).value = leitor.result; };
+  leitor.readAsText(arquivo);
+}
+$('#zona-upload').onclick = () => $('#input-arquivo-json').click();
+$('#input-arquivo-json').onchange = (e) => { if(e.target.files[0]) lerArquivoNoCampo(e.target.files[0], '#licao-blocos'); };
+['dragover','drop'].forEach(ev => $('#zona-upload').addEventListener(ev, e => e.preventDefault()));
+$('#zona-upload').addEventListener('drop', e => { if(e.dataTransfer.files[0]) lerArquivoNoCampo(e.dataTransfer.files[0], '#licao-blocos'); });
+
+$('#form-licao').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const aviso = $('#licao-aviso');
+  try{
+    const blocos = lerBlocosDoCampo();
+    await api('licao_salvar', {method:'POST', corpo:{
+      id: $('#licao-id').value.trim(), mundoId: $('#licao-mundo').value, titulo: $('#licao-titulo').value.trim(),
+      emoji: $('#licao-emoji').value.trim(), serie: $('#licao-serie').value, ordem: Number($('#licao-ordem').value) || 0,
+      publicado: $('#licao-publicado').checked, blocos,
+    }});
+    $('#form-licao').classList.add('oculto');
+    carregarLicoes(); carregarMundos();
+  }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
+});
+
+/* ---------- jogadores ---------- */
+let jogadoresTimer;
+$('#busca-jogador').addEventListener('input', () => { clearTimeout(jogadoresTimer); jogadoresTimer = setTimeout(carregarJogadores, 300); });
+async function carregarJogadores(){
+  const busca = $('#busca-jogador').value.trim();
+  const d = await api('jogadores_listar', {query: busca ? `&busca=${encodeURIComponent(busca)}` : ''}).catch(() => ({jogadores:[]}));
+  $('#tabela-jogadores').innerHTML = `
+    <tr><th>Apelido</th><th>Moedas</th><th>XP</th><th>Lições feitas</th><th>Sequência</th><th>Última atividade</th><th></th></tr>
+    ${d.jogadores.map(j => `<tr>
+      <td><b>${esc(j.apelido)}</b></td><td>🪙 ${j.moedas}</td><td>⭐ ${j.xp}</td><td>${j.licoesFeitas}</td>
+      <td>${j.streak}d</td><td>${esc(j.atualizadoEm)}</td>
+      <td class="acoes">
+        <button class="btn linha branco" onclick="resetarSenha(${j.id},'${esc(j.apelido)}')">Resetar senha</button>
+        <button class="btn linha erro" onclick="excluirJogador(${j.id},'${esc(j.apelido)}')">Excluir</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="7">Nenhum jogador encontrado.</td></tr>'}`;
+}
+window.resetarSenha = async (id, apelido) => {
+  const nova = prompt(`Nova senha para "${apelido}" (mínimo 4 caracteres):`);
+  if(!nova) return;
+  try{ await api('jogador_resetar_senha', {method:'POST', corpo:{id, novaSenha:nova}}); alert('Senha atualizada.'); }
+  catch(e){ alert(e.message); }
+};
+window.excluirJogador = async (id, apelido) => {
+  if(!confirm(`Excluir a conta de "${apelido}"? Isso apaga o progresso salvo dela para sempre.`)) return;
+  await api('jogador_excluir', {method:'POST', corpo:{id}});
+  carregarJogadores();
+};
+
+/* ---------- backup ---------- */
+function baixarArquivo(nome, conteudo){
+  const blob = new Blob([conteudo], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nome; a.click();
+  URL.revokeObjectURL(a.href);
+}
+$('#btn-exportar').onclick = async () => {
+  const d = await api('exportar').catch(e => { alert(e.message); return null; });
+  if(!d) return;
+  baixarArquivo(`bichoteca-backup-${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(d, null, 2));
+};
+$('#zona-upload-backup').onclick = () => $('#input-arquivo-backup').click();
+$('#input-arquivo-backup').onchange = (e) => { if(e.target.files[0]) lerArquivoNoCampo(e.target.files[0], '#backup-json'); };
+['dragover','drop'].forEach(ev => $('#zona-upload-backup').addEventListener(ev, e => e.preventDefault()));
+$('#zona-upload-backup').addEventListener('drop', e => { if(e.dataTransfer.files[0]) lerArquivoNoCampo(e.dataTransfer.files[0], '#backup-json'); });
+$('#btn-importar').onclick = async () => {
+  const aviso = $('#backup-aviso');
+  aviso.style.display = 'none';
+  let dados;
+  try{ dados = JSON.parse($('#backup-json').value); }
+  catch(e){ aviso.className='aviso-form erro'; aviso.textContent = 'JSON inválido: ' + e.message; aviso.style.display='block'; return; }
+  if(!confirm('Isso sobrescreve mundos e lições com o mesmo id. Continuar?')) return;
+  try{
+    const r = await api('importar', {method:'POST', corpo:dados});
+    aviso.className='aviso-form ok'; aviso.textContent = `Importado: ${r.mundos} mundo(s).`; aviso.style.display='block';
+    carregarMundos(); carregarLicoes(); carregarPainel();
+  }catch(e){ aviso.className='aviso-form erro'; aviso.textContent = e.message; aviso.style.display='block'; }
+};
+
+checarSessao();
+</script>
+</body>
+</html>

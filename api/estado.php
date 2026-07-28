@@ -14,47 +14,7 @@
 declare(strict_types=1);
 session_start();
 header('Content-Type: application/json; charset=utf-8');
-
-/* Gabarito das lições — espelha o "certa:" de cada bloco tipo "pergunta" em
-   index.html, na mesma ordem em que aparecem na lição. Lição nova no front
-   precisa entrar aqui também, senão completar_licao devolve 422 pra ela e o
-   índex.html cai no cálculo local (sem crédito verificado, mas sem travar). */
-const RESPOSTAS_LICOES = [
-  'his1' => [0, 1, 2],
-  'his2' => [1, 0, 2],
-  'por1' => [2, 0, 1],
-  'por2' => [0, 1, 2],
-  'bio1' => [1, 0, 2],
-  'bio2' => [1, 0, 2],
-  'mat1' => [1, 2, 0],
-  'mat2' => [2, 0, 1],
-  'geo1' => [1, 0, 2],
-  'geo2' => [1, 0, 2],
-];
-
-/* As credenciais ficam em api/config.php, que NÃO vai para o Git.
-   Copie api/config.example.php para api/config.php e preencha. */
-if (!is_file(__DIR__ . '/config.php')) {
-  http_response_code(500);
-  exit('{"erro":"Falta o api/config.php. Copie o config.example.php e preencha."}');
-}
-require __DIR__ . '/config.php';
-
-function bd(): PDO {
-  static $pdo;
-  return $pdo ??= new PDO(
-    'mysql:host='.BD_HOST.';dbname='.BD_NOME.';charset=utf8mb4', BD_USER, BD_SENHA,
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES => false]
-  );
-}
-function responder(array $dados, int $codigo = 200): never {
-  http_response_code($codigo);
-  echo json_encode($dados, JSON_UNESCAPED_UNICODE);
-  exit;
-}
-function corpo(): array {
-  return json_decode(file_get_contents('php://input') ?: '{}', true) ?? [];
-}
+require __DIR__ . '/bd.php';
 
 $acao = $_GET['acao'] ?? '';
 
@@ -119,8 +79,13 @@ try {
     $d = corpo();
     $licaoId = (string)($d['licaoId'] ?? '');
     $respostas = is_array($d['respostas'] ?? null) ? $d['respostas'] : [];
-    $gabarito = RESPOSTAS_LICOES[$licaoId] ?? null;
-    if ($gabarito === null) responder(['erro' => 'Lição sem gabarito no servidor.'], 422);
+    // gabarito é gravado pelo painel administrativo (api/admin.php) toda vez que uma
+    // lição é salva — deriva do "certa:" de cada bloco tipo "pergunta", na ordem deles
+    $st = bd()->prepare('SELECT gabarito FROM licoes WHERE id = ? AND publicado = 1');
+    $st->execute([$licaoId]);
+    $gabaritoJson = $st->fetchColumn();
+    if ($gabaritoJson === false) responder(['erro' => 'Lição sem gabarito no servidor.'], 422);
+    $gabarito = json_decode((string)$gabaritoJson, true) ?? [];
 
     $acertos = 0;
     foreach ($gabarito as $i => $certa) {
