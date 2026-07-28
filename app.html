@@ -5,26 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bichoteca — a vila onde estudar é brincadeira</title>
 <meta name="description" content="Plataforma de estudos gamificada do fundamental ao médio, com bichinhos, minigames e trilhas.">
-<meta name="theme-color" content="#FFE9B8">
+<meta name="theme-color" content="#ECF0F1">
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
 <style>
 :root{
-  --papel:#FFE9B8;
-  --papel-2:#FFF7E4;
-  --tinta:#33200F;
-  --mata:#4CAF50;   --mata-rim:#2E7D32;  --mata-esc:#1B5E20;
-  --manga:#FFA726;  --manga-rim:#EF6C00;
-  --jabuti:#9A55E8; --jabuti-rim:#6E31B8;
-  --ceu:#26A9C9;    --ceu-rim:#0E7A93;
-  --moeda:#FFB300;  --moeda-rim:#E65100;
-  --rosa:#EC4B72;   --rosa-rim:#B22854;
-  --erro:#D6455A;   --erro-rim:#8E2430;
-  --contorno:#8B5323;
+  --papel:#ECF0F1;
+  --papel-2:#FFFFFF;
+  --tinta:#2C3E50;
+  --mata:#2ECC71;   --mata-rim:#27AE60;  --mata-esc:#1E8449;
+  --manga:#E67E22;  --manga-rim:#D35400;
+  --jabuti:#9B59B6; --jabuti-rim:#8E44AD;
+  --ceu:#3498DB;    --ceu-rim:#2980B9;
+  --moeda:#F1C40F;  --moeda-rim:#F39C12;
+  --rosa:#FF6F91;   --rosa-rim:#E0507A;
+  --erro:#E74C3C;   --erro-rim:#C0392B;
+  --contorno:#BDC3C7;
   --borda:3px;
-  --r:20px;
+  --r:14px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -32,27 +32,23 @@ body{
   font-family:'Nunito',system-ui,sans-serif;
   font-weight:700;
   color:var(--tinta);
-  background-color:var(--papel);
-  background-image:
-    radial-gradient(circle at 12px 12px, rgba(51,32,15,.06) 2px, transparent 2px);
-  background-size:36px 36px;
+  background:var(--papel);
   min-height:100dvh;
   overflow-x:hidden;
 }
 /* arcade e perfil são compactos de propósito: sem isso o corpo rola por baixo do rodapé fixo */
 body.sem-scroll{height:100dvh;overflow:hidden}
 body.sem-scroll #app{padding-bottom:0}
-h1,h2,h3,.display{font-family:'Baloo 2',cursive;font-weight:800;margin:0;line-height:1.05}
+h1,h2,h3,.display{font-family:'Pacifico',cursive;font-weight:400;margin:0;line-height:1.15}
+/* Pacifico é cursiva: ótima pra marca e título, ilegível em frase longa —
+   botão e corpo de texto continuam em Nunito bold, que é o que a criança lê de verdade */
 button{font-family:inherit;font-weight:900;color:inherit;cursor:pointer}
 img{max-width:100%}
 
 /* ---------- casca do app ---------- */
 #app{max-width:520px;margin:0 auto;padding:0 16px 118px;position:relative}
 @media(min-width:900px){
-  body{background-image:
-    radial-gradient(circle at 12px 12px, rgba(51,32,15,.06) 2px, transparent 2px),
-    linear-gradient(180deg,#FFE9B8,#FFD98F)}
-  #app{max-width:560px;border-left:var(--borda) dashed rgba(51,32,15,.25);border-right:var(--borda) dashed rgba(51,32,15,.25)}
+  #app{max-width:560px;border-left:var(--borda) dashed #BDC3C7;border-right:var(--borda) dashed #BDC3C7}
 }
 
 /* ---------- cartão flat: cor sólida + borda de baixo grossa (mesma técnica do botão) ---------- */
@@ -86,7 +82,7 @@ img{max-width:100%}
 .btn.azul{--bg:var(--ceu);--edge:var(--ceu-rim)}
 .btn.rosa{--bg:var(--rosa);--edge:var(--rosa-rim)}
 .btn.branco{--bg:#fff;--edge:var(--contorno);background:#fff;color:var(--tinta);text-shadow:none}
-.btn.bloq{--bg:#C9BFAE;--edge:#8A7355;color:#6A5B48;text-shadow:none}
+.btn.bloq{--bg:#BDC3C7;--edge:#7F8C8D;color:#7F8C8D;text-shadow:none}
 .btn.grande{width:100%;font-size:19px;padding:16px}
 .btn.pequeno{padding:9px 14px;font-size:14px;border-radius:11px;border-bottom-width:4px}
 .btn.pequeno:active{border-bottom-width:1px;transform:translateY(4px)}
@@ -107,7 +103,7 @@ input:focus-visible{outline:4px solid var(--jabuti);outline-offset:2px}
   display:flex;align-items:center;gap:8px;
 }
 [hidden]{display:none!important}
-.topo .marca{font-family:'Baloo 2';font-size:22px;margin-right:auto;letter-spacing:-.5px}
+.topo .marca{font-family:'Pacifico';font-size:22px;margin-right:auto}
 .topo .marca span{color:var(--mata-esc)}
 .contador{display:flex;align-items:center;gap:5px;background:#fff;
   border:3px solid var(--contorno);border-bottom-width:5px;
@@ -129,7 +125,7 @@ nav.rodape{
 nav.rodape .aba{
   flex:1;max-width:96px;background:none;border:none;padding:6px 2px 4px;
   display:flex;flex-direction:column;align-items:center;gap:2px;
-  font-size:11px;font-weight:900;color:#8A7355;border-radius:14px;
+  font-size:11px;font-weight:900;color:#7F8C8D;border-radius:14px;
 }
 nav.rodape .aba .icone{
   width:42px;height:38px;display:grid;place-items:center;font-size:22px;
@@ -149,12 +145,12 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 @keyframes entra{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 .titulo-secao{display:flex;align-items:baseline;gap:10px;margin:22px 4px 12px}
 .titulo-secao h2{font-size:27px}
-.titulo-secao small{font-size:13px;font-weight:900;color:#8A7355}
+.titulo-secao small{font-size:13px;font-weight:900;color:#7F8C8D}
 
 /* ---------- bicho ---------- */
 .palco{
   position:relative;text-align:center;padding:10px 0 0;
-  background:linear-gradient(180deg,#CFF0FF 0%,#CFF0FF 62%,#8FD97A 62%,#7ACB63 100%);
+  background:linear-gradient(180deg,#D6EAF8 0%,#D6EAF8 62%,#A9DFBF 62%,#7DCEA0 100%);
   border:var(--borda) solid var(--contorno);border-bottom-width:9px;border-radius:var(--r);
   overflow:hidden;
 }
@@ -172,7 +168,7 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 .placa-nome{
   display:inline-flex;align-items:center;gap:6px;margin:-16px auto 0;position:relative;z-index:3;
   background:#fff;border:3px solid var(--contorno);border-bottom-width:5px;border-radius:14px;padding:5px 14px;
-  font-family:'Baloo 2';font-size:19px;
+  font-family:'Pacifico';font-size:19px;
 }
 .barras{display:grid;gap:9px;margin-top:20px}
 .barra{display:flex;align-items:center;gap:9px}
@@ -202,7 +198,7 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 .cartao-trilha p{margin:0;font-size:12px;font-weight:700;opacity:.75}
 .cartao-trilha .fita{
   position:absolute;top:10px;right:-30px;transform:rotate(38deg);
-  background:var(--tinta);color:#FFE9B8;font-size:10px;padding:3px 32px;font-weight:900;
+  background:var(--tinta);color:#ECF0F1;font-size:10px;padding:3px 32px;font-weight:900;
 }
 .escolha-bicho{
   background:#fff;border:var(--borda) solid var(--contorno);border-bottom-width:9px;border-radius:var(--r);
@@ -212,7 +208,7 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 .escolha-bicho[aria-pressed="true"]{background:var(--moeda);
   border-color:var(--moeda-rim);
   transform:translateY(-6px) rotate(-2deg)}
-.escolha-bicho b{display:block;font-family:'Baloo 2';font-size:17px;margin-top:2px}
+.escolha-bicho b{display:block;font-family:'Pacifico';font-size:17px;margin-top:2px}
 
 /* ---------- lição / quiz ---------- */
 .leitura{font-weight:700;font-size:16px;line-height:1.6}
@@ -251,7 +247,7 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
   position:absolute;inset:0;backface-visibility:hidden;
   border:var(--borda) solid var(--contorno);border-bottom-width:8px;border-radius:var(--r);
   background:#fff;display:flex;align-items:center;justify-content:center;text-align:center;
-  padding:18px;font-family:'Baloo 2';font-size:20px;
+  padding:18px;font-family:'Nunito';font-weight:800;font-size:20px;
 }
 .flashcard .face.verso{transform:rotateY(180deg);background:var(--papel-2)}
 .flashcard .aviso-toque{text-align:center;font-size:12px;font-weight:700;opacity:.65;margin-top:8px}
@@ -264,7 +260,7 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 .video-embutido iframe{width:100%;height:100%;border:0;display:block}
 
 /* ---------- cloze (frase com lacuna) ---------- */
-.cloze .frase{font-family:'Baloo 2';font-size:20px;line-height:1.5;margin-bottom:16px}
+.cloze .frase{font-family:'Nunito';font-weight:800;font-size:20px;line-height:1.5;margin-bottom:16px}
 .cloze .lacuna{
   display:inline-block;min-width:64px;border-bottom:4px solid var(--contorno);
   text-align:center;font-weight:900;
@@ -296,7 +292,7 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 /* ---------- mural ---------- */
 .recado{background:#fff;border:var(--borda) solid var(--contorno);border-bottom-width:6px;border-radius:18px;
   padding:12px 14px;margin-bottom:12px;display:flex;gap:10px}
-.recado .aut{font-family:'Baloo 2';font-size:16px;line-height:1.1}
+.recado .aut{font-family:'Pacifico';font-size:16px;line-height:1.1}
 .recado .txt{font-size:15px;margin:2px 0 0}
 .recado .av{width:42px;height:42px;flex:none;border:3px solid var(--contorno);border-radius:50%;
   display:grid;place-items:center;font-size:20px;background:var(--papel)}
@@ -317,7 +313,7 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 .carta.virada{background:#fff;color:inherit;border-color:var(--contorno)}
 .carta.par{background:var(--mata);color:#fff;border-color:var(--mata-rim)}
 canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--contorno);
-  border-bottom-width:8px;border-radius:var(--r);background:#CFF0FF;touch-action:none}
+  border-bottom-width:8px;border-radius:var(--r);background:#D6EAF8;touch-action:none}
 
 /* ---------- perfil ---------- */
 .perfil-retrato{text-align:center;padding:14px 0 4px}
@@ -325,13 +321,13 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
 .avatar-nivel .moldura{background:#fff;border:4px solid var(--contorno);border-bottom-width:7px;border-radius:24px;padding:10px;display:inline-flex}
 .selo-nivel{position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);
   background:var(--moeda);border:3px solid var(--moeda-rim);border-radius:999px;
-  padding:3px 14px;font-family:'Baloo 2';font-size:13px;white-space:nowrap}
+  padding:3px 14px;font-family:'Nunito';font-weight:900;font-size:13px;white-space:nowrap}
 .perfil-retrato h2{margin-top:20px;font-size:24px}
 .perfil-retrato .sub-perfil{margin:2px 0 0;font-size:13px;font-weight:900;opacity:.7}
 .grade-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:18px 0}
 .stat-card{background:#fff;border:3px solid var(--contorno);border-bottom-width:6px;border-radius:16px;padding:12px 8px;text-align:center}
 .stat-card .stat-emoji{font-size:22px;display:block}
-.stat-card .stat-valor{font-family:'Baloo 2';font-size:19px;display:block;margin-top:2px}
+.stat-card .stat-valor{font-family:'Nunito';font-weight:900;font-size:19px;display:block;margin-top:2px}
 .stat-card .stat-rotulo{font-size:11px;text-transform:uppercase;letter-spacing:.4px;opacity:.65;font-weight:900}
 .perfil-rodape{display:flex;flex-direction:column;align-items:center;gap:8px;margin:18px 0 4px}
 .aviso-mini{font-size:11px;font-weight:700;opacity:.6;text-align:center;margin:0}
@@ -342,7 +338,7 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
 .conquista .bolha{width:44px;height:44px;border-radius:50%;
   background:var(--moeda);border:3px solid var(--moeda-rim);
   display:grid;place-items:center;font-size:20px}
-.conquista.bloqueada .bolha{background:#E4DCC8;filter:grayscale(1);opacity:.6}
+.conquista.bloqueada .bolha{background:#D5DBDB;filter:grayscale(1);opacity:.6}
 .conquista span{font-size:10px;font-weight:900;text-align:center;line-height:1.15}
 
 /* ---------- balão / aviso ---------- */
@@ -395,7 +391,7 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
   <!-- ====== ONBOARDING ====== -->
   <section id="tela-inicio" class="tela ativa">
     <div style="text-align:center;padding:26px 0 10px">
-      <h1 style="font-size:46px;letter-spacing:-1.5px">Bicho<span style="color:var(--mata-esc)">teca</span></h1>
+      <h1 style="font-size:40px">Bicho<span style="color:var(--mata-esc)">teca</span></h1>
       <p style="font-weight:900;margin:2px 0 0;font-size:15px">a vila onde estudar é brincadeira</p>
     </div>
     <div class="sticker tilt" style="margin-bottom:16px">
@@ -404,13 +400,13 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
       <div class="grade-3" id="grade-bichos"></div>
     </div>
     <div class="sticker tilt-r">
-      <label for="campo-nome" style="display:block;font-family:'Baloo 2';font-size:20px;margin-bottom:6px">Como seu bicho se chama?</label>
+      <label for="campo-nome" style="display:block;font-family:'Pacifico';font-size:20px;margin-bottom:6px">Como seu bicho se chama?</label>
       <input id="campo-nome" maxlength="14" placeholder="Ex.: Tobias"
-        style="width:100%;font-family:'Baloo 2';font-size:22px;padding:10px 14px;border:4px solid var(--contorno);border-radius:16px;background:#fff;color:inherit">
+        style="width:100%;font-family:'Nunito';font-weight:800;font-size:22px;padding:10px 14px;border:4px solid var(--contorno);border-radius:16px;background:#fff;color:inherit">
       <p style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Nada de nome verdadeiro, sobrenome ou escola. Aqui a gente usa apelido de bicho — e é esse apelido que vira seu usuário de login.</p>
-      <label for="campo-senha" style="display:block;font-family:'Baloo 2';font-size:20px;margin-bottom:6px">Senha</label>
+      <label for="campo-senha" style="display:block;font-family:'Pacifico';font-size:20px;margin-bottom:6px">Senha</label>
       <input id="campo-senha" type="password" maxlength="60" placeholder="Pelo menos 4 letras/números"
-        style="width:100%;font-family:'Baloo 2';font-size:22px;padding:10px 14px;border:4px solid var(--contorno);border-radius:16px;background:#fff;color:inherit">
+        style="width:100%;font-family:'Nunito';font-weight:800;font-size:22px;padding:10px 14px;border:4px solid var(--contorno);border-radius:16px;background:#fff;color:inherit">
       <p style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Digite pra criar sua conta ou entrar numa que já existe. Deixe em branco pra jogar sem salvar.</p>
       <button class="btn grande" id="btn-comecar">Começar a aventura</button>
       <p id="aviso-conta" class="aviso" style="margin-top:12px;display:none"></p>
@@ -458,7 +454,7 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
    ========================================================= */
 
 /* ---------- 1. OS BICHOS (SVG desenhado à mão, sem imagem externa) ---------- */
-const T = '#33200F'; // tinta do contorno
+const T = '#2C3E50'; // tinta do contorno
 
 const BICHOS = {
   capivara: {
@@ -686,7 +682,7 @@ RENDER.casa = () => {
     <div class="sticker tilt-r" style="display:flex;gap:14px;align-items:center">
       <div style="font-size:40px">${proxima ? proxima.emoji : '🏆'}</div>
       <div style="flex:1">
-        <b style="font-family:'Baloo 2';font-size:19px;display:block">${proxima ? proxima.titulo : 'Tudo estudado!'}</b>
+        <b style="font-family:'Pacifico';font-size:19px;display:block">${proxima ? proxima.titulo : 'Tudo estudado!'}</b>
         <span style="font-size:13px">${proxima ? 'Vale 🪙 25 e ⭐ 40' : 'Você zerou as trilhas do protótipo.'}</span>
       </div>
       <button class="btn pequeno laranja" onclick="${proxima ? `ir('licao','${proxima.id}')` : `ir('arcade')`}">Ir</button>
@@ -1333,8 +1329,8 @@ function jogoChuva(){
       itens.push({x:24+Math.random()*(L-48), y:-24, vy:1.9+Math.random()*1.8, ...t});
     }
     ctx.clearRect(0,0,L,A);
-    ctx.fillStyle = '#7ACB63'; ctx.fillRect(0, A-40, L, 40);
-    ctx.strokeStyle = '#33200F'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(0,A-40); ctx.lineTo(L,A-40); ctx.stroke();
+    ctx.fillStyle = '#7DCEA0'; ctx.fillRect(0, A-40, L, 40);
+    ctx.strokeStyle = '#2C3E50'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(0,A-40); ctx.lineTo(L,A-40); ctx.stroke();
 
     itens.forEach(it => { it.y += it.vy; ctx.font='30px serif'; ctx.textAlign='center'; ctx.fillText(it.e, it.x, it.y); });
     itens = itens.filter(it => {
@@ -1344,9 +1340,9 @@ function jogoChuva(){
       return it.y < A+30;
     });
     // cesta
-    ctx.fillStyle = '#C98A4B'; ctx.strokeStyle = '#33200F'; ctx.lineWidth = 6;
+    ctx.fillStyle = '#C98A4B'; ctx.strokeStyle = '#2C3E50'; ctx.lineWidth = 6;
     ctx.beginPath(); ctx.roundRect(cesta.x-cesta.l/2, A-64, cesta.l, 30, 10); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#33200F'; ctx.font = '900 20px Nunito, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#2C3E50'; ctx.font = '900 20px Nunito, sans-serif'; ctx.textAlign = 'left';
     ctx.fillText('Pontos: '+pontos, 14, 32);
     requestAnimationFrame(laco);
   })();
@@ -1474,7 +1470,7 @@ function cartaoItem(i){
 }
 function cartaoMochila(i){
   return `<div class="item-loja"><span class="emoji">${i.emoji}</span><b>${i.nome}</b>
-    <small style="font-weight:900;color:#8A7355">tem ${estado.inventario[i.id]}</small>
+    <small style="font-weight:900;color:#7F8C8D">tem ${estado.inventario[i.id]}</small>
     <button class="btn pequeno laranja" onclick="consumirItem('${i.id}')">Dar pro bicho</button></div>`;
 }
 function usarItem(id){

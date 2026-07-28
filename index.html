@@ -5,26 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bichoteca — a vila onde estudar é brincadeira</title>
 <meta name="description" content="Trilhas de estudo gamificadas do fundamental ao médio, com bichinhos, minigames e sem rede social. Conheça a Bichoteca.">
-<meta name="theme-color" content="#FFE9B8">
+<meta name="theme-color" content="#ECF0F1">
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
 <style>
 :root{
-  --papel:#FFE9B8;
-  --papel-2:#FFF7E4;
-  --tinta:#33200F;
-  --mata:#4CAF50;   --mata-rim:#2E7D32;  --mata-esc:#1B5E20;
-  --manga:#FFA726;  --manga-rim:#EF6C00;
-  --jabuti:#9A55E8; --jabuti-rim:#6E31B8;
-  --ceu:#26A9C9;    --ceu-rim:#0E7A93;
-  --moeda:#FFB300;  --moeda-rim:#E65100;
-  --rosa:#EC4B72;   --rosa-rim:#B22854;
-  --erro:#D6455A;   --erro-rim:#8E2430;
-  --contorno:#8B5323;
+  --papel:#ECF0F1;
+  --papel-2:#FFFFFF;
+  --tinta:#2C3E50;
+  --mata:#2ECC71;   --mata-rim:#27AE60;  --mata-esc:#1E8449;
+  --manga:#E67E22;  --manga-rim:#D35400;
+  --jabuti:#9B59B6; --jabuti-rim:#8E44AD;
+  --ceu:#3498DB;    --ceu-rim:#2980B9;
+  --moeda:#F1C40F;  --moeda-rim:#F39C12;
+  --rosa:#FF6F91;   --rosa-rim:#E0507A;
+  --erro:#E74C3C;   --erro-rim:#C0392B;
+  --contorno:#BDC3C7;
   --borda:3px;
-  --r:20px;
+  --r:14px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{scroll-behavior:smooth}
@@ -33,22 +33,15 @@ body{
   font-family:'Nunito',system-ui,sans-serif;
   font-weight:700;
   color:var(--tinta);
-  background-color:var(--papel);
-  background-image:radial-gradient(circle at 12px 12px, rgba(51,32,15,.06) 2px, transparent 2px);
-  background-size:36px 36px;
+  background:var(--papel);
   overflow-x:hidden;
 }
-h1,h2,h3,.display{font-family:'Baloo 2',cursive;font-weight:800;margin:0;line-height:1.08}
+h1,h2,h3,.display{font-family:'Pacifico',cursive;font-weight:400;margin:0;line-height:1.2}
 button{font-family:inherit;font-weight:900;color:inherit;cursor:pointer}
 img{max-width:100%}
 a{color:inherit}
 
 #pagina{max-width:960px;margin:0 auto;padding:0 20px 40px;position:relative}
-@media(min-width:900px){
-  body{background-image:
-    radial-gradient(circle at 12px 12px, rgba(51,32,15,.06) 2px, transparent 2px),
-    linear-gradient(180deg,#FFE9B8,#FFD98F)}
-}
 
 /* ---------- botões reaproveitados do jogo: cor chapada + borda de baixo grossa ---------- */
 .btn{
@@ -88,11 +81,11 @@ a{color:inherit}
 .topo{
   position:sticky;top:0;z-index:40;
   padding:12px 20px;
-  background:rgba(255,233,184,.94);backdrop-filter:blur(6px);
+  background:rgba(255,255,255,.94);backdrop-filter:blur(6px);
   border-bottom:var(--borda) solid var(--contorno);
   display:flex;align-items:center;gap:10px;
 }
-.topo .marca{font-family:'Baloo 2';font-size:24px;letter-spacing:-.5px;margin-right:auto}
+.topo .marca{font-family:'Pacifico';font-size:24px;margin-right:auto}
 .topo .marca span{color:var(--mata-esc)}
 .topo .acoes{display:flex;gap:8px}
 @media(max-width:520px){ .topo .acoes .btn{padding:9px 14px;font-size:14px} }
@@ -106,7 +99,7 @@ a{color:inherit}
 @media(min-width:760px){
   .hero{grid-template-columns:1.1fr .9fr;text-align:left;padding:64px 0 30px}
 }
-.hero h1{font-size:38px;letter-spacing:-1px}
+.hero h1{font-size:34px}
 @media(min-width:760px){ .hero h1{font-size:48px} }
 .hero p.sub{font-size:17px;font-weight:700;margin:14px 0 22px;max-width:46ch}
 @media(min-width:760px){ .hero p.sub{margin-left:0;margin-right:0} }
@@ -117,7 +110,7 @@ a{color:inherit}
 
 .palco-hero{
   position:relative;text-align:center;padding:18px 0 0;
-  background:linear-gradient(180deg,#CFF0FF 0%,#CFF0FF 62%,#8FD97A 62%,#7ACB63 100%);
+  background:linear-gradient(180deg,#D6EAF8 0%,#D6EAF8 62%,#A9DFBF 62%,#7DCEA0 100%);
   border:var(--borda) solid var(--contorno);border-bottom-width:8px;border-radius:28px;
   overflow:hidden;max-width:320px;margin:0 auto;
 }
@@ -134,7 +127,7 @@ a{color:inherit}
 .placa-hero{
   display:inline-block;margin:-14px 0 12px;position:relative;z-index:3;
   background:#fff;border:3px solid var(--contorno);border-bottom-width:5px;border-radius:14px;padding:5px 16px;
-  font-family:'Baloo 2';font-size:16px;
+  font-family:'Pacifico';font-size:16px;
 }
 
 /* ---------- títulos de seção ---------- */
@@ -174,7 +167,7 @@ a{color:inherit}
 .passo .numero{
   width:34px;height:34px;border-radius:50%;
   background:var(--jabuti);color:#fff;
-  display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-family:'Baloo 2';font-size:16px;
+  display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-family:'Pacifico';font-size:16px;
   border:3px solid var(--jabuti-rim);
 }
 .passo h3{font-size:15px;margin-bottom:4px}
@@ -245,17 +238,17 @@ footer{text-align:center;margin-top:30px;font-size:12px;font-weight:700;opacity:
       <div class="sol"></div><div class="nuvem"></div>
       <svg class="bicho" viewBox="0 0 200 200" role="img" aria-label="Capivara mascote da Bichoteca">
         <g class="corpo-todo" stroke-linecap="round">
-          <ellipse cx="62" cy="172" rx="15" ry="14" fill="#A97038" stroke="#33200F" stroke-width="6"/>
-          <ellipse cx="138" cy="172" rx="15" ry="14" fill="#A97038" stroke="#33200F" stroke-width="6"/>
-          <ellipse cx="100" cy="140" rx="66" ry="44" fill="#C98A4B" stroke="#33200F" stroke-width="6"/>
-          <circle cx="60" cy="50" r="13" fill="#A97038" stroke="#33200F" stroke-width="6"/>
-          <circle cx="140" cy="50" r="13" fill="#A97038" stroke="#33200F" stroke-width="6"/>
-          <ellipse cx="100" cy="82" rx="50" ry="42" fill="#C98A4B" stroke="#33200F" stroke-width="6"/>
-          <ellipse cx="100" cy="100" rx="30" ry="21" fill="#B0763C" stroke="#33200F" stroke-width="5"/>
-          <ellipse cx="90" cy="96" rx="4" ry="5" fill="#33200F"/><ellipse cx="110" cy="96" rx="4" ry="5" fill="#33200F"/>
-          <path d="M92 110 q8 7 16 0" stroke="#33200F" stroke-width="5" fill="none" stroke-linecap="round"/>
-          <ellipse class="olho" cx="80" cy="70" rx="7" ry="8" fill="#33200F"/>
-          <ellipse class="olho" cx="120" cy="70" rx="7" ry="8" fill="#33200F"/>
+          <ellipse cx="62" cy="172" rx="15" ry="14" fill="#A97038" stroke="#2C3E50" stroke-width="6"/>
+          <ellipse cx="138" cy="172" rx="15" ry="14" fill="#A97038" stroke="#2C3E50" stroke-width="6"/>
+          <ellipse cx="100" cy="140" rx="66" ry="44" fill="#C98A4B" stroke="#2C3E50" stroke-width="6"/>
+          <circle cx="60" cy="50" r="13" fill="#A97038" stroke="#2C3E50" stroke-width="6"/>
+          <circle cx="140" cy="50" r="13" fill="#A97038" stroke="#2C3E50" stroke-width="6"/>
+          <ellipse cx="100" cy="82" rx="50" ry="42" fill="#C98A4B" stroke="#2C3E50" stroke-width="6"/>
+          <ellipse cx="100" cy="100" rx="30" ry="21" fill="#B0763C" stroke="#2C3E50" stroke-width="5"/>
+          <ellipse cx="90" cy="96" rx="4" ry="5" fill="#2C3E50"/><ellipse cx="110" cy="96" rx="4" ry="5" fill="#2C3E50"/>
+          <path d="M92 110 q8 7 16 0" stroke="#2C3E50" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <ellipse class="olho" cx="80" cy="70" rx="7" ry="8" fill="#2C3E50"/>
+          <ellipse class="olho" cx="120" cy="70" rx="7" ry="8" fill="#2C3E50"/>
           <circle cx="82" cy="67" r="2.4" fill="#fff"/><circle cx="122" cy="67" r="2.4" fill="#fff"/>
         </g>
       </svg>
