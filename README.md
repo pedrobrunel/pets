@@ -30,14 +30,19 @@ Para publicar: joga tudo dentro de `public_html/` na hospedagem compartilhada e 
 .github/workflows/
   deploy.yml          publica na Hostinger a cada push na main
 index.html            home pública — objetivos do projeto e CTA de entrar/cadastrar
-app.html              o jogo em si — onboarding, trilhas, minigames, loja, mural, perfil
+app.html              o jogo em si — onboarding, mapa de mundos, minigames, loja, mural, perfil
+admin.html            painel do Hostmaster — upload de conteúdo, jogadores, métricas, backup
 manifest.json         identidade do PWA (nome, ícones, cor, tela cheia; start_url aponta pro app.html)
 sw.js                 service worker: funciona offline depois da 1ª visita
 icone-*.png           ícones do app instalado
 .htaccess             HTTPS forçado, cache e proteção das credenciais
 api/
-  estado.php          back-end opcional: login por usuário + senha, salvar progresso
-  install.php          roda uma vez só: cria a tabela do banco sozinho
+  bd.php              helpers de banco compartilhados (conexão PDO, respostas JSON)
+  estado.php          back-end opcional: login de aluno por usuário + senha, salvar progresso
+  admin.php           back-end do painel do Hostmaster (mundos, lições, jogadores, backup)
+  conteudo.php        endpoint público: devolve os mundos/lições publicados pro app.html
+  install.php         roda uma vez (e de novo pra trocar a senha do painel): cria as tabelas e semeia o conteúdo de exemplo
+  seed-conteudo.json  conteúdo de exemplo semeado na 1ª instalação — também serve de referência do formato de JSON que o painel aceita
   config.example.php  modelo — copie para config.php e preencha (não versionado)
 ```
 
@@ -56,6 +61,7 @@ api/
 - Home pública explicando o projeto pros responsáveis, com CTA de entrar/cadastrar
 - Instalável como aplicativo no Android e no iOS
 - Salvar progresso (opcional): com usuário + senha, o jogo sincroniza com o banco — sem conta, continua 100% local
+- **Painel do Hostmaster (`admin.html`)**: quem hospeda o site cria mundos, sobe lições em JSON (com validação e pré-visualização antes de salvar), publica ou deixa em rascunho, vê jogadores (busca, reset de senha, exclusão de conta), métricas gerais e exporta/importa backup completo do conteúdo. É o painel de quem administra o site — não é o painel do professor.
 
 **Ainda não funciona:** perfil público do aluno e painel do responsável/professor — veja "Próximos passos".
 
@@ -125,34 +131,31 @@ Premium e Business têm acesso SSH, e aí o `rsync` fica mais rápido e mais seg
 No hPanel, crie o banco em *Bancos de dados MySQL*. Depois:
 
 ```bash
-cp api/config.example.php api/config.php   # e preencha com host/banco/usuário/senha do hPanel
+cp api/config.example.php api/config.php   # preencha host/banco/usuário/senha do hPanel
+                                            # e defina ADMIN_USUARIO/ADMIN_SENHA (conta do painel)
 ```
 
-**Caminho fácil:** abra `seusite.com/api/install.php` no navegador uma vez — ele cria a tabela `jogadores` sozinho (é seguro rodar mais de uma vez) — e apague o arquivo do servidor depois.
+Abra `seusite.com/api/install.php` no navegador uma vez. Ele:
 
-**Caminho manual:** rode isto no phpMyAdmin em vez de usar o `install.php`:
+1. cria as tabelas `jogadores`, `admins`, `mundos` e `licoes` (é seguro rodar de novo — nunca apaga o que já existe);
+2. cria (ou atualiza) a conta do painel a partir de `ADMIN_USUARIO`/`ADMIN_SENHA` — **pra trocar a senha do painel depois, é só editar essas duas constantes em `config.php` e abrir `install.php` de novo**;
+3. semeia o conteúdo de exemplo (`api/seed-conteudo.json`) só se o banco de mundos estiver vazio — depois da 1ª vez, quem manda é o painel.
 
-```sql
-CREATE TABLE jogadores (
-  id            INT AUTO_INCREMENT PRIMARY KEY,
-  apelido       VARCHAR(14)  NOT NULL UNIQUE,
-  pin_hash      VARCHAR(255) NOT NULL,
-  estado        JSON         NOT NULL,
-  criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-```
+Pode deixar o `install.php` no servidor (ele nunca sobrescreve conteúdo já existente) ou apagar e subir de novo quando precisar resetar a senha do painel.
 
-Com o banco pronto, o front-end já está ligado: a tela de onboarding do `app.html` tem um campo de senha opcional — em branco, o jogo continua 100% local igual antes; preenchido, `entrarNoServidor()`/`carregarDoServidor()`/`salvarNoServidor()` (fim do `app.html`) cuidam de criar a conta, restaurar progresso salvo e sincronizar a cada ação relevante (lição concluída, item comprado, item consumido, recado publicado).
+Com o banco pronto:
 
-> ⚠️ **Moedas e XP hoje são calculados no navegador.** Qualquer aluno com o console aberto vira milionário. Quando isso passar a valer alguma coisa (ranking, item raro), a conta precisa subir para o PHP: o cliente manda *"respondi a alternativa 2 da pergunta 3 da lição bio1"*, o servidor confere e credita.
+- **`app.html`** já está ligado: a tela de onboarding tem um campo de senha opcional — em branco, o jogo continua 100% local igual antes; preenchido, `entrarNoServidor()`/`carregarDoServidor()`/`salvarNoServidor()` (fim do `app.html`) cuidam de criar a conta, restaurar progresso salvo e sincronizar a cada ação relevante. O conteúdo (mundos e lições) também passa a vir do banco via `api/conteudo.php` — sem banco ou com ele fora do ar, cai de volta no conteúdo de exemplo embutido no próprio arquivo.
+- **`admin.html`** é o painel do Hostmaster: acesse `seusite.com/admin.html` e entre com `ADMIN_USUARIO`/`ADMIN_SENHA`. De lá dá pra criar mundos, subir lições em JSON (com validação e pré-visualização antes de gravar), gerenciar jogadores e fazer backup/restauração do conteúdo. O formato do JSON de cada lição é o mesmo de `api/seed-conteudo.json` — o painel tem um botão "usar exemplo" e uma lista dos tipos de bloco aceitos.
+
+> **Moedas e XP de lições feitas via banco já são conferidas no servidor.** Quando uma lição é salva pelo painel, o gabarito (`certa:` de cada bloco `pergunta`) vai junto pra tabela `licoes`, e `api/estado.php` credita moedas/XP comparando com esse gabarito — não com o que o navegador do aluno diz que ele acertou. Sem banco (modo 100% local) o cálculo continua no navegador, como antes.
 
 ---
 
 ## Próximos passos
 
-1. **Painel do responsável/professor** — quem estudou o quê, quanto tempo, onde errou. É isso que faz escola pagar
-2. **Conteúdo de verdade** — só `bio1` usa os blocos novos (flashcard, vídeo, cloze, caça-palavras); as outras 9 lições ainda são só leitura + quiz. Ancorar nas habilidades da BNCC (`EF08HI01` e afins) desde já organiza o currículo e vira argumento de venda
+1. **Painel do responsável/professor** — diferente do painel do Hostmaster (`admin.html`, de quem hospeda o site): esse é pra quem acompanha um aluno específico — quem estudou o quê, quanto tempo, onde errou. É isso que faz escola pagar
+2. **Mais conteúdo, mais rápido** — agora que subir lição é upload de JSON validado pelo painel (sem editar código nem fazer deploy), o gargalo passa a ser só escrever o conteúdo. Ancorar nas habilidades da BNCC (`EF08HI01` e afins) no `titulo`/`serie` de cada lição organiza o currículo e vira argumento de venda
 3. **Lojas de aplicativo** — o mesmo código entra num invólucro (Capacitor ou Bubblewrap/TWA) e sobe na Play Store sem reescrever nada. Foi por isso que já saiu como PWA
 
 VPS e Node só quando o número de alunos justificar. Enquanto for protótipo e piloto, hospedagem compartilhada com PHP dá conta com folga.

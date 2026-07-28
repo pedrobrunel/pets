@@ -173,11 +173,52 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 .barra .cheio{display:block;height:100%;border-radius:999px 0 0 999px;transition:width .5s cubic-bezier(.3,1.4,.5,1)}
 .barra .valor{width:38px;text-align:right;font-size:13px;font-weight:900}
 
-.trilha-emoji{
-  width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-size:22px;
-  flex:none;
-  background:var(--tc);
-  border:2.5px solid var(--contorno);border-bottom-width:5px;
+/* ---------- mapa de mundos ---------- */
+.mapa-mundos{position:relative;padding:26px 4px 8px;display:flex;flex-direction:column;gap:30px}
+.mapa-mundos::before{
+  content:'';position:absolute;left:50%;top:10px;bottom:10px;border-left:4px dashed var(--contorno);
+  opacity:.5;z-index:0;
+}
+.mundo-no{
+  position:relative;z-index:1;width:158px;
+  background:#fff;border:var(--borda) solid var(--contorno);border-bottom-width:8px;border-radius:18px;
+  padding:14px 8px 12px;display:flex;flex-direction:column;align-items:center;gap:4px;
+  transition:transform .1s ease, border-bottom-width .1s ease;
+}
+.mundo-no:active{transform:translateY(6px);border-bottom-width:1px}
+.mundo-no:nth-child(odd){align-self:flex-start;margin-left:4%}
+.mundo-no:nth-child(even){align-self:flex-end;margin-right:4%}
+.mundo-emblema{
+  position:relative;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:28px;
+  background:var(--tc);border:3px solid var(--contorno);margin-bottom:2px;
+}
+.mundo-coroa{position:absolute;top:-12px;right:-10px;font-size:20px}
+.mundo-no b{font-family:'Baloo 2';font-size:16px}
+.mundo-progresso{font-size:11px;font-weight:900;color:#7F8C8D}
+.mundo-progresso.completo{color:var(--mata-esc)}
+
+.mundo-banner{
+  background:var(--tc);color:#fff;
+  border:var(--borda) solid var(--contorno);border-bottom-width:9px;border-radius:var(--r);
+  padding:14px 16px 16px;margin-bottom:14px;
+}
+.mundo-banner .btn{margin-bottom:12px}
+.mundo-banner-corpo{display:flex;align-items:center;gap:14px}
+.mundo-banner .mundo-emblema{background:rgba(255,255,255,.25);border-color:rgba(255,255,255,.6)}
+.mundo-banner h2{color:#fff;font-size:23px}
+.mundo-banner p{margin:2px 0 0;font-size:13px;font-weight:800;opacity:.92}
+
+.mundos-atalho{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 4px;-webkit-overflow-scrolling:touch}
+.mundo-atalho{
+  flex:0 0 auto;display:flex;align-items:center;gap:6px;white-space:nowrap;
+  background:#fff;border:3px solid var(--contorno);border-bottom-width:5px;border-radius:999px;
+  padding:8px 14px 8px 8px;font-size:13px;font-weight:900;
+  transition:transform .1s ease, border-bottom-width .1s ease;
+}
+.mundo-atalho:active{transform:translateY(4px);border-bottom-width:1px}
+.mundo-atalho span{
+  width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:14px;
+  background:var(--tc);border:2px solid var(--contorno);
 }
 
 /* ---------- grades ---------- */
@@ -418,8 +459,10 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
 
   <!-- ====== CASA ====== -->
   <section id="tela-casa" class="tela"></section>
-  <!-- ====== TRILHAS ====== -->
+  <!-- ====== TRILHAS (mapa de mundos) ====== -->
   <section id="tela-trilhas" class="tela"></section>
+  <!-- ====== MUNDO (uma trilha por dentro) ====== -->
+  <section id="tela-mundo" class="tela"></section>
   <!-- ====== LIÇÃO ====== -->
   <section id="tela-licao" class="tela"></section>
   <!-- ====== ARCADE ====== -->
@@ -701,8 +744,12 @@ setInterval(()=>{
   if(telaAtual === 'casa') RENDER.casa();
 }, 25000);
 
-/* ---------- 5. CONTEÚDO DAS TRILHAS ---------- */
-const TRILHAS = [
+/* ---------- 5. CONTEÚDO DAS TRILHAS ----------
+   Este array é só o fallback: funciona sozinho em hospedagem estática
+   (GitHub Pages, "sem back-end") mesmo sem api/. Quando o back-end existe
+   e tem conteúdo publicado, carregarConteudo() (seção 13) troca TRILHAS
+   pelo que o painel do Hostmaster (admin.html) publicou no banco. */
+let TRILHAS = [
   { id:'his', nome:'História', emoji:'🏺', cor:'var(--manga)', licoes:[
     { id:'his1', emoji:'👑', titulo:'A Independência do Brasil', serie:'8º ano',
       blocos:[
@@ -898,6 +945,7 @@ const TRILHAS = [
   ]}
 ];
 const acharLicao = id => TRILHAS.flatMap(t=>t.licoes).find(l=>l.id===id);
+const acharMundoDaLicao = id => TRILHAS.find(t => t.licoes.some(l=>l.id===id));
 
 // lições antigas (só leitura + perguntas) viram blocos automaticamente — não precisa reescrever
 function blocosDaLicao(l){
@@ -908,45 +956,74 @@ function blocosDaLicao(l){
   ];
 }
 
-/* ---------- 6. TELA: TRILHAS ---------- */
+/* ---------- 6. TELA: TRILHAS (mapa de mundos, estilo Neopia) ---------- */
 // ordem de exibição do filtro por ano — assim que o currículo crescer (BNCC completa),
 // as séries aparecem na ordem certa em vez da ordem em que os dados foram escritos
 const ORDEM_SERIES = ['6º ano','7º ano','8º ano','9º ano','1º ano do médio','2º ano do médio','3º ano do médio'];
-let filtroSerie = 'todos';
-function filtrarSerie(s){ filtroSerie = s; RENDER.trilhas(); }
+const progressoMundo = t => {
+  const feitas = t.licoes.filter(l=>estado.licoesFeitas.includes(l.id)).length;
+  return {feitas, total: t.licoes.length, completo: feitas === t.licoes.length};
+};
 RENDER.trilhas = () => {
-  const seriesUsadas = [...new Set(TRILHAS.flatMap(t=>t.licoes.map(l=>l.serie)))]
-    .sort((a,b) => ORDEM_SERIES.indexOf(a) - ORDEM_SERIES.indexOf(b));
-  const trilhasVisiveis = TRILHAS.map(t => ({
-    ...t, licoesVisiveis: t.licoes.filter(l => filtroSerie==='todos' || l.serie===filtroSerie)
-  })).filter(t => t.licoesVisiveis.length);
   $('#tela-trilhas').innerHTML = `
-    <div class="titulo-secao"><h2>Trilhas</h2><small>do fundamental ao médio</small></div>
+    <div class="titulo-secao"><h2>Mapa de mundos</h2><small>escolha uma matéria pra visitar</small></div>
+    <div class="mapa-mundos">
+      ${TRILHAS.map(t => {
+        const {feitas, total, completo} = progressoMundo(t);
+        return `<button class="mundo-no" style="--tc:${t.cor}" onclick="ir('mundo','${t.id}')">
+          <span class="mundo-emblema">${t.emoji}${completo?'<span class="mundo-coroa">👑</span>':''}</span>
+          <b>${t.nome}</b>
+          <span class="mundo-progresso ${completo?'completo':''}">${feitas}/${total}</span>
+        </button>`;
+      }).join('')}
+    </div>
+    <p class="aviso">Cada mundo tem suas próprias lições — leitura, atividades e um quizzinho no final. Errou? Sem drama: dá pra refazer quantas vezes quiser.</p>`;
+};
+
+/* ---------- 6b. TELA: MUNDO (uma trilha por dentro, com identidade própria) ---------- */
+let filtroSerie = 'todos';
+function filtrarSerie(s){ filtroSerie = s; RENDER.mundo(mundoAtual); }
+let mundoAtual = null;
+RENDER.mundo = (id) => {
+  mundoAtual = id;
+  filtroSerie = 'todos';
+  const t = TRILHAS.find(x => x.id === id);
+  desenharMundo(t);
+};
+function desenharMundo(t){
+  const {feitas, total} = progressoMundo(t);
+  const seriesUsadas = [...new Set(t.licoes.map(l=>l.serie))]
+    .sort((a,b) => ORDEM_SERIES.indexOf(a) - ORDEM_SERIES.indexOf(b));
+  const licoesVisiveis = t.licoes.filter(l => filtroSerie==='todos' || l.serie===filtroSerie);
+  const outrosMundos = TRILHAS.filter(x => x.id !== t.id);
+  $('#tela-mundo').innerHTML = `
+    <div class="mundo-banner" style="--tc:${t.cor}">
+      <button class="btn pequeno branco" onclick="ir('trilhas')">← Mapa</button>
+      <div class="mundo-banner-corpo">
+        <span class="mundo-emblema grande">${t.emoji}</span>
+        <div><h2>${t.nome}</h2><p>${feitas}/${total} lições concluídas</p></div>
+      </div>
+    </div>
     <div class="filtro-series">
       <button class="chip-filtro ${filtroSerie==='todos'?'ativo':''}" onclick="filtrarSerie('todos')">Todos os anos</button>
       ${seriesUsadas.map(s=>
         `<button class="chip-filtro ${filtroSerie===s?'ativo':''}" onclick="filtrarSerie('${s}')">${s}</button>`).join('')}
     </div>
-    ${trilhasVisiveis.length ? trilhasVisiveis.map(t => {
-      const feitas = t.licoesVisiveis.filter(l=>estado.licoesFeitas.includes(l.id)).length;
-      return `<div class="sticker" style="margin-bottom:14px;border-left:14px solid ${t.cor}">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-          <span class="trilha-emoji" style="--tc:${t.cor}">${t.emoji}</span>
-          <h3 style="font-size:22px;flex:1">${t.nome}</h3>
-          <span class="chip">${feitas}/${t.licoesVisiveis.length}</span>
-        </div>
-        <div class="grade">
-        ${t.licoesVisiveis.map(l => {
-          const ok = estado.licoesFeitas.includes(l.id);
-          return `<button class="cartao-trilha" onclick="ir('licao','${l.id}')">
-            ${ok?'<span class="fita">FEITA</span>':''}
-            <span class="emoji">${l.emoji}</span>
-            <h3>${l.titulo}</h3><p>${l.serie}</p></button>`;
-        }).join('')}
-        </div></div>`;
+    <div class="grade">
+    ${licoesVisiveis.length ? licoesVisiveis.map(l => {
+      const ok = estado.licoesFeitas.includes(l.id);
+      return `<button class="cartao-trilha" onclick="ir('licao','${l.id}')">
+        ${ok?'<span class="fita">FEITA</span>':''}
+        <span class="emoji">${l.emoji}</span>
+        <h3>${l.titulo}</h3><p>${l.serie}</p></button>`;
     }).join('') : `<p class="vazio"><span class="emoji">🔍</span>Nenhuma lição pra esse ano ainda.</p>`}
-    <p class="aviso">Cada lição tem leitura, atividades e um quizzinho no final. Errou? Sem drama: dá pra refazer quantas vezes quiser.</p>`;
-};
+    </div>
+    <div class="titulo-secao"><h2 style="font-size:19px">Outros mundos</h2></div>
+    <div class="mundos-atalho">
+      ${outrosMundos.map(o => `<button class="mundo-atalho" style="--tc:${o.cor}" onclick="ir('mundo','${o.id}')">
+        <span>${o.emoji}</span>${o.nome}</button>`).join('')}
+    </div>`;
+}
 
 /* ---------- 7. TELA: LIÇÃO (blocos: texto, flashcard, vídeo, cloze, caça-palavras, pergunta) ---------- */
 let progresso = null;
@@ -961,7 +1038,7 @@ RENDER.licao = (id) => {
 function mostrarBloco(){
   const b = progresso.blocos[progresso.i];
   $('#tela-licao').innerHTML = `
-    <button class="btn pequeno branco" onclick="ir('trilhas')">← Trilhas</button>
+    <button class="btn pequeno branco" onclick="ir('mundo','${acharMundoDaLicao(progresso.licao.id).id}')">← ${acharMundoDaLicao(progresso.licao.id).nome}</button>
     <div class="titulo-secao"><h2>${progresso.licao.emoji} ${progresso.licao.titulo}</h2></div>
     <div class="progresso-quiz">${progresso.marcas.map(m=>`<i class="${m}"></i>`).join('')}</div>
     <div id="corpo-bloco"></div>`;
@@ -1014,7 +1091,7 @@ function mostrarResumoLicao(licao, total, acertos, moedas, xp){
         <span class="chip">🪙 +${moedas}</span><span class="chip">⭐ +${xp}</span>
       </div>
       <button class="btn grande" onclick="ir('licao','${licao.id}')">Refazer</button>
-      <button class="btn grande branco" style="margin-top:10px" onclick="ir('trilhas')">Voltar às trilhas</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="ir('mundo','${acharMundoDaLicao(licao.id).id}')">Voltar pro mundo</button>
     </div>`;
 }
 
@@ -1630,6 +1707,7 @@ $('#btn-comecar').onclick = async () => {
     salvandoLocal = true;
     salvarLocal();
   }
+  await conteudoPronto;
   atualizarStreak();
   $('#topo').hidden = false; $('#rodape').hidden = false;
   atualizarHud();
@@ -1645,6 +1723,20 @@ $('#campo-senha').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn
    (api/estado.php) documentado no README, que tem prioridade quando os dois existem. */
 let logado = false;
 let salvandoLocal = false;
+/* busca o conteúdo publicado no painel (api/admin.php); sem back-end ou banco vazio,
+   a chamada falha ou volta vazia e o jogo segue com o TRILHAS fallback acima —
+   nunca trava a inicialização por causa disso */
+async function carregarConteudo(){
+  try{
+    const r = await fetch('api/conteudo.php', {cache:'no-store'});
+    if(!r.ok) return;
+    const dados = await r.json();
+    if(Array.isArray(dados) && dados.length) TRILHAS = dados;
+  }catch(e){ /* offline ou hospedagem sem PHP: fica com o conteúdo embutido */ }
+}
+// dispara já no carregamento da página — some com a espera perceptível, porque
+// roda em paralelo com o aluno digitando o apelido na tela de onboarding
+const conteudoPronto = carregarConteudo();
 async function entrarNoServidor(apelido, senha){
   const r = await fetch('api/estado.php?acao=entrar', {
     method:'POST', headers:{'Content-Type':'application/json'},
@@ -1693,6 +1785,7 @@ async function salvarNoServidor(){
 /* sessão de retorno: se o navegador já tem login ou save local, pula o onboarding.
    O servidor tem prioridade — se a conta existir lá, é ela que vale. */
 (async () => {
+  await conteudoPronto;
   const restauradoServidor = await carregarDoServidor();
   if(restauradoServidor && estado.apelido){
     logado = true;
