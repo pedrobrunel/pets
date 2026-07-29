@@ -629,11 +629,34 @@ document.addEventListener('click', e => {
   }
 });
 
+/* sons de acerto/erro/moeda/nível sintetizados por código (osciladores do Web
+   Audio), sem depender de arquivo — mesmo espírito "zero asset externo" que já
+   vale pros bichos em SVG. Nascem só no primeiro uso porque AudioContext exige
+   gesto do usuário; como toda chamada aqui vem de clique, sempre tem gesto. */
+let audioCtx = null;
+function ctxAudio(){ return audioCtx ??= new (window.AudioContext || window.webkitAudioContext)(); }
+function tocarNota(freq, inicioSeg, duracaoSeg, tipo='sine', volume=0.18){
+  const ctx = ctxAudio();
+  const osc = ctx.createOscillator(), gain = ctx.createGain();
+  osc.type = tipo; osc.frequency.value = freq;
+  const t0 = ctx.currentTime + inicioSeg;
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(volume, t0 + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0 + duracaoSeg);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t0); osc.stop(t0 + duracaoSeg + 0.02);
+}
+function tocarAcerto(){ tocarNota(784, 0, .12, 'sine'); tocarNota(1047, .09, .18, 'sine'); } // sol5 → dó6, "ding" alegre
+function tocarErro(){ tocarNota(220, 0, .16, 'triangle', .14); tocarNota(185, .1, .2, 'triangle', .12); } // desce, sem assustar
+function tocarMoeda(){ tocarNota(988, 0, .05, 'square', .1); tocarNota(1319, .04, .12, 'square', .12); } // blip de moeda
+function tocarNivel(){ [523, 659, 784, 1047].forEach((f,i) => tocarNota(f, i*.09, .16, 'sine', .16)); } // dó-mi-sol-dó
+
 function ganhar(moedas=0, xp=0){
   estado.moedas += moedas;
   const antes = nivel(); estado.xp += xp;
   atualizarHud();
-  if(nivel() > antes) setTimeout(()=>brinde(`🎉 Nível ${nivel()}! Seu bicho está orgulhoso.`), 900);
+  if(moedas > 0) tocarMoeda();
+  if(nivel() > antes) setTimeout(()=>{ tocarNivel(); brinde(`🎉 Nível ${nivel()}! Seu bicho está orgulhoso.`); }, 900);
   agendarSalvar();
 }
 
@@ -1243,7 +1266,9 @@ function pintarCloze(b, escolha){
 }
 function escolherCloze(i){
   const b = progresso.blocos[progresso.i];
-  pintarCloze(b, b.opcoes[i]);
+  const opcao = b.opcoes[i];
+  opcao === b.certa ? tocarAcerto() : tocarErro();
+  pintarCloze(b, opcao);
 }
 
 /* --- bloco: caça-palavras --- */
@@ -1346,6 +1371,7 @@ function responderBloco(i){
   if(acertou) progresso.acertos++;
   progresso.respostas.push(i);
   estado.felicidade = lim(estado.felicidade + (acertou?4:1));
+  acertou ? tocarAcerto() : tocarErro();
   pintarPergunta(b, i);
 }
 
