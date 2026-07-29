@@ -36,9 +36,6 @@ body{
   min-height:100dvh;
   overflow-x:hidden;
 }
-/* arcade e perfil são compactos de propósito: sem isso o corpo rola por baixo do rodapé fixo */
-body.sem-scroll{height:100dvh;overflow:hidden}
-body.sem-scroll #app{padding-bottom:0}
 h1,h2,h3,.display{font-family:'Baloo 2',cursive;font-weight:800;margin:0;line-height:1.05}
 button{font-family:inherit;font-weight:900;color:inherit;cursor:pointer}
 img{max-width:100%}
@@ -173,11 +170,22 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 .barra .cheio{display:block;height:100%;border-radius:999px 0 0 999px;transition:width .5s cubic-bezier(.3,1.4,.5,1)}
 .barra .valor{width:38px;text-align:right;font-size:13px;font-weight:900}
 
-/* ---------- ilha do saber (cena imersiva em tela cheia, com prédios clicáveis) ---------- */
+/* ---------- telas imersivas em tela cheia (ilha, arcade, lição) ----------
+   as três escondem topo/rodapé e mostram só o botãozinho .btn-voltar-cena;
+   a ilha é edge-to-edge (a imagem já é o fundo), arcade e lição têm um
+   respiro no topo pra esse botão não tampar o título */
 body.tela-cheia #topo, body.tela-cheia #rodape{display:none}
 body.tela-cheia{overflow:hidden}
 body.tela-cheia #app{padding:0;max-width:none}
-#tela-trilhas.ativa{position:fixed;inset:0;z-index:40;background:#8ecfe8;animation:none}
+#tela-trilhas.ativa, #tela-arcade.ativa, #tela-licao.ativa{
+  position:fixed;inset:0;z-index:40;animation:none;box-sizing:border-box;
+}
+#tela-trilhas.ativa{background:#8ecfe8}
+#tela-arcade.ativa, #tela-licao.ativa{
+  background:var(--papel);padding:calc(env(safe-area-inset-top,0px) + 60px) 16px 24px;
+}
+#tela-arcade.ativa{overflow:hidden}
+#tela-licao.ativa{overflow-y:auto;-webkit-overflow-scrolling:touch}
 .cena-scroll{
   width:100%;height:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
   cursor:grab;
@@ -688,20 +696,9 @@ function ir(tela, dados){
   document.querySelectorAll('.aba').forEach(a =>
     a.setAttribute('aria-current', String(a.dataset.ir === tela)));
   window.scrollTo({top:0, behavior:'instant'});
-  // arcade é desenhado pra caber inteiro acima do rodapé (o canvas dos minigames depende
-  // desse tamanho fixo); as demais telas, incluindo o perfil, rolam normalmente
-  const semScroll = tela === 'arcade';
-  document.body.classList.toggle('sem-scroll', semScroll);
-  if(semScroll) ajustarAlturaTela(secao);
-  // ilha do saber é imersiva: ocupa a tela toda, sem topo/rodapé — só o botão de voltar
-  document.body.classList.toggle('tela-cheia', tela === 'trilhas');
-}
-function ajustarAlturaTela(secao){
-  const topoEl = document.querySelector('.topo');
-  const rodapeEl = $('#rodape');
-  const disponivel = rodapeEl.getBoundingClientRect().top - topoEl.getBoundingClientRect().bottom - 12;
-  secao.style.height = Math.max(200, disponivel) + 'px';
-  secao.style.overflowY = 'hidden'; // arcade e perfil nunca mostram barra de rolagem, nem como fallback
+  // ilha, arcade e lição são imersivas: ocupam a tela toda, sem topo/rodapé — só o
+  // botão de voltar. O CSS (#tela-arcade.ativa etc) cuida do tamanho, sem cálculo em JS.
+  document.body.classList.toggle('tela-cheia', tela === 'trilhas' || tela === 'arcade' || tela === 'licao');
 }
 document.querySelectorAll('.aba').forEach(a => a.onclick = () => ir(a.dataset.ir));
 let pararLoops = null;
@@ -1121,7 +1118,7 @@ RENDER.licao = (id) => {
 function mostrarBloco(){
   const b = progresso.blocos[progresso.i];
   $('#tela-licao').innerHTML = `
-    <button class="btn pequeno branco" onclick="ir('mundo','${acharMundoDaLicao(progresso.licao.id).id}')">← ${acharMundoDaLicao(progresso.licao.id).nome}</button>
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('mundo','${acharMundoDaLicao(progresso.licao.id).id}')">Voltar</button>
     <div class="titulo-secao"><h2>${progresso.licao.emoji} ${progresso.licao.titulo}</h2></div>
     <div class="progresso-quiz">${progresso.marcas.map(m=>`<i class="${m}"></i>`).join('')}</div>
     <div id="corpo-bloco"></div>`;
@@ -1364,6 +1361,7 @@ const INICIAR_BLOCO = {
 /* ---------- 8. TELA: ARCADE ---------- */
 RENDER.arcade = () => {
   $('#tela-arcade').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
     <div class="titulo-secao"><h2>Arcade</h2><small>ganhe moedas pro seu bicho</small></div>
     <div class="grade">
       <button class="cartao-trilha" onclick="jogoMemoria()">
@@ -1412,7 +1410,7 @@ function jogoMemoria(){
     }, a.e===c.e ? 260 : 700);
   };
   $('#tela-arcade').innerHTML = `
-    <button class="btn pequeno branco" onclick="ir('arcade')">← Arcade</button>
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
     <div class="titulo-secao"><h2>🃏 Memória do Bicho</h2><small>jogadas: <b id="placar-mem">0</b></small></div>
     <div id="tabuleiro-memoria"></div>`;
   pinta();
@@ -1421,18 +1419,18 @@ function jogoMemoria(){
 /* --- minigame 2: chuva de frutas --- */
 function jogoChuva(){
   $('#tela-arcade').innerHTML = `
-    <button class="btn pequeno branco" onclick="ir('arcade')">← Arcade</button>
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
     <div class="titulo-secao"><h2>🍉 Chuva de Frutas</h2><small id="cronometro">30s</small></div>
     <canvas id="tela-jogo"></canvas>
     <p class="aviso" style="margin-top:12px">Arraste o dedo (ou use ← →) para mover a cesta. Fruta vale ponto, lata tira ponto.</p>`;
   const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
-  // tamanho calculado pelo espaço real que sobra dentro da #tela-arcade (já limitada por
-  // ajustarAlturaTela) — sem isso o canvas fixo de 340x440 estourava em celulares menores
+  // tamanho calculado pelo espaço real que sobra dentro da #tela-arcade (que ocupa a tela
+  // toda) — sem isso o canvas fixo de 340x440 estourava em celulares menores. O botão
+  // "Voltar" é position:fixed (flutua por cima), não entra nessa conta de espaço consumido.
   const secao = $('#tela-arcade');
-  const voltar = secao.querySelector('.btn.pequeno');
   const titulo = secao.querySelector('.titulo-secao');
   const aviso = secao.querySelector('.aviso');
-  const consumidoAntes = titulo.getBoundingClientRect().bottom - voltar.getBoundingClientRect().top;
+  const consumidoAntes = titulo.getBoundingClientRect().bottom - secao.getBoundingClientRect().top;
   const consumidoDepois = aviso.getBoundingClientRect().height + 12;
   const bordaCanvas = 8; // canvas tem borda de 4px solid dos dois lados
   const alturaDisponivel = secao.clientHeight - consumidoAntes - consumidoDepois - bordaCanvas - 20;
@@ -1557,7 +1555,7 @@ function jogoToca(){
   pararLoops = () => { rodando = false; clearTimeout(spawnTimer); clearInterval(cronoTimer); sumiTimers.forEach(t => t && clearTimeout(t)); };
 
   $('#tela-arcade').innerHTML = `
-    <button class="btn pequeno branco" onclick="ir('arcade')">← Arcade</button>
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
     <div class="titulo-secao"><h2>🕳️ Toca do Bicho</h2><small id="cronometro-toca">${DURACAO}s</small></div>
     <div class="placar-toca">Pontos: <span id="placar-toca">0</span></div>
     <div id="buracos-toca" class="grade-toca"></div>
