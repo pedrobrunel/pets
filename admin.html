@@ -104,6 +104,44 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
 
 #form-mundo, #form-licao{background:#fff;border:1px solid var(--contorno);border-radius:12px;padding:18px;margin-bottom:18px}
 
+/* --- editor visual de mapas --- */
+.editor-mapa{display:grid;grid-template-columns:1fr 260px;gap:14px;align-items:start}
+@media (max-width:900px){.editor-mapa{grid-template-columns:1fr}}
+.palco-mapa{
+  position:relative;overflow:auto;background:#DDE4E6;border:1px solid var(--contorno);border-radius:10px;
+  max-height:70vh;
+}
+.palco-mapa .quadro{position:relative;display:inline-block;line-height:0}
+/* --zoom: 1 = largura do palco; 2/3/5 = ampliado, com rolagem. Como os pontos são
+   posicionados em % do quadro, o zoom não interfere em nenhuma coordenada gravada. */
+.palco-mapa img{display:block;width:calc(100% * var(--zoom,1));height:auto;user-select:none;-webkit-user-drag:none}
+.palco-mapa .quadro{width:calc(100% * var(--zoom,1))}
+.palco-mapa.desenhando{cursor:crosshair}
+.ponto-marca{
+  position:absolute;border:2px solid var(--ceu);background:rgba(52,152,219,.22);border-radius:6px;
+  cursor:move;box-sizing:border-box;
+}
+.ponto-marca.selecionada{border-color:var(--erro);background:rgba(231,76,60,.28);z-index:2}
+.ponto-marca .rotulo-marca{
+  position:absolute;top:-9px;left:-2px;background:var(--tinta);color:#fff;font-size:9px;font-weight:800;
+  padding:1px 5px;border-radius:4px;white-space:nowrap;pointer-events:none;line-height:1.5;
+}
+.ponto-marca .alca{
+  position:absolute;right:-6px;bottom:-6px;width:14px;height:14px;background:#fff;
+  border:2px solid var(--erro);border-radius:3px;cursor:nwse-resize;
+}
+.ponto-marca:not(.selecionada) .alca{display:none}
+.lista-pontos{max-height:280px;overflow-y:auto;border:1px solid var(--contorno);border-radius:8px}
+.lista-pontos button{
+  display:block;width:100%;text-align:left;background:#fff;border:none;border-bottom:1px solid #F4F6F7;
+  padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;
+}
+.lista-pontos button:hover{background:#F8F9F9}
+.lista-pontos button.ativo{background:#EAF2F8;font-weight:900}
+.lista-pontos small{display:block;color:#7F8C8D;font-weight:700;font-size:10px}
+.dica-editor{font-size:11px;color:#7F8C8D;font-weight:700;margin:6px 0 0;line-height:1.45}
+.selo-cena{display:inline-block;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:800;background:#D6EAF8;color:#21618C}
+
 .busca{margin-bottom:12px}
 .busca input{max-width:280px}
 .rodape-form{display:flex;gap:8px;margin-top:16px}
@@ -130,7 +168,8 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
     <div class="marca">Painel do Hostmaster</div>
     <nav>
       <button data-aba="painel" class="ativo">📊 Painel</button>
-      <button data-aba="mundos">🗺️ Mundos</button>
+      <button data-aba="mapas">🗺️ Mapas</button>
+      <button data-aba="mundos">🎒 Mundos</button>
       <button data-aba="licoes">📚 Lições</button>
       <button data-aba="jogadores">🧒 Jogadores</button>
       <button data-aba="backup">💾 Backup</button>
@@ -148,9 +187,83 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
       <div class="grade-metricas" id="grade-metricas"></div>
     </section>
 
+    <section id="aba-mapas" class="oculto">
+      <h2>Mapas</h2>
+      <p class="sub">os cenários que o aluno navega — desenhe onde ele pode tocar e pra onde isso leva</p>
+
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+        <select id="seletor-cena" style="max-width:260px"></select>
+        <button class="btn" id="btn-nova-cena">+ Novo mapa</button>
+        <button class="btn branco" id="btn-editar-cena">Configurar este mapa</button>
+      </div>
+
+      <form id="form-cena" class="painel oculto">
+        <h3 id="titulo-form-cena" style="font-size:16px;margin-bottom:4px">Novo mapa</h3>
+        <div class="linha3">
+          <div><label>id (fixo, não muda depois)</label><input type="text" id="cena-id" placeholder="ex.: porto"></div>
+          <div><label>ordem</label><input type="number" id="cena-ordem" value="0"></div>
+          <div style="display:flex;flex-direction:column;justify-content:flex-end;gap:6px">
+            <label style="margin:0"><input type="checkbox" id="cena-inicial" style="width:auto"> mapa de entrada</label>
+            <label style="margin:0"><input type="checkbox" id="cena-publicado" style="width:auto" checked> publicado</label>
+          </div>
+        </div>
+        <label>nome</label>
+        <input type="text" id="cena-nome" placeholder="ex.: Porto do saber">
+        <label>imagem de fundo</label>
+        <div class="upload" id="zona-upload-cena">🖼️ Arraste a imagem aqui, ou clique pra escolher (webp de preferência — é o mais leve)</div>
+        <input type="file" id="input-imagem-cena" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
+        <input type="text" id="cena-imagem" placeholder="nome do arquivo (preenchido pelo upload)" style="margin-top:8px">
+        <p class="dica-editor">A imagem enviada fica em <code>assets/cenas/</code> no servidor. Enviar outra com o mesmo nome substitui a anterior.</p>
+        <div id="cena-aviso" class="aviso-form"></div>
+        <div class="rodape-form">
+          <button type="submit" class="btn mata">Salvar mapa</button>
+          <button type="button" class="btn branco" id="btn-cancelar-cena">Cancelar</button>
+          <button type="button" class="btn erro" id="btn-excluir-cena" style="margin-left:auto">Excluir mapa</button>
+        </div>
+      </form>
+
+      <div id="editor-wrap" class="oculto">
+        <div class="editor-mapa">
+          <div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <span style="font-size:11px;font-weight:800;color:#566573">ZOOM</span>
+              <button type="button" class="btn linha branco" data-zoom="1">Ajustar</button>
+              <button type="button" class="btn linha branco" data-zoom="2">2×</button>
+              <button type="button" class="btn linha branco" data-zoom="3">3×</button>
+              <button type="button" class="btn linha branco" data-zoom="5">5×</button>
+            </div>
+            <div class="palco-mapa" id="palco-mapa"></div>
+            <p class="dica-editor">
+              <b>Arraste em cima da imagem</b> pra criar um ponto clicável. Clique num ponto pra editar, arraste pra mover,
+              use o quadradinho do canto pra redimensionar. Nada é salvo até você clicar em <b>Salvar pontos</b>.
+              O zoom é só pra você mirar melhor — não muda nada do que o aluno vê.
+            </p>
+          </div>
+          <div>
+            <div class="painel" style="padding:14px">
+              <h3 style="font-size:14px;margin-bottom:8px">Pontos deste mapa</h3>
+              <div class="lista-pontos" id="lista-pontos"></div>
+              <div id="form-ponto" class="oculto" style="margin-top:12px;border-top:1px dashed var(--contorno);padding-top:10px">
+                <label>rótulo (só você vê)</label>
+                <input type="text" id="ponto-rotulo" placeholder="ex.: Lancha pro porto">
+                <label>ao tocar, vai pra</label>
+                <select id="ponto-tipo"></select>
+                <div id="ponto-destino-wrap" style="margin-top:8px"></div>
+                <label style="margin-top:10px"><input type="checkbox" id="ponto-selo" style="width:auto"> mostrar progresso (X/Y)</label>
+                <label style="margin:6px 0 0"><input type="checkbox" id="ponto-dica" style="width:auto"> piscar pra indicar que dá pra tocar</label>
+                <button type="button" class="btn erro linha" id="btn-excluir-ponto" style="margin-top:10px;width:100%">Remover este ponto</button>
+              </div>
+              <div id="pontos-aviso" class="aviso-form"></div>
+              <button class="btn mata" id="btn-salvar-pontos" style="margin-top:12px;width:100%">Salvar pontos</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="aba-mundos" class="oculto">
       <h2>Mundos</h2>
-      <p class="sub">cada mundo é uma matéria no mapa que o aluno vê</p>
+      <p class="sub">cada mundo é uma matéria (a trilha de lições). Pra ele aparecer no mapa, crie um ponto na aba Mapas.</p>
       <button class="btn" id="btn-novo-mundo" style="margin-bottom:14px">+ Novo mundo</button>
       <form id="form-mundo" class="oculto">
         <h3 id="titulo-form-mundo" style="font-size:16px">Novo mundo</h3>
@@ -327,6 +440,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   if(b.dataset.aba === 'licoes') carregarLicoes();
   if(b.dataset.aba === 'jogadores') carregarJogadores();
   if(b.dataset.aba === 'painel') carregarPainel();
+  if(b.dataset.aba === 'mapas') carregarCenas();
 });
 
 /* ---------- painel (métricas) ---------- */
@@ -340,6 +454,306 @@ async function carregarPainel(){
     <div class="metrica"><b>${m.licoesPublicadas}</b><span>Lições publicadas</span></div>
     <div class="metrica"><b>${m.licoesRascunho}</b><span>Lições em rascunho</span></div>
     <div class="metrica"><b>${m.totalConclusoes}</b><span>Lições concluídas (total)</span></div>`;
+}
+
+/* ---------- mapas (cenas + pontos clicáveis) ----------
+   O editor trabalha numa cópia em memória (pontosEdit); nada vai pro banco até o
+   "Salvar pontos". Coordenadas sempre em % da imagem, nunca em pixel, porque a mesma
+   cena é desenhada em telas de tamanhos completamente diferentes. */
+const TIPOS_PONTO = [
+  {v:'mundo', rotulo:'Trilha de uma matéria'},
+  {v:'cena',  rotulo:'Outro mapa'},
+  {v:'licao', rotulo:'Uma lição específica'},
+  {v:'tela',  rotulo:'Uma tela do jogo'},
+  {v:'aviso', rotulo:'Só mostrar um recadinho'},
+];
+let cenasCache = [], cenaEdit = null, pontosEdit = [], pontoSel = -1, destinosCache = null;
+
+async function carregarCenas(){
+  const d = await api('cenas_listar').catch(() => ({cenas:[]}));
+  cenasCache = d.cenas;
+  const anterior = $('#seletor-cena').value;
+  $('#seletor-cena').innerHTML = cenasCache.map(c =>
+    `<option value="${c.id}">${esc(c.nome)}${c.inicial?' (entrada)':''}${c.publicado?'':' — rascunho'} · ${c.pontos} ponto(s)</option>`
+  ).join('') || '<option value="">Nenhum mapa ainda</option>';
+  if(anterior && cenasCache.some(c => c.id === anterior)) $('#seletor-cena').value = anterior;
+  destinosCache = await api('destinos').catch(() => null);
+  if(cenasCache.length) abrirCena($('#seletor-cena').value);
+  else { $('#editor-wrap').classList.add('oculto'); }
+}
+$('#seletor-cena').addEventListener('change', e => abrirCena(e.target.value));
+
+async function abrirCena(id){
+  if(!id) return;
+  const c = await api('cena_obter', {query:`&id=${encodeURIComponent(id)}`}).catch(e => { alert(e.message); return null; });
+  if(!c) return;
+  cenaEdit = c;
+  pontosEdit = c.pontos.map(p => ({...p}));
+  pontoSel = -1;
+  $('#form-cena').classList.add('oculto');
+  $('#editor-wrap').classList.remove('oculto');
+  $('#palco-mapa').innerHTML = `<div class="quadro" id="quadro-mapa">
+    <img src="${esc(c.imagemUrl)}?v=${Date.now()}" alt="${esc(c.nome)}" id="img-mapa"></div>`;
+  $('#img-mapa').onload = desenharMarcas;
+  if($('#img-mapa').complete) desenharMarcas();
+  ativarDesenhoMapa();
+}
+
+function desenharMarcas(){
+  const quadro = $('#quadro-mapa');
+  if(!quadro) return;
+  quadro.querySelectorAll('.ponto-marca').forEach(m => m.remove());
+  pontosEdit.forEach((p, i) => {
+    const el = document.createElement('div');
+    el.className = 'ponto-marca' + (i === pontoSel ? ' selecionada' : '');
+    el.style.left = p.x + '%'; el.style.top = p.y + '%';
+    el.style.width = p.largura + '%'; el.style.height = p.altura + '%';
+    el.dataset.i = i;
+    el.innerHTML = `<span class="rotulo-marca">${esc(p.rotulo || '(sem rótulo)')}</span><span class="alca"></span>`;
+    quadro.appendChild(el);
+  });
+  pintarListaPontos();
+}
+function pintarListaPontos(){
+  $('#lista-pontos').innerHTML = pontosEdit.map((p, i) => {
+    const tipo = TIPOS_PONTO.find(t => t.v === p.tipo);
+    const alvo = p.tipo === 'aviso' ? '"' + (p.destino||'').slice(0, 28) + '…"' : p.destino;
+    return `<button class="${i===pontoSel?'ativo':''}" onclick="selecionarPonto(${i})">
+      ${esc(p.rotulo || '(sem rótulo)')}<small>${tipo ? esc(tipo.rotulo) : p.tipo} → ${esc(alvo || '?')}</small></button>`;
+  }).join('') || '<div style="padding:10px;font-size:12px;color:#7F8C8D;font-weight:700">Nenhum ponto. Arraste na imagem pra criar.</div>';
+}
+window.selecionarPonto = (i) => {
+  pontoSel = i;
+  const p = pontosEdit[i];
+  $('#form-ponto').classList.remove('oculto');
+  $('#ponto-rotulo').value = p.rotulo || '';
+  $('#ponto-tipo').innerHTML = TIPOS_PONTO.map(t => `<option value="${t.v}" ${t.v===p.tipo?'selected':''}>${t.rotulo}</option>`).join('');
+  $('#ponto-selo').checked = !!p.mostrarSelo;
+  $('#ponto-dica').checked = !!p.mostrarDica;
+  pintarCampoDestino();
+  desenharMarcas();
+};
+// o campo de destino muda de cara conforme o tipo: dropdown do que existe, ou texto livre pro aviso
+function pintarCampoDestino(){
+  const p = pontosEdit[pontoSel];
+  if(!p) return;
+  const tipo = $('#ponto-tipo').value;
+  const wrap = $('#ponto-destino-wrap');
+  if(tipo === 'aviso'){
+    wrap.innerHTML = `<label>texto do recadinho</label>
+      <input type="text" id="ponto-destino" maxlength="160" value="${esc(p.tipo==='aviso' ? (p.destino||'') : '')}"
+        placeholder="ex.: Química ainda não tem lições — em breve! 🚧">`;
+  } else {
+    const lista = (destinosCache && destinosCache[tipo]) || [];
+    wrap.innerHTML = `<label>qual</label>
+      <select id="ponto-destino">
+        ${lista.length ? '' : '<option value="">(nada cadastrado ainda)</option>'}
+        ${lista.map(o => `<option value="${esc(o.id)}" ${o.id===p.destino?'selected':''}>${esc(o.rotulo)}</option>`).join('')}
+      </select>`;
+  }
+  $('#ponto-destino').oninput = salvarCampoPonto;
+  $('#ponto-destino').onchange = salvarCampoPonto;
+}
+function salvarCampoPonto(){
+  const p = pontosEdit[pontoSel];
+  if(!p) return;
+  p.rotulo = $('#ponto-rotulo').value;
+  p.tipo = $('#ponto-tipo').value;
+  p.destino = $('#ponto-destino') ? $('#ponto-destino').value : '';
+  p.mostrarSelo = $('#ponto-selo').checked;
+  p.mostrarDica = $('#ponto-dica').checked;
+  desenharMarcas();
+}
+['#ponto-rotulo','#ponto-selo','#ponto-dica'].forEach(s => {
+  $(s).addEventListener('input', salvarCampoPonto);
+  $(s).addEventListener('change', salvarCampoPonto);
+});
+$('#ponto-tipo').addEventListener('change', () => {
+  const p = pontosEdit[pontoSel];
+  if(!p) return;
+  p.tipo = $('#ponto-tipo').value;
+  p.destino = ''; // trocou o tipo: o destino antigo não vale mais
+  p.mostrarSelo = p.tipo === 'mundo';
+  $('#ponto-selo').checked = p.mostrarSelo;
+  pintarCampoDestino();
+  salvarCampoPonto();
+});
+$('#btn-excluir-ponto').onclick = () => {
+  if(pontoSel < 0) return;
+  pontosEdit.splice(pontoSel, 1);
+  pontoSel = -1;
+  $('#form-ponto').classList.add('oculto');
+  desenharMarcas();
+};
+
+/* desenhar/mover/redimensionar em cima da imagem. Tudo em % do quadro. */
+function ativarDesenhoMapa(){
+  const palco = $('#palco-mapa'), quadro = $('#quadro-mapa');
+  if(!quadro) return;
+  const pct = (ev) => {
+    const r = quadro.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(100, (ev.clientX - r.left) / r.width * 100)),
+      y: Math.max(0, Math.min(100, (ev.clientY - r.top) / r.height * 100)),
+    };
+  };
+  let modo = null, inicio = null, alvo = -1, base = null;
+
+  quadro.addEventListener('pointerdown', ev => {
+    const marca = ev.target.closest('.ponto-marca');
+    inicio = pct(ev);
+    if(ev.target.classList.contains('alca') && marca){
+      modo = 'redimensionar'; alvo = +marca.dataset.i; base = {...pontosEdit[alvo]};
+    } else if(marca){
+      modo = 'mover'; alvo = +marca.dataset.i; base = {...pontosEdit[alvo]};
+      selecionarPonto(alvo);
+    } else {
+      // ponto novo: nasce com tamanho zero e cresce enquanto arrasta
+      modo = 'criar';
+      pontosEdit.push({rotulo:'Novo ponto', x:inicio.x, y:inicio.y, largura:0, altura:0,
+        tipo:'mundo', destino:'', mostrarSelo:true, mostrarDica:false, publicado:true});
+      alvo = pontosEdit.length - 1;
+      selecionarPonto(alvo);
+    }
+    quadro.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+  });
+
+  quadro.addEventListener('pointermove', ev => {
+    if(!modo) return;
+    const agora = pct(ev), p = pontosEdit[alvo];
+    if(modo === 'criar'){
+      p.x = Math.min(inicio.x, agora.x); p.y = Math.min(inicio.y, agora.y);
+      p.largura = Math.abs(agora.x - inicio.x); p.altura = Math.abs(agora.y - inicio.y);
+    } else if(modo === 'mover'){
+      p.x = Math.max(0, Math.min(100 - base.largura, base.x + (agora.x - inicio.x)));
+      p.y = Math.max(0, Math.min(100 - base.altura, base.y + (agora.y - inicio.y)));
+    } else if(modo === 'redimensionar'){
+      p.largura = Math.max(1, Math.min(100 - p.x, base.largura + (agora.x - inicio.x)));
+      p.altura  = Math.max(1, Math.min(100 - p.y, base.altura + (agora.y - inicio.y)));
+    }
+    desenharMarcas();
+  });
+
+  const soltar = () => {
+    if(modo === 'criar'){
+      const p = pontosEdit[alvo];
+      // clique seco (sem arrastar) não deve deixar um ponto invisível pra trás
+      if(p.largura < 1.5 || p.altura < 1.5){
+        pontosEdit.splice(alvo, 1); pontoSel = -1;
+        $('#form-ponto').classList.add('oculto');
+      }
+    }
+    // arredonda pra não gravar 12.34567890123%
+    if(alvo >= 0 && pontosEdit[alvo]){
+      const p = pontosEdit[alvo];
+      ['x','y','largura','altura'].forEach(k => p[k] = Math.round(p[k] * 100) / 100);
+    }
+    modo = null; alvo = -1; base = null;
+    desenharMarcas();
+  };
+  quadro.addEventListener('pointerup', soltar);
+  quadro.addEventListener('pointercancel', soltar);
+}
+
+$$('[data-zoom]').forEach(b => b.onclick = () => {
+  $('#palco-mapa').style.setProperty('--zoom', b.dataset.zoom);
+  $$('[data-zoom]').forEach(x => x.classList.toggle('branco', x !== b));
+});
+
+$('#btn-salvar-pontos').onclick = async () => {
+  const aviso = $('#pontos-aviso');
+  aviso.style.display = 'none';
+  try{
+    const r = await api('pontos_salvar', {method:'POST', corpo:{cenaId: cenaEdit.id, pontos: pontosEdit}});
+    aviso.className = 'aviso-form ok';
+    aviso.textContent = `${r.pontos} ponto(s) salvos. Já está no ar pro aluno.`;
+    aviso.style.display = 'block';
+    carregarCenas();
+  }catch(e){ aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block'; }
+};
+
+/* --- criar/editar/excluir a cena em si --- */
+function limparFormCena(){
+  $('#form-cena').reset();
+  $('#cena-id').disabled = false;
+  $('#cena-aviso').style.display = 'none';
+  $('#btn-excluir-cena').classList.add('oculto');
+}
+$('#btn-nova-cena').onclick = () => {
+  limparFormCena();
+  $('#titulo-form-cena').textContent = 'Novo mapa';
+  $('#form-cena').classList.remove('oculto');
+  $('#editor-wrap').classList.add('oculto');
+};
+$('#btn-editar-cena').onclick = () => {
+  if(!cenaEdit) return;
+  limparFormCena();
+  $('#titulo-form-cena').textContent = 'Configurar mapa';
+  $('#cena-id').value = cenaEdit.id; $('#cena-id').disabled = true;
+  $('#cena-nome').value = cenaEdit.nome;
+  $('#cena-imagem').value = cenaEdit.imagem;
+  $('#cena-ordem').value = cenaEdit.ordem;
+  $('#cena-inicial').checked = cenaEdit.inicial;
+  $('#cena-publicado').checked = cenaEdit.publicado;
+  $('#btn-excluir-cena').classList.remove('oculto');
+  $('#form-cena').classList.remove('oculto');
+};
+$('#btn-cancelar-cena').onclick = () => {
+  $('#form-cena').classList.add('oculto');
+  if(cenaEdit) $('#editor-wrap').classList.remove('oculto');
+};
+$('#form-cena').addEventListener('submit', async e => {
+  e.preventDefault();
+  const aviso = $('#cena-aviso');
+  try{
+    const id = $('#cena-id').value.trim();
+    await api('cena_salvar', {method:'POST', corpo:{
+      id, nome: $('#cena-nome').value.trim(), imagem: $('#cena-imagem').value.trim(),
+      inicial: $('#cena-inicial').checked, publicado: $('#cena-publicado').checked,
+      ordem: Number($('#cena-ordem').value) || 0,
+    }});
+    $('#form-cena').classList.add('oculto');
+    await carregarCenas();
+    $('#seletor-cena').value = id;
+    abrirCena(id);
+  }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
+});
+$('#btn-excluir-cena').onclick = async () => {
+  if(!cenaEdit) return;
+  if(!confirm(`Excluir o mapa "${cenaEdit.nome}"? Os pontos dele somem junto.`)) return;
+  try{
+    const r = await api('cena_excluir', {method:'POST', corpo:{id: cenaEdit.id}});
+    if(r.pontosOrfaos) alert(`Mapa excluído. Atenção: ${r.pontosOrfaos} ponto(s) de outros mapas apontavam pra ele e vão parar de aparecer pro aluno.`);
+    cenaEdit = null;
+    $('#form-cena').classList.add('oculto');
+    carregarCenas();
+  }catch(e){ alert(e.message); }
+};
+
+/* upload da imagem de fundo */
+$('#zona-upload-cena').onclick = () => $('#input-imagem-cena').click();
+$('#input-imagem-cena').onchange = e => { if(e.target.files[0]) enviarImagemCena(e.target.files[0]); };
+['dragover','drop'].forEach(ev => $('#zona-upload-cena').addEventListener(ev, e => e.preventDefault()));
+$('#zona-upload-cena').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemCena(e.dataTransfer.files[0]); });
+async function enviarImagemCena(arquivo){
+  const aviso = $('#cena-aviso');
+  const zona = $('#zona-upload-cena');
+  const textoOriginal = zona.textContent;
+  zona.textContent = '⏳ Enviando…';
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    const r = await fetch('api/admin.php?acao=cena_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    $('#cena-imagem').value = d.imagem;
+    aviso.className = 'aviso-form ok';
+    aviso.textContent = `Imagem enviada (${d.largura}×${d.altura}px). Agora salve o mapa.`;
+    aviso.style.display = 'block';
+  }catch(e){
+    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
+  }finally{ zona.textContent = textoOriginal; }
 }
 
 /* ---------- mundos ---------- */

@@ -31,8 +31,11 @@ Para publicar: joga tudo dentro de `public_html/` na hospedagem compartilhada e 
   deploy.yml          publica na Hostinger a cada push na main
 index.html            home pública — objetivos do projeto e CTA de entrar/cadastrar
 app.html              o jogo em si — onboarding, mapa de mundos, minigames, loja, mural, perfil
-admin.html            painel do Hostmaster — upload de conteúdo, jogadores, métricas, backup
+admin.html            painel do Hostmaster — mapas, conteúdo, jogadores, métricas, backup
 responsavel.html       painel do responsável/professor — entra com o login do aluno, vê progresso e onde errou
+assets/
+  mapa-mundosv2.webp  arte da Ilha do saber (a cena inicial)
+  cenas/              imagens de mapa enviadas pelo painel — ficam só no servidor, fora do Git
 manifest.json         identidade do PWA (nome, ícones, cor, tela cheia; start_url aponta pro app.html)
 sw.js                 service worker: funciona offline depois da 1ª visita
 icone-*.png           ícones do app instalado
@@ -41,7 +44,7 @@ api/
   bd.php              helpers de banco compartilhados (conexão PDO, respostas JSON)
   estado.php          back-end opcional: login de aluno por usuário + senha, salvar progresso
   admin.php           back-end do painel do Hostmaster (mundos, lições, jogadores, backup)
-  conteudo.php        endpoint público: devolve os mundos/lições publicados pro app.html
+  conteudo.php        endpoint público: devolve os mundos, lições e mapas publicados pro app.html
   install.php         roda uma vez (e de novo pra trocar a senha do painel): cria as tabelas e semeia o conteúdo de exemplo
   seed-conteudo.json  conteúdo de exemplo semeado na 1ª instalação — também serve de referência do formato de JSON que o painel aceita
   config.example.php  modelo — copie para config.php e preencha (não versionado)
@@ -63,6 +66,7 @@ api/
 - Instalável como aplicativo no Android e no iOS
 - Salvar progresso (opcional): com usuário + senha, o jogo sincroniza com o banco — sem conta, continua 100% local
 - **Painel do Hostmaster (`admin.html`)**: quem hospeda o site cria mundos, sobe lições em JSON (com validação e pré-visualização antes de salvar), publica ou deixa em rascunho, vê jogadores (busca, reset de senha, exclusão de conta), métricas gerais, desempenho por pergunta de cada lição (taxa de acerto, pior primeiro) e exporta/importa backup completo do conteúdo. É o painel de quem administra o site — não é o painel do professor.
+- **Editor de mapas (`admin.html` → Mapas)**: os cenários que o aluno navega são dados, não código. Dá pra subir a imagem de um mapa novo, desenhar os pontos clicáveis arrastando em cima dela (com zoom pra mirar) e escolher pra onde cada um leva. Um ponto pode abrir uma trilha, **outro mapa** (é assim que a lancha leva pro próximo cenário), uma lição específica, uma tela do jogo, ou só mostrar um recadinho de "em breve" — veja "O catálogo de links".
 - **Painel do responsável (`responsavel.html`)**: entra com o mesmo usuário e senha que a criança já usa pra jogar (não é uma conta nova) e mostra nível, moedas, sequência de dias, lições concluídas e em quais perguntas ela mais erra — sem expor nome real, idade ou escola.
 
 **Ainda não funciona:** perfil público do aluno pra compartilhar (o botão "Compartilhar" do perfil ainda é só demonstração) — veja "Próximos passos".
@@ -116,6 +120,33 @@ Premium e Business têm acesso SSH, e aí o `rsync` fica mais rápido e mais seg
 
 ---
 
+## Mapas e o catálogo de links
+
+Um **mapa** (tabela `cenas`) é uma imagem de fundo mais uma lista de **pontos clicáveis** (tabela `pontos`). Tudo isso é editado em `admin.html` → *Mapas*, sem tocar em código.
+
+A posição de cada ponto é gravada em **porcentagem da imagem**, nunca em pixel: é o que faz o mesmo mapa funcionar do celular estreito ao monitor largo. O zoom do editor existe só pra você mirar melhor e não afeta nenhuma coordenada.
+
+Cada ponto aponta pra um destino do catálogo abaixo. Esses cinco tipos são a lista fechada de links internos do jogo — quem valida é `validarPonto()` em `api/admin.php`, e um destino que não existe é recusado na hora de salvar, em vez de virar botão que não leva a nada:
+
+| Tipo | Destino | O que acontece ao tocar |
+|---|---|---|
+| `mundo` | id de um mundo | abre a trilha de lições da matéria |
+| `cena` | id de outro mapa | vai pro outro cenário (a lancha, o balão…) |
+| `licao` | id de uma lição | abre aquela lição direto |
+| `tela` | `casa`, `trilhas`, `arcade`, `loja`, `mural`, `perfil` | vai pra essa aba do jogo |
+| `aviso` | texto livre | só mostra o recadinho (o "em breve") |
+
+Duas proteções contra link quebrado, em camadas:
+
+1. **Ao salvar** (`api/admin.php`): mundo/cena/lição precisam existir; `tela` só aceita nome de tela que existe de verdade em `app.html`.
+2. **Ao servir** (`api/conteudo.php`): ponto cujo destino virou rascunho ou foi apagado depois é omitido, então a criança nunca vê o botão morto.
+
+Uma cena é marcada como **inicial** — é a que abre quando o aluno toca em *Trilhas*. Só uma pode ser inicial por vez. O botão **Voltar** desfaz um passo do caminho percorrido entre mapas (ilha → porto → *Voltar* volta pra ilha); na cena inicial, ele sai pra casa.
+
+> ⚠️ **A imagem que você sobe pelo painel fica só no servidor** (`assets/cenas/`), fora do Git — por isso `assets/cenas/*` está no `.gitignore`. Duas consequências: o `dangerous-clean-slate` do deploy tem que continuar desligado (agora por dois motivos, não só pelo `api/config.php`), e essa pasta precisa entrar no seu backup, porque o "Baixar backup" do painel exporta o *desenho* dos mapas (posições e destinos), não os bytes das imagens.
+
+---
+
 ## Decisões de projeto
 
 **Nada de estética de dashboard.** Sem vidro fosco, sem degradê roxo-azul, sem sombra difusa. O visual é adesivo de caderno: contorno grosso cor de tinta, sombra sólida deslocada, papel creme, tipografia arredondada. Botão afunda quando aperta, como brinquedo.
@@ -139,16 +170,17 @@ cp api/config.example.php api/config.php   # preencha host/banco/usuário/senha 
 
 Abra `seusite.com/api/install.php` no navegador uma vez. Ele:
 
-1. cria as tabelas `jogadores`, `admins`, `mundos` e `licoes` (é seguro rodar de novo — nunca apaga o que já existe);
+1. cria as tabelas `jogadores`, `admins`, `mundos`, `licoes`, `respostas`, `cenas` e `pontos` (é seguro rodar de novo — nunca apaga o que já existe, então rode também depois de atualizar o código, pra ganhar tabela nova);
 2. cria (ou atualiza) a conta do painel a partir de `ADMIN_USUARIO`/`ADMIN_SENHA` — **pra trocar a senha do painel depois, é só editar essas duas constantes em `config.php` e abrir `install.php` de novo**;
-3. semeia o conteúdo de exemplo (`api/seed-conteudo.json`) só se o banco de mundos estiver vazio — depois da 1ª vez, quem manda é o painel.
+3. semeia o conteúdo de exemplo (`api/seed-conteudo.json`) só se o banco de mundos estiver vazio — depois da 1ª vez, quem manda é o painel;
+4. cria a cena inicial "Ilha do saber" com os 13 pontos clicáveis que antes eram fixos no código — só se ainda não houver nenhuma cena. Assim quem já tem o jogo no ar não perde o mapa e já começa com algo editável.
 
 Pode deixar o `install.php` no servidor (ele nunca sobrescreve conteúdo já existente) ou apagar e subir de novo quando precisar resetar a senha do painel.
 
 Com o banco pronto:
 
 - **`app.html`** já está ligado: a tela de onboarding tem um campo de senha opcional — em branco, o jogo continua 100% local igual antes; preenchido, `entrarNoServidor()`/`carregarDoServidor()`/`salvarNoServidor()` (fim do `app.html`) cuidam de criar a conta, restaurar progresso salvo e sincronizar a cada ação relevante. O conteúdo (mundos e lições) também passa a vir do banco via `api/conteudo.php` — sem banco ou com ele fora do ar, cai de volta no conteúdo de exemplo embutido no próprio arquivo.
-- **`admin.html`** é o painel do Hostmaster: acesse `seusite.com/admin.html` e entre com `ADMIN_USUARIO`/`ADMIN_SENHA`. De lá dá pra criar mundos, subir lições em JSON (com validação e pré-visualização antes de gravar), gerenciar jogadores e fazer backup/restauração do conteúdo. O formato do JSON de cada lição é o mesmo de `api/seed-conteudo.json` — o painel tem um botão "usar exemplo" e uma lista dos tipos de bloco aceitos.
+- **`admin.html`** é o painel do Hostmaster: acesse `seusite.com/admin.html` e entre com `ADMIN_USUARIO`/`ADMIN_SENHA`. De lá dá pra desenhar mapas, criar mundos, subir lições em JSON (com validação e pré-visualização antes de gravar), gerenciar jogadores e fazer backup/restauração do conteúdo. O formato do JSON de cada lição é o mesmo de `api/seed-conteudo.json` — o painel tem um botão "usar exemplo" e uma lista dos tipos de bloco aceitos.
 
 > **Moedas e XP de lições feitas via banco já são conferidas no servidor.** Quando uma lição é salva pelo painel, o gabarito (`certa:` de cada bloco `pergunta`) vai junto pra tabela `licoes`, e `api/estado.php` credita moedas/XP comparando com esse gabarito — não com o que o navegador do aluno diz que ele acertou. Sem banco (modo 100% local) o cálculo continua no navegador, como antes.
 
