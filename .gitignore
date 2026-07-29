@@ -13,3 +13,10 @@ Thumbs.db
 # uploads e backups da hospedagem
 /backup/
 *.zip
+
+# imagens de mapa enviadas pelo painel: vivem no servidor, não no repositório.
+# A pasta é versionada (.gitkeep) pro deploy criá-la; o conteúdo, não.
+# ⚠️ Isso significa que elas NÃO estão no Git — inclua assets/cenas/ no seu backup.
+assets/cenas/*
+!assets/cenas/.gitkeep
+!assets/cenas/.htaccess

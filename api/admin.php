@@ -22,6 +22,13 @@
      GET  ?acao=metricas
      GET  ?acao=exportar
      POST ?acao=importar              {mundos:[...]}   (mesmo formato do exportar)
+     GET  ?acao=cenas_listar
+     GET  ?acao=cena_obter            ?id=xx           -> cena + seus pontos
+     POST ?acao=cena_salvar           {id, nome, imagem, inicial, publicado, ordem}
+     POST ?acao=cena_excluir          {id}
+     POST ?acao=pontos_salvar         {cenaId, pontos:[...]}  -> substitui os pontos da cena
+     POST ?acao=cena_imagem           (multipart: arquivo) -> sobe imagem pra assets/cenas/
+     GET  ?acao=destinos              -> catálogo de links possíveis pra um ponto
    ========================================================= */
 
 declare(strict_types=1);
@@ -33,8 +40,59 @@ const TIPOS_BLOCO = ['texto', 'flashcard', 'video', 'cloze', 'cacapalavras', 'pe
 const SERIES_VALIDAS = ['6º ano', '7º ano', '8º ano', '9º ano', '1º ano do médio', '2º ano do médio', '3º ano do médio'];
 const CORES_VALIDAS = ['var(--manga)', 'var(--rosa)', 'var(--mata)', 'var(--ceu)', 'var(--jabuti)', 'var(--moeda)', 'var(--erro)'];
 
+/* catálogo de links do jogo: pra onde um ponto de uma cena pode levar.
+   "tela" é limitado às abas que existem em app.html (RENDER.*) — nada de string livre,
+   senão um ponto mal configurado leva a criança pra uma tela que não existe. */
+const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso'];
+const TELAS_VALIDAS = ['casa', 'trilhas', 'arcade', 'loja', 'mural', 'perfil'];
+const EXTENSOES_IMAGEM = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg'];
+
 function validarId(string $id): bool {
   return (bool)preg_match('/^[a-z0-9]{2,24}$/', $id);
+}
+/* nome de arquivo de imagem de cena: só o que o painel gera/aceita, sem caminho.
+   Barra, "..", byte nulo ou extensão estranha viram recusa — o valor entra num <img src>. */
+function validarNomeImagem(string $nome): bool {
+  if ($nome === '' || strlen($nome) > 160) return false;
+  if (!preg_match('/^[A-Za-z0-9._-]+$/', $nome)) return false;
+  if (str_contains($nome, '..')) return false;
+  $ext = strtolower(pathinfo($nome, PATHINFO_EXTENSION));
+  return isset(EXTENSOES_IMAGEM[$ext]);
+}
+function pastaCenas(): string { return dirname(__DIR__) . '/assets/cenas'; }
+/* a imagem pode estar em assets/cenas/ (enviada pelo painel) ou em assets/ (veio no
+   repositório, como o mapa-mundosv2.webp da ilha) — o front tenta nessa ordem */
+function caminhoPublicoImagem(string $nome): string {
+  return is_file(pastaCenas() . '/' . $nome) ? 'assets/cenas/' . $nome : 'assets/' . $nome;
+}
+
+/** valida um ponto vindo do editor. @return string|null mensagem de erro, ou null se ok */
+function validarPonto(array $p, int $i): ?string {
+  $rotulo = trim((string)($p['rotulo'] ?? ''));
+  if ($rotulo === '' || mb_strlen($rotulo) > 60) return "Ponto $i: o rótulo precisa ter de 1 a 60 caracteres.";
+  foreach (['x', 'y', 'largura', 'altura'] as $campo) {
+    if (!is_numeric($p[$campo] ?? null)) return "Ponto \"$rotulo\": $campo inválido.";
+    $v = (float)$p[$campo];
+    if ($v < 0 || $v > 100) return "Ponto \"$rotulo\": $campo fora de 0–100%.";
+  }
+  if ((float)$p['largura'] <= 0 || (float)$p['altura'] <= 0) return "Ponto \"$rotulo\": largura e altura precisam ser maiores que zero.";
+  $tipo = $p['tipo'] ?? null;
+  if (!in_array($tipo, TIPOS_PONTO, true)) return "Ponto \"$rotulo\": tipo de destino desconhecido.";
+  $destino = trim((string)($p['destino'] ?? ''));
+  if ($destino === '') return "Ponto \"$rotulo\": escolha o destino.";
+
+  if ($tipo === 'tela' && !in_array($destino, TELAS_VALIDAS, true)) {
+    return "Ponto \"$rotulo\": tela \"$destino\" não existe (use: " . implode(', ', TELAS_VALIDAS) . ').';
+  }
+  if ($tipo === 'aviso' && mb_strlen($destino) > 160) return "Ponto \"$rotulo\": o aviso passou de 160 caracteres.";
+  // mundo/cena/licao: confere se o alvo existe de verdade, pra não gerar link quebrado
+  $tabelas = ['mundo' => 'mundos', 'cena' => 'cenas', 'licao' => 'licoes'];
+  if (isset($tabelas[$tipo])) {
+    $st = bd()->prepare('SELECT COUNT(*) FROM ' . $tabelas[$tipo] . ' WHERE id = ?');
+    $st->execute([$destino]);
+    if (!$st->fetchColumn()) return "Ponto \"$rotulo\": não existe $tipo com id \"$destino\".";
+  }
+  return null;
 }
 
 /* Espelha exatamente o que cada INICIAR_BLOCO de app.html espera — um bloco
@@ -319,18 +377,44 @@ try {
         'ordem' => (int)$l['ordem'], 'publicado' => (bool)$l['publicado'], 'blocos' => json_decode($l['blocos'], true),
       ];
     }
-    responder(['mundos' => array_map(fn($m) => [
-      'id' => $m['id'], 'nome' => $m['nome'], 'emoji' => $m['emoji'], 'cor' => $m['cor'],
-      'ordem' => (int)$m['ordem'], 'publicado' => (bool)$m['publicado'], 'licoes' => $porMundo[$m['id']] ?? [],
-    ], $mundos)]);
+    // cenas entram no backup junto: é o desenho dos mapas. O arquivo de imagem em si
+    // não cabe aqui (é binário) — ele vive em assets/cenas/ no servidor.
+    $porCena = [];
+    foreach (bd()->query('SELECT cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, publicado FROM pontos ORDER BY id') as $p) {
+      $porCena[$p['cena_id']][] = [
+        'rotulo' => $p['rotulo'], 'x' => (float)$p['x'], 'y' => (float)$p['y'],
+        'largura' => (float)$p['largura'], 'altura' => (float)$p['altura'],
+        'tipo' => $p['tipo'], 'destino' => $p['destino'],
+        'mostrarSelo' => (bool)$p['mostrar_selo'], 'mostrarDica' => (bool)$p['mostrar_dica'],
+        'publicado' => (bool)$p['publicado'],
+      ];
+    }
+    $cenas = bd()->query('SELECT id, nome, imagem, inicial, publicado, ordem FROM cenas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    responder([
+      'mundos' => array_map(fn($m) => [
+        'id' => $m['id'], 'nome' => $m['nome'], 'emoji' => $m['emoji'], 'cor' => $m['cor'],
+        'ordem' => (int)$m['ordem'], 'publicado' => (bool)$m['publicado'], 'licoes' => $porMundo[$m['id']] ?? [],
+      ], $mundos),
+      'cenas' => array_map(fn($c) => [
+        'id' => $c['id'], 'nome' => $c['nome'], 'imagem' => $c['imagem'],
+        'inicial' => (bool)$c['inicial'], 'publicado' => (bool)$c['publicado'], 'ordem' => (int)$c['ordem'],
+        'pontos' => $porCena[$c['id']] ?? [],
+      ], $cenas),
+    ]);
   }
 
   if ($acao === 'importar') {
     $d = corpo();
     $mundos = $d['mundos'] ?? null;
     if (!is_array($mundos)) responder(['erro' => 'Formato inválido: esperado {"mundos": [...]} — o mesmo do botão "Baixar backup".'], 422);
+    $cenasImp = is_array($d['cenas'] ?? null) ? $d['cenas'] : []; // backup antigo não tem cenas
 
     // valida tudo antes de gravar qualquer coisa: ou importa inteiro, ou não muda nada
+    foreach ($cenasImp as $c) {
+      if (!validarId((string)($c['id'] ?? ''))) responder(['erro' => 'Mapa com "id" inválido: ' . json_encode($c['id'] ?? null)], 422);
+      if (!validarNomeImagem((string)($c['imagem'] ?? ''))) responder(['erro' => 'Mapa "' . $c['id'] . '": nome de imagem inválido.'], 422);
+      if (trim((string)($c['nome'] ?? '')) === '') responder(['erro' => 'Mapa "' . $c['id'] . '": falta o nome.'], 422);
+    }
     foreach ($mundos as $m) {
       if (!validarId((string)($m['id'] ?? ''))) responder(['erro' => 'Mundo com "id" inválido: ' . json_encode($m['id'] ?? null)], 422);
       if (!in_array($m['cor'] ?? null, CORES_VALIDAS, true)) responder(['erro' => 'Mundo "' . $m['id'] . '": cor inválida.'], 422);
@@ -360,12 +444,201 @@ try {
           ]);
         }
       }
+      /* cenas e pontos entram depois dos mundos/lições de propósito: a validação de um
+         ponto confere se o mundo/lição/cena de destino existe, e agora eles já existem
+         (mesma transação). Se um ponto falhar, o rollback desfaz a importação inteira. */
+      if ($cenasImp) {
+        $insCena = $bdc->prepare('INSERT INTO cenas (id, nome, imagem, inicial, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE nome=VALUES(nome), imagem=VALUES(imagem), inicial=VALUES(inicial),
+            publicado=VALUES(publicado), ordem=VALUES(ordem)');
+        foreach ($cenasImp as $c) {
+          $insCena->execute([$c['id'], trim((string)$c['nome']), (string)$c['imagem'],
+            !empty($c['inicial']) ? 1 : 0, !empty($c['publicado']) ? 1 : 0, (int)($c['ordem'] ?? 0)]);
+        }
+        $delPontos = $bdc->prepare('DELETE FROM pontos WHERE cena_id = ?');
+        $insPonto = $bdc->prepare('INSERT INTO pontos (cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, publicado)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        foreach ($cenasImp as $c) {
+          $delPontos->execute([$c['id']]);
+          foreach (($c['pontos'] ?? []) as $i => $p) {
+            if (!is_array($p)) throw new RuntimeException('Mapa "' . $c['id'] . '": ponto ' . $i . ' inválido.');
+            $erro = validarPonto($p, $i);
+            if ($erro) throw new RuntimeException('Mapa "' . $c['id'] . '": ' . $erro);
+            $insPonto->execute([
+              $c['id'], trim((string)$p['rotulo']), (float)$p['x'], (float)$p['y'], (float)$p['largura'], (float)$p['altura'],
+              $p['tipo'], trim((string)$p['destino']),
+              !empty($p['mostrarSelo']) ? 1 : 0, !empty($p['mostrarDica']) ? 1 : 0,
+              array_key_exists('publicado', $p) ? (!empty($p['publicado']) ? 1 : 0) : 1,
+            ]);
+          }
+        }
+      }
       $bdc->commit();
+    } catch (RuntimeException $e) {
+      $bdc->rollBack();
+      responder(['erro' => $e->getMessage()], 422);
     } catch (Throwable $e) {
       $bdc->rollBack();
       throw $e;
     }
-    responder(['ok' => true, 'mundos' => count($mundos)]);
+    responder(['ok' => true, 'mundos' => count($mundos), 'cenas' => count($cenasImp)]);
+  }
+
+  /* ---------- cenas (mapas) e seus pontos clicáveis ---------- */
+
+  if ($acao === 'cenas_listar') {
+    $linhas = bd()->query('SELECT c.id, c.nome, c.imagem, c.inicial, c.publicado, c.ordem, COUNT(p.id) AS pontos
+      FROM cenas c LEFT JOIN pontos p ON p.cena_id = c.id
+      GROUP BY c.id ORDER BY c.inicial DESC, c.ordem, c.nome')->fetchAll(PDO::FETCH_ASSOC);
+    responder(['cenas' => array_map(fn($c) => [
+      'id' => $c['id'], 'nome' => $c['nome'], 'imagem' => $c['imagem'],
+      'imagemUrl' => caminhoPublicoImagem($c['imagem']),
+      'inicial' => (bool)$c['inicial'], 'publicado' => (bool)$c['publicado'],
+      'ordem' => (int)$c['ordem'], 'pontos' => (int)$c['pontos'],
+    ], $linhas)]);
+  }
+
+  if ($acao === 'cena_obter') {
+    $st = bd()->prepare('SELECT id, nome, imagem, inicial, publicado, ordem FROM cenas WHERE id = ?');
+    $st->execute([(string)($_GET['id'] ?? '')]);
+    $c = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$c) responder(['erro' => 'Cena não encontrada.'], 404);
+    $st = bd()->prepare('SELECT id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, publicado
+      FROM pontos WHERE cena_id = ? ORDER BY id');
+    $st->execute([$c['id']]);
+    responder([
+      'id' => $c['id'], 'nome' => $c['nome'], 'imagem' => $c['imagem'],
+      'imagemUrl' => caminhoPublicoImagem($c['imagem']),
+      'inicial' => (bool)$c['inicial'], 'publicado' => (bool)$c['publicado'], 'ordem' => (int)$c['ordem'],
+      'pontos' => array_map(fn($p) => [
+        'rotulo' => $p['rotulo'], 'x' => (float)$p['x'], 'y' => (float)$p['y'],
+        'largura' => (float)$p['largura'], 'altura' => (float)$p['altura'],
+        'tipo' => $p['tipo'], 'destino' => $p['destino'],
+        'mostrarSelo' => (bool)$p['mostrar_selo'], 'mostrarDica' => (bool)$p['mostrar_dica'],
+        'publicado' => (bool)$p['publicado'],
+      ], $st->fetchAll(PDO::FETCH_ASSOC)),
+    ]);
+  }
+
+  if ($acao === 'cena_salvar') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    if (!validarId($id)) responder(['erro' => '"id" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
+    $nome = trim((string)($d['nome'] ?? ''));
+    if ($nome === '' || mb_strlen($nome) > 60) responder(['erro' => 'O nome precisa ter de 1 a 60 caracteres.'], 422);
+    $imagem = trim((string)($d['imagem'] ?? ''));
+    if (!validarNomeImagem($imagem)) responder(['erro' => 'Escolha ou envie a imagem de fundo da cena (webp, png ou jpg).'], 422);
+    $inicial = !empty($d['inicial']) ? 1 : 0;
+    $bdc = bd();
+    $bdc->beginTransaction();
+    try {
+      $bdc->prepare('INSERT INTO cenas (id, nome, imagem, inicial, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE nome=VALUES(nome), imagem=VALUES(imagem), inicial=VALUES(inicial),
+          publicado=VALUES(publicado), ordem=VALUES(ordem)')
+        ->execute([$id, $nome, $imagem, $inicial, !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0)]);
+      // só uma cena pode ser a inicial (a que abre na aba Trilhas)
+      if ($inicial) $bdc->prepare('UPDATE cenas SET inicial = 0 WHERE id <> ?')->execute([$id]);
+      $bdc->commit();
+    } catch (Throwable $e) { $bdc->rollBack(); throw $e; }
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'cena_excluir') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    $st = bd()->prepare('SELECT inicial FROM cenas WHERE id = ?');
+    $st->execute([$id]);
+    $inicial = $st->fetchColumn();
+    if ($inicial === false) responder(['erro' => 'Cena não encontrada.'], 404);
+    $total = (int)bd()->query('SELECT COUNT(*) FROM cenas')->fetchColumn();
+    if ($inicial && $total > 1) {
+      responder(['erro' => 'Essa é a cena inicial. Marque outra como inicial antes de excluir esta.'], 422);
+    }
+    // pontos de OUTRAS cenas que apontavam pra cá ficariam quebrados — avisa em vez de silenciar
+    $st = bd()->prepare('SELECT COUNT(*) FROM pontos WHERE tipo = "cena" AND destino = ? AND cena_id <> ?');
+    $st->execute([$id, $id]);
+    $apontam = (int)$st->fetchColumn();
+    bd()->prepare('DELETE FROM cenas WHERE id = ?')->execute([$id]);
+    responder(['ok' => true, 'pontosOrfaos' => $apontam]);
+  }
+
+  if ($acao === 'pontos_salvar') {
+    $d = corpo();
+    $cenaId = (string)($d['cenaId'] ?? '');
+    $st = bd()->prepare('SELECT COUNT(*) FROM cenas WHERE id = ?');
+    $st->execute([$cenaId]);
+    if (!$st->fetchColumn()) responder(['erro' => 'Cena não encontrada.'], 422);
+    $pontos = is_array($d['pontos'] ?? null) ? $d['pontos'] : null;
+    if ($pontos === null) responder(['erro' => 'Formato inválido: esperado {"cenaId":..., "pontos":[...]}.'], 422);
+
+    // valida tudo antes de gravar: ou salva o mapa inteiro, ou não muda nada
+    foreach ($pontos as $i => $p) {
+      if (!is_array($p)) responder(['erro' => "Ponto $i inválido."], 422);
+      $erro = validarPonto($p, $i);
+      if ($erro) responder(['erro' => $erro], 422);
+    }
+
+    $bdc = bd();
+    $bdc->beginTransaction();
+    try {
+      $bdc->prepare('DELETE FROM pontos WHERE cena_id = ?')->execute([$cenaId]);
+      $ins = $bdc->prepare('INSERT INTO pontos (cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, publicado)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+      foreach ($pontos as $p) {
+        $ins->execute([
+          $cenaId, trim((string)$p['rotulo']), (float)$p['x'], (float)$p['y'], (float)$p['largura'], (float)$p['altura'],
+          $p['tipo'], trim((string)$p['destino']),
+          !empty($p['mostrarSelo']) ? 1 : 0, !empty($p['mostrarDica']) ? 1 : 0,
+          array_key_exists('publicado', $p) ? (!empty($p['publicado']) ? 1 : 0) : 1,
+        ]);
+      }
+      $bdc->commit();
+    } catch (Throwable $e) { $bdc->rollBack(); throw $e; }
+    responder(['ok' => true, 'pontos' => count($pontos)]);
+  }
+
+  if ($acao === 'cena_imagem') {
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || ($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+      $limite = ini_get('upload_max_filesize');
+      $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+        ? "A imagem passou do limite do servidor ($limite)."
+        : 'Nenhum arquivo recebido.';
+      responder(['erro' => $motivo], 422);
+    }
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_IMAGEM[$ext])) {
+      responder(['erro' => 'Formato não aceito. Use webp, png ou jpg (webp é o mais leve).'], 422);
+    }
+    // não confia na extensão nem no content-type do navegador: confirma que é imagem de verdade
+    $info = @getimagesize($arq['tmp_name']);
+    if (!$info || !in_array($info['mime'], EXTENSOES_IMAGEM, true)) {
+      responder(['erro' => 'O arquivo não é uma imagem válida.'], 422);
+    }
+    $base = strtolower(pathinfo((string)$arq['name'], PATHINFO_FILENAME));
+    $base = preg_replace('/[^a-z0-9_-]+/', '-', $base) ?: 'cena';
+    $base = trim($base, '-') ?: 'cena';
+    $nome = substr($base, 0, 60) . '.' . $ext;
+    if (!is_dir(pastaCenas()) && !@mkdir(pastaCenas(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta assets/cenas no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaCenas() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo em assets/cenas (confira a permissão da pasta).'], 500);
+    }
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => 'assets/cenas/' . $nome,
+      'largura' => $info[0], 'altura' => $info[1]]);
+  }
+
+  if ($acao === 'destinos') {
+    $mundos = bd()->query('SELECT id, nome, emoji FROM mundos ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    $cenas = bd()->query('SELECT id, nome FROM cenas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    $licoes = bd()->query('SELECT id, titulo, emoji FROM licoes ORDER BY mundo_id, ordem')->fetchAll(PDO::FETCH_ASSOC);
+    responder([
+      'mundo' => array_map(fn($m) => ['id' => $m['id'], 'rotulo' => $m['emoji'] . ' ' . $m['nome']], $mundos),
+      'cena'  => array_map(fn($c) => ['id' => $c['id'], 'rotulo' => '🗺️ ' . $c['nome']], $cenas),
+      'licao' => array_map(fn($l) => ['id' => $l['id'], 'rotulo' => $l['emoji'] . ' ' . $l['titulo']], $licoes),
+      'tela'  => array_map(fn($t) => ['id' => $t, 'rotulo' => ucfirst($t)], TELAS_VALIDAS),
+    ]);
   }
 
   responder(['erro' => 'Ação desconhecida.'], 404);

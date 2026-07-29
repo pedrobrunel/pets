@@ -206,6 +206,14 @@ body.tela-cheia #app{padding:0;max-width:none}
   outline:none;
 }
 .predio:active{filter:brightness(.9)}
+/* dica opcional (marcada por ponto no painel): pulsa de leve pra criança perceber que
+   dá pra tocar ali — útil em ponto que não é prédio óbvio, tipo a lancha do porto */
+.predio.com-dica::before{
+  content:'';position:absolute;inset:0;border-radius:14px;
+  border:3px solid rgba(255,255,255,.85);box-shadow:0 0 12px rgba(255,255,255,.6);
+  animation:pulsa-dica 1.8s ease-in-out infinite;pointer-events:none;
+}
+@keyframes pulsa-dica{0%,100%{opacity:.25;transform:scale(.97)}50%{opacity:.9;transform:scale(1.02)}}
 .predio-selo{
   margin-bottom:-8px;background:#fff;border:2px solid var(--contorno);border-radius:999px;
   padding:2px 8px;font-size:11px;font-weight:900;box-shadow:0 2px 0 var(--contorno);white-space:nowrap;
@@ -1009,27 +1017,35 @@ const progressoMundo = t => {
   const feitas = t.licoes.filter(l=>estado.licoesFeitas.includes(l.id)).length;
   return {feitas, total: t.licoes.length, completo: feitas === t.licoes.length};
 };
-/* posição (% da imagem assets/mapa-mundosv2.webp) do prédio de cada mundo que já
-   existe hoje — estimada visualmente, então pode precisar de ajuste fino */
-const CENA_MUNDOS = {
-  por: {left:'9%',  top:'22%', width:'12%', height:'25%'},
-  mat: {left:'28%', top:'13%', width:'13%', height:'30%'},
-  bio: {left:'40%', top:'20%', width:'10%', height:'25%'},
-  fis: {left:'50%', top:'15%', width:'10%', height:'28%'},
-  his: {left:'67%', top:'15%', width:'12%', height:'28%'},
-  geo: {left:'85%', top:'15%', width:'13%', height:'28%'},
-  art: {left:'55%', top:'45%', width:'11%', height:'28%'},
-};
-/* prédios que já existem na ilha mas cuja matéria ainda não virou mundo no
-   painel — ficam clicáveis, só avisam que tá vindo por aí */
-const CENA_EM_BREVE = [
-  {nome:'Literatura',      left:'20%', top:'15%', width:'10%', height:'28%'},
-  {nome:'Química',         left:'59%', top:'13%', width:'9%',  height:'28%'},
-  {nome:'Filosofia',       left:'20%', top:'48%', width:'11%', height:'25%'},
-  {nome:'Sociologia',      left:'30%', top:'46%', width:'11%', height:'27%'},
-  {nome:'Língua Inglesa',  left:'43%', top:'42%', width:'12%', height:'32%'},
-  {nome:'Educação Física', left:'65%', top:'48%', width:'18%', height:'25%'},
+/* ---------- cenas (mapas navegáveis) ----------
+   Cada cena tem uma imagem de fundo e uma lista de pontos clicáveis, com posição em %
+   da imagem. Isso vem do banco (api/conteudo.php), montado no painel do Hostmaster
+   (admin.html → Mapas). O que está aqui embaixo é só o fallback pra funcionar em
+   hospedagem estática sem PHP — é a Ilha do saber como ela estava fixa no código.
+   Um ponto leva pra: mundo (trilha), cena (outro mapa), licao, tela (aba do jogo)
+   ou aviso (só mostra um recadinho). */
+const AVISO_EM_BREVE = nome => `${nome} ainda não tem lições — em breve! 🚧`;
+let CENAS = [
+  { id:'ilha', nome:'Ilha do saber', inicial:true, imagem:'assets/mapa-mundosv2.webp', pontos:[
+    {rotulo:'Português',  x:9,  y:22, largura:12, altura:25, tipo:'mundo', destino:'por', mostrarSelo:true},
+    {rotulo:'Matemática', x:28, y:13, largura:13, altura:30, tipo:'mundo', destino:'mat', mostrarSelo:true},
+    {rotulo:'Biologia',   x:40, y:20, largura:10, altura:25, tipo:'mundo', destino:'bio', mostrarSelo:true},
+    {rotulo:'Física',     x:50, y:15, largura:10, altura:28, tipo:'mundo', destino:'fis', mostrarSelo:true},
+    {rotulo:'História',   x:67, y:15, largura:12, altura:28, tipo:'mundo', destino:'his', mostrarSelo:true},
+    {rotulo:'Geografia',  x:85, y:15, largura:13, altura:28, tipo:'mundo', destino:'geo', mostrarSelo:true},
+    {rotulo:'Arte',       x:55, y:45, largura:11, altura:28, tipo:'mundo', destino:'art', mostrarSelo:true},
+    {rotulo:'Literatura',      x:20, y:15, largura:10, altura:28, tipo:'aviso', destino:AVISO_EM_BREVE('Literatura')},
+    {rotulo:'Química',         x:59, y:13, largura:9,  altura:28, tipo:'aviso', destino:AVISO_EM_BREVE('Química')},
+    {rotulo:'Filosofia',       x:20, y:48, largura:11, altura:25, tipo:'aviso', destino:AVISO_EM_BREVE('Filosofia')},
+    {rotulo:'Sociologia',      x:30, y:46, largura:11, altura:27, tipo:'aviso', destino:AVISO_EM_BREVE('Sociologia')},
+    {rotulo:'Língua Inglesa',  x:43, y:42, largura:12, altura:32, tipo:'aviso', destino:AVISO_EM_BREVE('Língua Inglesa')},
+    {rotulo:'Educação Física', x:65, y:48, largura:18, altura:25, tipo:'aviso', destino:AVISO_EM_BREVE('Educação Física')},
+  ]},
 ];
+const cenaInicial = () => CENAS.find(c => c.inicial) || CENAS[0];
+const acharCena = id => CENAS.find(c => c.id === id);
+let cenaAtual = null;
+let pilhaCenas = []; // caminho percorrido entre mapas, pro "Voltar" desfazer um passo por vez
 // arrasta com o mouse pra rolar a cena (toque já rola nativo); um clique-arrastado
 // não deve "vazar" como clique num prédio, por isso o stopPropagation no capture
 function ativarArrastoCena(el){
@@ -1058,26 +1074,62 @@ function ativarArrastoCena(el){
   el.addEventListener('pointercancel', soltar);
   el.addEventListener('click', e => { if(moveu){ e.stopPropagation(); moveu = false; } }, true);
 }
-RENDER.trilhas = () => {
+/* toca num ponto do mapa: resolve o destino conforme o catálogo de links.
+   Os pontos são acessados por índice (nunca interpolando texto do painel dentro de um
+   onclick) — rótulo com apóstrofo quebraria o HTML, e o texto vem de fora do código. */
+function abrirPonto(i){
+  const p = (cenaAtual?.pontos || [])[i];
+  if(!p) return;
+  if(p.tipo === 'mundo') return ir('mundo', p.destino);
+  if(p.tipo === 'licao') return ir('licao', p.destino);
+  if(p.tipo === 'tela')  return ir(p.destino);
+  if(p.tipo === 'aviso') return brinde(p.destino);
+  if(p.tipo === 'cena'){
+    const proxima = acharCena(p.destino);
+    if(!proxima) return brinde('Esse caminho ainda não leva a nenhum lugar. 🚧');
+    // se o destino já está no caminho percorrido, volta até ele em vez de empilhar de novo:
+    // sem isso, ir e voltar entre dois mapas faz a pilha crescer sem parar e o "Voltar"
+    // vira um desandar longo em vez de sair pra casa
+    const jaNoCaminho = pilhaCenas.indexOf(proxima.id);
+    if(jaNoCaminho >= 0) pilhaCenas = pilhaCenas.slice(0, jaNoCaminho);
+    else pilhaCenas.push(cenaAtual.id);
+    return ir('trilhas', proxima.id);
+  }
+}
+// "Voltar" desfaz um passo do caminho entre mapas; na cena inicial, sai pra casa
+function voltarDaCena(){
+  const anterior = pilhaCenas.pop();
+  anterior ? ir('trilhas', anterior) : ir('casa');
+}
+RENDER.trilhas = (idCena) => {
+  // sem argumento (toque na aba Trilhas) = volta pro começo do mapa e esquece o caminho
+  if(!idCena) pilhaCenas = [];
+  cenaAtual = (idCena && acharCena(idCena)) || cenaInicial();
+  if(!cenaAtual){
+    $('#tela-trilhas').innerHTML = `
+      <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
+      <p class="vazio" style="margin-top:80px"><span class="emoji">🗺️</span>Nenhum mapa publicado ainda.</p>`;
+    return;
+  }
+  const c = cenaAtual;
   $('#tela-trilhas').innerHTML = `
-    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="voltarDaCena()">Voltar</button>
     <div class="cena-scroll" id="cena-scroll">
       <div class="cena-quadro">
-        <picture>
-          <source srcset="assets/mapa-mundosv2.webp" type="image/webp">
-          <img class="cena-img" src="assets/mapa-mundosv2.png" alt="Ilha do saber, com um prédio pra cada matéria">
-        </picture>
-        ${TRILHAS.filter(t => CENA_MUNDOS[t.id]).map(t => {
-          const pos = CENA_MUNDOS[t.id];
-          const {feitas, total, completo} = progressoMundo(t);
-          return `<button class="predio" style="left:${pos.left};top:${pos.top};width:${pos.width};height:${pos.height}"
-            onclick="ir('mundo','${t.id}')" aria-label="${esc(t.nome)}">
-            <span class="predio-selo ${completo?'completo':''}">${completo?'👑':`${feitas}/${total}`}</span>
-          </button>`;
+        <img class="cena-img" src="${esc(c.imagem)}" alt="${esc(c.nome)}">
+        ${(c.pontos || []).map((p, i) => {
+          const mundo = p.tipo === 'mundo' ? TRILHAS.find(t => t.id === p.destino) : null;
+          // ponto de mundo que não existe mais (rascunho, apagado) não vira botão morto
+          if(p.tipo === 'mundo' && !mundo) return '';
+          let selo = '';
+          if(mundo && p.mostrarSelo){
+            const {feitas, total, completo} = progressoMundo(mundo);
+            selo = `<span class="predio-selo ${completo?'completo':''}">${completo?'👑':`${feitas}/${total}`}</span>`;
+          }
+          return `<button class="predio ${p.mostrarDica?'com-dica':''}"
+            style="left:${p.x}%;top:${p.y}%;width:${p.largura}%;height:${p.altura}%"
+            onclick="abrirPonto(${i})" aria-label="${esc(p.rotulo)}">${selo}</button>`;
         }).join('')}
-        ${CENA_EM_BREVE.map(p => `<button class="predio em-breve"
-          style="left:${p.left};top:${p.top};width:${p.width};height:${p.height}"
-          onclick="brinde('${p.nome} ainda não tem lições — em breve! 🚧')" aria-label="${p.nome} (em breve)"></button>`).join('')}
       </div>
     </div>`;
   ativarArrastoCena($('#cena-scroll'));
@@ -1838,7 +1890,11 @@ async function carregarConteudo(){
     const r = await fetch('api/conteudo.php', {cache:'no-store'});
     if(!r.ok) return;
     const dados = await r.json();
-    if(Array.isArray(dados) && dados.length) TRILHAS = dados;
+    // formato atual: {mundos, cenas}. O Array.isArray cobre a versão antiga do endpoint
+    // (só a lista de mundos), pra um app.html em cache não quebrar durante um deploy.
+    const mundos = Array.isArray(dados) ? dados : dados.mundos;
+    if(Array.isArray(mundos) && mundos.length) TRILHAS = mundos;
+    if(Array.isArray(dados.cenas) && dados.cenas.length) CENAS = dados.cenas;
   }catch(e){ /* offline ou hospedagem sem PHP: fica com o conteúdo embutido */ }
 }
 // dispara já no carregamento da página — some com a espera perceptível, porque
