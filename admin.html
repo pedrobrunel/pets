@@ -122,6 +122,9 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
   cursor:move;box-sizing:border-box;
 }
 .ponto-marca.selecionada{border-color:var(--erro);background:rgba(231,76,60,.28);z-index:2}
+/* ponto sem destino (ou apontando pra rascunho): tracejado, pra dar na vista antes de salvar */
+.ponto-marca.incompleta{border-style:dashed;border-color:#C0392B;background:rgba(192,57,43,.14)}
+.ponto-marca.incompleta .rotulo-marca{background:#C0392B}
 .ponto-marca .rotulo-marca{
   position:absolute;top:-9px;left:-2px;background:var(--tinta);color:#fff;font-size:9px;font-weight:800;
   padding:1px 5px;border-radius:4px;white-space:nowrap;pointer-events:none;line-height:1.5;
@@ -469,7 +472,9 @@ const TIPOS_PONTO = [
 ];
 let cenasCache = [], cenaEdit = null, pontosEdit = [], pontoSel = -1, destinosCache = null;
 
-async function carregarCenas(){
+/* só a lista de mapas e o catálogo de destinos, sem recarregar a cena aberta — usado
+   depois de salvar os pontos, pra não jogar fora o que o usuário tem selecionado */
+async function atualizarListaCenas(){
   const d = await api('cenas_listar').catch(() => ({cenas:[]}));
   cenasCache = d.cenas;
   const anterior = $('#seletor-cena').value;
@@ -478,8 +483,11 @@ async function carregarCenas(){
   ).join('') || '<option value="">Nenhum mapa ainda</option>';
   if(anterior && cenasCache.some(c => c.id === anterior)) $('#seletor-cena').value = anterior;
   destinosCache = await api('destinos').catch(() => null);
+}
+async function carregarCenas(){
+  await atualizarListaCenas();
   if(cenasCache.length) abrirCena($('#seletor-cena').value);
-  else { $('#editor-wrap').classList.add('oculto'); }
+  else $('#editor-wrap').classList.add('oculto');
 }
 $('#seletor-cena').addEventListener('change', e => abrirCena(e.target.value));
 
@@ -490,6 +498,10 @@ async function abrirCena(id){
   cenaEdit = c;
   pontosEdit = c.pontos.map(p => ({...p}));
   pontoSel = -1;
+  // sem isso o formulário do ponto ficava na tela apontando pra uma seleção que não
+  // existe mais, e editar ali não mudava nada (silenciosamente)
+  $('#form-ponto').classList.add('oculto');
+  $('#pontos-aviso').style.display = 'none';
   $('#form-cena').classList.add('oculto');
   $('#editor-wrap').classList.remove('oculto');
   $('#palco-mapa').innerHTML = `<div class="quadro" id="quadro-mapa">
@@ -505,7 +517,7 @@ function desenharMarcas(){
   quadro.querySelectorAll('.ponto-marca').forEach(m => m.remove());
   pontosEdit.forEach((p, i) => {
     const el = document.createElement('div');
-    el.className = 'ponto-marca' + (i === pontoSel ? ' selecionada' : '');
+    el.className = 'ponto-marca' + (i === pontoSel ? ' selecionada' : '') + (problemaDoPonto(p) ? ' incompleta' : '');
     el.style.left = p.x + '%'; el.style.top = p.y + '%';
     el.style.width = p.largura + '%'; el.style.height = p.altura + '%';
     el.dataset.i = i;
@@ -514,12 +526,26 @@ function desenharMarcas(){
   });
   pintarListaPontos();
 }
+/* problema de um ponto, se houver: destino em branco (não leva a lugar nenhum) ou
+   destino em rascunho (salva, mas conteudo.php esconde do aluno). Devolve null se ok. */
+function problemaDoPonto(p){
+  if(!p.destino) return 'sem destino — não vai levar a lugar nenhum';
+  if(p.tipo === 'aviso') return null;
+  const alvo = ((destinosCache && destinosCache[p.tipo]) || []).find(o => o.id === p.destino);
+  if(!alvo) return 'destino não existe mais';
+  if(!alvo.publicado) return 'destino está em rascunho — o aluno não vai ver este ponto';
+  return null;
+}
 function pintarListaPontos(){
   $('#lista-pontos').innerHTML = pontosEdit.map((p, i) => {
     const tipo = TIPOS_PONTO.find(t => t.v === p.tipo);
     const alvo = p.tipo === 'aviso' ? '"' + (p.destino||'').slice(0, 28) + '…"' : p.destino;
+    const problema = problemaDoPonto(p);
     return `<button class="${i===pontoSel?'ativo':''}" onclick="selecionarPonto(${i})">
-      ${esc(p.rotulo || '(sem rótulo)')}<small>${tipo ? esc(tipo.rotulo) : p.tipo} → ${esc(alvo || '?')}</small></button>`;
+      ${problema ? '⚠️ ' : ''}${esc(p.rotulo || '(sem rótulo)')}
+      <small>${problema
+        ? '<span style="color:#C0392B">' + esc(problema) + '</span>'
+        : (tipo ? esc(tipo.rotulo) : p.tipo) + ' → ' + esc(alvo || '')}</small></button>`;
   }).join('') || '<div style="padding:10px;font-size:12px;color:#7F8C8D;font-weight:700">Nenhum ponto. Arraste na imagem pra criar.</div>';
 }
 window.selecionarPonto = (i) => {
@@ -544,12 +570,18 @@ function pintarCampoDestino(){
       <input type="text" id="ponto-destino" maxlength="160" value="${esc(p.tipo==='aviso' ? (p.destino||'') : '')}"
         placeholder="ex.: Química ainda não tem lições — em breve! 🚧">`;
   } else {
-    const lista = (destinosCache && destinosCache[tipo]) || [];
+    // mandar pro mapa em que já se está não faz nada de útil e parece defeito: fora da lista
+    const lista = ((destinosCache && destinosCache[tipo]) || [])
+      .filter(o => !(tipo === 'cena' && cenaEdit && o.id === cenaEdit.id));
+    /* a primeira opção é um placeholder vazio DE PROPÓSITO: sem ele o <select> assume
+       sozinho o primeiro item da lista, e um ponto acabava salvo apontando pro mapa
+       errado sem ninguém ter escolhido nada. Vazio = o servidor recusa e diz o motivo. */
     wrap.innerHTML = `<label>qual</label>
       <select id="ponto-destino">
-        ${lista.length ? '' : '<option value="">(nada cadastrado ainda)</option>'}
+        <option value="">— escolha —</option>
         ${lista.map(o => `<option value="${esc(o.id)}" ${o.id===p.destino?'selected':''}>${esc(o.rotulo)}</option>`).join('')}
-      </select>`;
+      </select>
+      ${lista.length ? '' : '<p class="dica-editor">Nada cadastrado desse tipo ainda.</p>'}`;
   }
   $('#ponto-destino').oninput = salvarCampoPonto;
   $('#ponto-destino').onchange = salvarCampoPonto;
@@ -666,10 +698,14 @@ $('#btn-salvar-pontos').onclick = async () => {
   aviso.style.display = 'none';
   try{
     const r = await api('pontos_salvar', {method:'POST', corpo:{cenaId: cenaEdit.id, pontos: pontosEdit}});
-    aviso.className = 'aviso-form ok';
-    aviso.textContent = `${r.pontos} ponto(s) salvos. Já está no ar pro aluno.`;
+    // salvou, mas alguns podem não chegar no aluno (destino em rascunho) — melhor dizer
+    const escondidos = pontosEdit.filter(p => problemaDoPonto(p));
+    aviso.className = escondidos.length ? 'aviso-form erro' : 'aviso-form ok';
+    aviso.textContent = escondidos.length
+      ? `${r.pontos} ponto(s) salvos, mas ${escondidos.length} não vão aparecer pro aluno: ${escondidos.map(p => p.rotulo).join(', ')}. Veja o ⚠️ na lista.`
+      : `${r.pontos} ponto(s) salvos. Já está no ar pro aluno.`;
     aviso.style.display = 'block';
-    carregarCenas();
+    atualizarListaCenas(); // mantém a seleção do usuário; não recarrega a cena aberta
   }catch(e){ aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block'; }
 };
 

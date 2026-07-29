@@ -630,14 +630,17 @@ try {
   }
 
   if ($acao === 'destinos') {
-    $mundos = bd()->query('SELECT id, nome, emoji FROM mundos ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
-    $cenas = bd()->query('SELECT id, nome FROM cenas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
-    $licoes = bd()->query('SELECT id, titulo, emoji FROM licoes ORDER BY mundo_id, ordem')->fetchAll(PDO::FETCH_ASSOC);
+    // "rascunho" vai junto: um ponto que aponta pra mundo/cena/lição não publicada é
+    // escondido do aluno por conteudo.php, então o painel precisa poder avisar disso
+    $mundos = bd()->query('SELECT id, nome, emoji, publicado FROM mundos ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    $cenas = bd()->query('SELECT id, nome, publicado FROM cenas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    $licoes = bd()->query('SELECT id, titulo, emoji, publicado FROM licoes ORDER BY mundo_id, ordem')->fetchAll(PDO::FETCH_ASSOC);
+    $marca = fn($rotulo, $pub) => $rotulo . ($pub ? '' : ' — rascunho, não aparece pro aluno');
     responder([
-      'mundo' => array_map(fn($m) => ['id' => $m['id'], 'rotulo' => $m['emoji'] . ' ' . $m['nome']], $mundos),
-      'cena'  => array_map(fn($c) => ['id' => $c['id'], 'rotulo' => '🗺️ ' . $c['nome']], $cenas),
-      'licao' => array_map(fn($l) => ['id' => $l['id'], 'rotulo' => $l['emoji'] . ' ' . $l['titulo']], $licoes),
-      'tela'  => array_map(fn($t) => ['id' => $t, 'rotulo' => ucfirst($t)], TELAS_VALIDAS),
+      'mundo' => array_map(fn($m) => ['id' => $m['id'], 'rotulo' => $marca($m['emoji'] . ' ' . $m['nome'], $m['publicado']), 'publicado' => (bool)$m['publicado']], $mundos),
+      'cena'  => array_map(fn($c) => ['id' => $c['id'], 'rotulo' => $marca('🗺️ ' . $c['nome'], $c['publicado']), 'publicado' => (bool)$c['publicado']], $cenas),
+      'licao' => array_map(fn($l) => ['id' => $l['id'], 'rotulo' => $marca($l['emoji'] . ' ' . $l['titulo'], $l['publicado']), 'publicado' => (bool)$l['publicado']], $licoes),
+      'tela'  => array_map(fn($t) => ['id' => $t, 'rotulo' => ucfirst($t), 'publicado' => true], TELAS_VALIDAS),
     ]);
   }
 
