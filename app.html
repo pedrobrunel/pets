@@ -202,13 +202,8 @@ body.tela-cheia #app{padding:0;max-width:none}
   padding:2px 8px;font-size:11px;font-weight:900;box-shadow:0 2px 0 var(--contorno);white-space:nowrap;
 }
 .predio-selo.completo{background:var(--moeda)}
-.btn-voltar-cena{
-  position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:41;
-  display:flex;align-items:center;gap:6px;background:rgba(44,62,80,.55);color:#fff;
-  border:none;border-radius:999px;padding:8px 14px 8px 10px;font-size:13px;font-weight:800;
-  cursor:pointer;backdrop-filter:blur(2px);
-}
-.btn-voltar-cena:active{background:rgba(44,62,80,.75)}
+.btn.amarelo{--bg:var(--moeda);--edge:var(--moeda-rim);color:var(--tinta);text-shadow:none}
+.btn-voltar-cena{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:41}
 
 .mundo-emblema{
   position:relative;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:28px;
@@ -616,6 +611,15 @@ const $ = s => document.querySelector(s);
 // o apelido é digitado livremente pelo aluno — nunca interpolar em innerHTML sem escapar
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+/* som de clique global: qualquer botão do site (inclusive os prédios da ilha)
+   toca o mesmo efeitinho — um Audio novo por clique, porque o som é curtinho
+   (~60ms) e clique rápido repetido não pode ficar esperando o anterior acabar */
+document.addEventListener('click', e => {
+  if(e.target.closest('button, [role="button"], .clicavel')){
+    new Audio('assets/clique.wav').play().catch(()=>{});
+  }
+});
+
 function ganhar(moedas=0, xp=0){
   estado.moedas += moedas;
   const antes = nivel(); estado.xp += xp;
@@ -1008,28 +1012,34 @@ const CENA_EM_BREVE = [
 // arrasta com o mouse pra rolar a cena (toque já rola nativo); um clique-arrastado
 // não deve "vazar" como clique num prédio, por isso o stopPropagation no capture
 function ativarArrastoCena(el){
-  let arrastando = false, moveu = false, inicioX = 0, inicioScroll = 0;
+  // setPointerCapture só é chamado depois que o arrasto é confirmado (passou do
+  // limiar de 4px) — chamar isso já no pointerdown "sequestra" o ponteiro pro
+  // container e o clique num prédio nunca chega no botão (bug: mouse não clicava,
+  // só touch, porque touch nem passa por aqui)
+  let pressionado = false, arrastando = false, moveu = false, inicioX = 0, inicioScroll = 0, ponteiroId = null;
   el.addEventListener('pointerdown', e => {
     if(e.pointerType === 'touch') return; // touch já rola nativo, não precisa emular
-    arrastando = true; moveu = false;
+    pressionado = true; moveu = false; ponteiroId = e.pointerId;
     inicioX = e.clientX; inicioScroll = el.scrollLeft;
-    el.classList.add('arrastando');
-    el.setPointerCapture(e.pointerId);
   });
   el.addEventListener('pointermove', e => {
-    if(!arrastando) return;
+    if(!pressionado) return;
     const dx = e.clientX - inicioX;
-    if(Math.abs(dx) > 4) moveu = true;
-    el.scrollLeft = inicioScroll - dx;
+    if(!arrastando && Math.abs(dx) > 4){
+      arrastando = true; moveu = true;
+      el.classList.add('arrastando');
+      el.setPointerCapture(ponteiroId);
+    }
+    if(arrastando) el.scrollLeft = inicioScroll - dx;
   });
-  const soltar = () => { arrastando = false; el.classList.remove('arrastando'); };
+  const soltar = () => { pressionado = false; arrastando = false; el.classList.remove('arrastando'); };
   el.addEventListener('pointerup', soltar);
   el.addEventListener('pointercancel', soltar);
   el.addEventListener('click', e => { if(moveu){ e.stopPropagation(); moveu = false; } }, true);
 }
 RENDER.trilhas = () => {
   $('#tela-trilhas').innerHTML = `
-    <button class="btn-voltar-cena" onclick="ir('casa')" aria-label="Voltar pro meu bicho">🐾 Meu bicho</button>
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
     <div class="cena-scroll" id="cena-scroll">
       <div class="cena-quadro">
         <picture>
