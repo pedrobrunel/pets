@@ -816,5 +816,174 @@
         ]
       }
     ]
+  },
+  {
+    "id": "fis",
+    "nome": "Física",
+    "emoji": "🧲",
+    "cor": "var(--moeda)",
+    "licoes": [
+      {
+        "id": "fis1",
+        "titulo": "As Leis de Newton",
+        "emoji": "🧲",
+        "serie": "9º ano",
+        "blocos": [
+          {
+            "tipo": "texto",
+            "paragrafos": [
+              "Isaac Newton, no século 17, descreveu três leis que explicam como e por que as coisas se movem — ou ficam paradas. Elas valem tanto pra uma bola de futebol quanto pra um foguete.",
+              "A Primeira Lei é a lei da [[inércia|Tendência de um corpo continuar como está: parado fica parado, em movimento continua em movimento, até que uma força mude isso.]]: um corpo parado tende a continuar parado, e um corpo em movimento tende a continuar em movimento, a não ser que uma força atue sobre ele.",
+              "A Segunda Lei relaciona força, massa e aceleração: F = m × a. Quanto mais força você aplica, maior a aceleração — e quanto mais pesado o objeto, mais força é preciso pra acelerá-lo do mesmo jeito.",
+              "A Terceira Lei é a da ação e reação: toda força tem uma força de mesma intensidade e sentido contrário. Quando você empurra a parede, a parede te empurra de volta."
+            ]
+          },
+          {
+            "tipo": "flashcard",
+            "cartas": [
+              {
+                "frente": "1ª Lei de Newton",
+                "verso": "Lei da inércia: um corpo tende a manter seu estado de repouso ou movimento, a menos que uma força atue sobre ele."
+              },
+              {
+                "frente": "2ª Lei de Newton",
+                "verso": "F = m × a — a força é igual à massa vezes a aceleração."
+              },
+              {
+                "frente": "3ª Lei de Newton",
+                "verso": "Ação e reação: toda força gera uma força de mesma intensidade, em sentido contrário."
+              }
+            ]
+          },
+          {
+            "tipo": "cloze",
+            "frase": "A fórmula da Segunda Lei de Newton é Força = massa × ___.",
+            "opcoes": [
+              "aceleração",
+              "velocidade",
+              "tempo"
+            ],
+            "certa": "aceleração"
+          },
+          {
+            "tipo": "pergunta",
+            "p": "Qual lei explica por que você continua \"escorregando\" pra frente quando o ônibus freia de repente?",
+            "alts": [
+              "1ª Lei (inércia)",
+              "2ª Lei (F=ma)",
+              "3ª Lei (ação e reação)",
+              "Lei da gravidade"
+            ],
+            "certa": 0
+          },
+          {
+            "tipo": "pergunta",
+            "p": "Se você aplicar o dobro de força em um objeto de mesma massa, o que acontece com a aceleração?",
+            "alts": [
+              "Fica igual",
+              "Dobra",
+              "Cai pela metade",
+              "Vira zero"
+            ],
+            "certa": 1
+          },
+          {
+            "tipo": "pergunta",
+            "p": "Quando você pula, empurrando o chão pra baixo, o chão te empurra de volta pra cima. Isso é exemplo de qual lei?",
+            "alts": [
+              "1ª Lei",
+              "2ª Lei",
+              "3ª Lei",
+              "Nenhuma das três"
+            ],
+            "certa": 2
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "art",
+    "nome": "Arte",
+    "emoji": "🎨",
+    "cor": "var(--erro)",
+    "licoes": [
+      {
+        "id": "art1",
+        "titulo": "Cores primárias e secundárias",
+        "emoji": "🎨",
+        "serie": "6º ano",
+        "blocos": [
+          {
+            "tipo": "texto",
+            "paragrafos": [
+              "As cores primárias são vermelho, azul e amarelo. Elas são especiais porque não dá pra criá-las misturando outras cores — são o ponto de partida de tudo.",
+              "Quando você mistura duas cores primárias, nasce uma [[cor secundária|Cor criada pela mistura de duas cores primárias.]]. Azul com amarelo dá verde. Amarelo com vermelho dá laranja. Vermelho com azul dá roxo.",
+              "Pintores e designers usam essa lógica o tempo todo: entender as primárias e secundárias ajuda a escolher combinações de cores que funcionam bem juntas."
+            ]
+          },
+          {
+            "tipo": "flashcard",
+            "cartas": [
+              {
+                "frente": "Cores primárias",
+                "verso": "Vermelho, azul e amarelo — não podem ser criadas misturando outras cores."
+              },
+              {
+                "frente": "Cor secundária",
+                "verso": "Nasce da mistura de duas cores primárias."
+              },
+              {
+                "frente": "Azul + Amarelo",
+                "verso": "Verde"
+              }
+            ]
+          },
+          {
+            "tipo": "cloze",
+            "frase": "Misturando azul e amarelo, obtemos o ___.",
+            "opcoes": [
+              "verde",
+              "roxo",
+              "laranja"
+            ],
+            "certa": "verde"
+          },
+          {
+            "tipo": "pergunta",
+            "p": "Quais são as três cores primárias?",
+            "alts": [
+              "Vermelho, azul e amarelo",
+              "Verde, roxo e laranja",
+              "Preto, branco e cinza",
+              "Rosa, azul e verde"
+            ],
+            "certa": 0
+          },
+          {
+            "tipo": "pergunta",
+            "p": "Misturando vermelho com azul, você obtém...",
+            "alts": [
+              "Verde",
+              "Laranja",
+              "Roxo",
+              "Marrom"
+            ],
+            "certa": 2
+          },
+          {
+            "tipo": "pergunta",
+            "p": "Por que as cores primárias são especiais?",
+            "alts": [
+              "Porque são mais bonitas",
+              "Porque não podem ser criadas misturando outras cores",
+              "Porque só existem na natureza",
+              "Porque só pintores profissionais usam"
+            ],
+            "certa": 1
+          }
+        ]
+      }
+    ]
   }
 ]

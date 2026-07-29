@@ -205,6 +205,34 @@ try {
     ]);
   }
 
+  if ($acao === 'licao_desempenho') {
+    $licaoId = (string)($_GET['id'] ?? '');
+    $st = bd()->prepare('SELECT titulo, blocos FROM licoes WHERE id = ?');
+    $st->execute([$licaoId]);
+    $l = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$l) responder(['erro' => 'Lição não encontrada.'], 404);
+    $perguntas = array_values(array_filter(json_decode($l['blocos'], true) ?: [], fn($b) => $b['tipo'] === 'pergunta'));
+
+    $st = bd()->prepare('SELECT indice_pergunta, COUNT(*) tentativas, SUM(acertou) acertos
+      FROM respostas WHERE licao_id = ? GROUP BY indice_pergunta');
+    $st->execute([$licaoId]);
+    $porIndice = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $linha) $porIndice[(int)$linha['indice_pergunta']] = $linha;
+
+    $saida = [];
+    foreach ($perguntas as $i => $p) {
+      $linha = $porIndice[$i] ?? null;
+      $tentativas = $linha ? (int)$linha['tentativas'] : 0;
+      $acertos = $linha ? (int)$linha['acertos'] : 0;
+      $saida[] = [
+        'indice' => $i, 'pergunta' => $p['p'], 'alts' => $p['alts'], 'certa' => $p['certa'],
+        'tentativas' => $tentativas, 'acertos' => $acertos,
+        'taxaAcerto' => $tentativas ? round($acertos / $tentativas * 100) : null,
+      ];
+    }
+    responder(['titulo' => $l['titulo'], 'perguntas' => $saida]);
+  }
+
   if ($acao === 'licao_salvar') {
     $d = corpo();
     $st = bd()->prepare('SELECT COUNT(*) FROM mundos WHERE id = ?');

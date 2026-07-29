@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bichoteca — painel do responsável</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --papel:#ECF0F1; --papel-2:#FFFFFF; --tinta:#2C3E50;
+  --mata:#2ECC71; --manga:#E67E22; --jabuti:#9B59B6; --ceu:#3498DB;
+  --moeda:#F1C40F; --rosa:#FF6F91; --erro:#E74C3C; --contorno:#BDC3C7;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Nunito',system-ui,sans-serif;font-weight:600;color:var(--tinta);background:var(--papel);min-height:100vh}
+h1,h2,h3{font-family:'Baloo 2',sans-serif;margin:0}
+button,input{font-family:inherit;font-size:14px}
+.oculto{display:none !important}
+main{max-width:560px;margin:0 auto;padding:20px 18px 60px}
+
+#tela-login{max-width:360px;margin:14vh auto;padding:0 20px}
+#tela-login .cartao{background:#fff;border:1px solid var(--contorno);border-radius:12px;padding:28px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+#tela-login h1{font-size:22px;margin-bottom:2px}
+#tela-login p.sub{margin:0 0 18px;font-size:13px;color:#7F8C8D;font-weight:700}
+label{display:block;font-size:12px;font-weight:800;color:#566573;margin:12px 0 4px}
+label:first-of-type{margin-top:0}
+input[type=text],input[type=password]{width:100%;padding:9px 10px;border:1px solid var(--contorno);border-radius:8px}
+.btn{background:var(--tinta);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-weight:800;cursor:pointer;width:100%}
+.aviso-form{font-size:12px;font-weight:700;padding:9px 12px;border-radius:8px;margin-top:12px;display:none;background:#FDEDEC;color:#C0392B}
+
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+header h1{font-size:20px}
+header button{background:none;border:1px solid var(--contorno);border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer;color:var(--tinta)}
+
+.grade-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px}
+.card{background:#fff;border:1px solid var(--contorno);border-radius:12px;padding:14px}
+.card b{display:block;font-family:'Baloo 2';font-size:24px}
+.card span{font-size:11px;color:#7F8C8D;font-weight:800;text-transform:uppercase;letter-spacing:.3px}
+
+.painel{background:#fff;border:1px solid var(--contorno);border-radius:12px;padding:16px;margin-bottom:16px}
+.painel h2{font-size:15px;margin-bottom:10px}
+.item-licao{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #F4F6F7;font-size:13px}
+.item-licao:last-child{border-bottom:none}
+.item-licao .emoji{font-size:20px}
+.item-licao small{display:block;color:#7F8C8D;font-weight:700}
+
+.item-pergunta{border-bottom:1px solid #F4F6F7;padding:9px 0;font-size:13px}
+.item-pergunta:last-child{border-bottom:none}
+.item-pergunta .taxa{font-weight:900;white-space:nowrap}
+.vazio{font-size:13px;color:#7F8C8D;font-weight:700;text-align:center;padding:14px 0}
+</style>
+</head>
+<body>
+
+<div id="tela-login">
+  <div class="cartao">
+    <h1>🐾 Bichoteca</h1>
+    <p class="sub">Painel do responsável</p>
+    <p style="font-size:13px;color:#566573;margin:0 0 14px">Entre com o mesmo usuário e senha que a criança usa pra jogar.</p>
+    <label>Usuário</label>
+    <input type="text" id="login-apelido" autocomplete="username">
+    <label>Senha</label>
+    <input type="password" id="login-senha" autocomplete="current-password">
+    <div id="login-aviso" class="aviso-form"></div>
+    <button class="btn" id="btn-login" style="margin-top:16px">Entrar</button>
+  </div>
+</div>
+
+<main id="painel" class="oculto">
+  <header>
+    <h1 id="titulo-apelido">🐾 Bichoteca</h1>
+    <button id="btn-sair">Sair</button>
+  </header>
+
+  <div class="grade-cards">
+    <div class="card"><b id="v-nivel">–</b><span>Nível</span></div>
+    <div class="card"><b id="v-moedas">–</b><span>Moedas</span></div>
+    <div class="card"><b id="v-xp">–</b><span>XP</span></div>
+    <div class="card"><b id="v-streak">–</b><span>Sequência atual</span></div>
+  </div>
+
+  <div class="painel">
+    <h2>Lições concluídas</h2>
+    <div id="lista-licoes"></div>
+  </div>
+
+  <div class="painel">
+    <h2>Onde tem mais dificuldade</h2>
+    <p style="font-size:12px;color:#7F8C8D;margin:0 0 8px">Perguntas com menor taxa de acerto, considerando todas as tentativas.</p>
+    <div id="lista-desempenho"></div>
+  </div>
+
+  <p style="font-size:12px;color:#7F8C8D;text-align:center">🔒 Esse painel só mostra apelido, progresso e desempenho — nunca nome real, idade ou escola.</p>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+async function api(acao, {method='GET', corpo=null} = {}){
+  const r = await fetch(`api/estado.php?acao=${acao}`, {
+    method, headers: corpo ? {'Content-Type':'application/json'} : undefined,
+    body: corpo ? JSON.stringify(corpo) : undefined,
+  });
+  const dados = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+  if(!r.ok) throw new Error(dados.erro || 'Erro desconhecido.');
+  return dados;
+}
+
+$('#btn-login').onclick = async () => {
+  const apelido = $('#login-apelido').value.trim();
+  const senha = $('#login-senha').value;
+  const aviso = $('#login-aviso');
+  aviso.style.display = 'none';
+  try{
+    await api('entrar', {method:'POST', corpo:{apelido, senha}});
+    await carregarResumo();
+  }catch(e){ aviso.textContent = e.message; aviso.style.display = 'block'; }
+};
+$('#login-senha').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-login').click(); });
+$('#btn-sair').onclick = () => location.reload();
+
+async function carregarResumo(){
+  const d = await api('resumo_responsavel');
+  $('#tela-login').classList.add('oculto');
+  $('#painel').classList.remove('oculto');
+  $('#titulo-apelido').textContent = '🐾 ' + d.apelido;
+  $('#v-nivel').textContent = d.nivel;
+  $('#v-moedas').textContent = d.moedas;
+  $('#v-xp').textContent = d.xp;
+  $('#v-streak').textContent = d.streakAtual + 'd (melhor: ' + d.streakMelhor + 'd)';
+
+  $('#lista-licoes').innerHTML = d.licoesFeitas.length
+    ? d.licoesFeitas.map(l => `<div class="item-licao"><span class="emoji">${l.emoji}</span><div><b>${esc(l.titulo)}</b><small>${esc(l.mundo)}</small></div></div>`).join('')
+    : '<p class="vazio">Ainda não concluiu nenhuma lição.</p>';
+
+  $('#lista-desempenho').innerHTML = d.desempenho.length
+    ? d.desempenho.map(p => {
+        const cor = p.taxaAcerto >= 70 ? 'var(--mata)' : p.taxaAcerto >= 40 ? '#D4A017' : 'var(--erro)';
+        return `<div class="item-pergunta">
+          <div style="display:flex;justify-content:space-between;gap:10px">
+            <span>${esc(p.pergunta)}</span>
+            <span class="taxa" style="color:${cor}">${p.taxaAcerto}%</span>
+          </div>
+          <small style="color:#7F8C8D">${esc(p.licaoTitulo)} · ${p.acertos}/${p.tentativas} tentativa(s) certa(s)</small>
+        </div>`;
+      }).join('')
+    : '<p class="vazio">Ainda não respondeu perguntas suficientes pra aparecer aqui.</p>';
+}
+
+// se já tiver sessão de jogador ativa (a criança logada no mesmo navegador), mostra direto
+carregarResumo().catch(() => {});
+</script>
+</body>
+</html>

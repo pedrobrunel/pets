@@ -191,6 +191,7 @@ body.tela-cheia #app{padding:0;max-width:none}
 .predio{
   position:absolute;background:none;border:none;cursor:pointer;padding:0;
   display:flex;align-items:flex-end;justify-content:center;
+  min-width:56px;min-height:56px; /* área de toque confortável mesmo quando o % da imagem dá um retângulo pequeno */
 }
 .predio:hover, .predio:focus-visible{
   background:radial-gradient(ellipse at 50% 65%, rgba(255,255,255,.4), transparent 70%);
@@ -994,19 +995,19 @@ const CENA_MUNDOS = {
   por: {left:'9%',  top:'22%', width:'12%', height:'25%'},
   mat: {left:'28%', top:'13%', width:'13%', height:'30%'},
   bio: {left:'40%', top:'20%', width:'10%', height:'25%'},
+  fis: {left:'50%', top:'15%', width:'10%', height:'28%'},
   his: {left:'67%', top:'15%', width:'12%', height:'28%'},
   geo: {left:'85%', top:'15%', width:'13%', height:'28%'},
+  art: {left:'55%', top:'45%', width:'11%', height:'28%'},
 };
 /* prédios que já existem na ilha mas cuja matéria ainda não virou mundo no
    painel — ficam clicáveis, só avisam que tá vindo por aí */
 const CENA_EM_BREVE = [
   {nome:'Literatura',      left:'20%', top:'15%', width:'10%', height:'28%'},
-  {nome:'Física',          left:'50%', top:'15%', width:'10%', height:'28%'},
   {nome:'Química',         left:'59%', top:'13%', width:'9%',  height:'28%'},
   {nome:'Filosofia',       left:'20%', top:'48%', width:'11%', height:'25%'},
   {nome:'Sociologia',      left:'30%', top:'46%', width:'11%', height:'27%'},
   {nome:'Língua Inglesa',  left:'43%', top:'42%', width:'12%', height:'32%'},
-  {nome:'Arte',            left:'55%', top:'45%', width:'11%', height:'28%'},
   {nome:'Educação Física', left:'65%', top:'48%', width:'18%', height:'25%'},
 ];
 // arrasta com o mouse pra rolar a cena (toque já rola nativo); um clique-arrastado

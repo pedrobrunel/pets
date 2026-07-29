@@ -32,6 +32,7 @@ Para publicar: joga tudo dentro de `public_html/` na hospedagem compartilhada e 
 index.html            home pública — objetivos do projeto e CTA de entrar/cadastrar
 app.html              o jogo em si — onboarding, mapa de mundos, minigames, loja, mural, perfil
 admin.html            painel do Hostmaster — upload de conteúdo, jogadores, métricas, backup
+responsavel.html       painel do responsável/professor — entra com o login do aluno, vê progresso e onde errou
 manifest.json         identidade do PWA (nome, ícones, cor, tela cheia; start_url aponta pro app.html)
 sw.js                 service worker: funciona offline depois da 1ª visita
 icone-*.png           ícones do app instalado
@@ -61,9 +62,10 @@ api/
 - Home pública explicando o projeto pros responsáveis, com CTA de entrar/cadastrar
 - Instalável como aplicativo no Android e no iOS
 - Salvar progresso (opcional): com usuário + senha, o jogo sincroniza com o banco — sem conta, continua 100% local
-- **Painel do Hostmaster (`admin.html`)**: quem hospeda o site cria mundos, sobe lições em JSON (com validação e pré-visualização antes de salvar), publica ou deixa em rascunho, vê jogadores (busca, reset de senha, exclusão de conta), métricas gerais e exporta/importa backup completo do conteúdo. É o painel de quem administra o site — não é o painel do professor.
+- **Painel do Hostmaster (`admin.html`)**: quem hospeda o site cria mundos, sobe lições em JSON (com validação e pré-visualização antes de salvar), publica ou deixa em rascunho, vê jogadores (busca, reset de senha, exclusão de conta), métricas gerais, desempenho por pergunta de cada lição (taxa de acerto, pior primeiro) e exporta/importa backup completo do conteúdo. É o painel de quem administra o site — não é o painel do professor.
+- **Painel do responsável (`responsavel.html`)**: entra com o mesmo usuário e senha que a criança já usa pra jogar (não é uma conta nova) e mostra nível, moedas, sequência de dias, lições concluídas e em quais perguntas ela mais erra — sem expor nome real, idade ou escola.
 
-**Ainda não funciona:** perfil público do aluno e painel do responsável/professor — veja "Próximos passos".
+**Ainda não funciona:** perfil público do aluno pra compartilhar (o botão "Compartilhar" do perfil ainda é só demonstração) — veja "Próximos passos".
 
 ---
 
@@ -154,8 +156,8 @@ Com o banco pronto:
 
 ## Próximos passos
 
-1. **Painel do responsável/professor** — diferente do painel do Hostmaster (`admin.html`, de quem hospeda o site): esse é pra quem acompanha um aluno específico — quem estudou o quê, quanto tempo, onde errou. É isso que faz escola pagar
-2. **Mais conteúdo, mais rápido** — agora que subir lição é upload de JSON validado pelo painel (sem editar código nem fazer deploy), o gargalo passa a ser só escrever o conteúdo. Ancorar nas habilidades da BNCC (`EF08HI01` e afins) no `titulo`/`serie` de cada lição organiza o currículo e vira argumento de venda
+1. **Mais conteúdo, mais rápido** — agora que subir lição é upload de JSON validado pelo painel (sem editar código nem fazer deploy), o gargalo passa a ser só escrever o conteúdo. Ancorar nas habilidades da BNCC (`EF08HI01` e afins) no `titulo`/`serie` de cada lição organiza o currículo e vira argumento de venda
+2. **Login separado pro responsável** — hoje `responsavel.html` usa o mesmo usuário/senha do aluno (simples, sem conta nova); quando fizer sentido, dá pra evoluir pra um convite/código que o aluno gera, sem precisar dividir a senha do jogo
 3. **Lojas de aplicativo** — o mesmo código entra num invólucro (Capacitor ou Bubblewrap/TWA) e sobe na Play Store sem reescrever nada. Foi por isso que já saiu como PWA
 
 VPS e Node só quando o número de alunos justificar. Enquanto for protótipo e piloto, hospedagem compartilhada com PHP dá conta com folga.

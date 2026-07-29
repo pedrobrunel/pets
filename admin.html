@@ -225,6 +225,14 @@ pergunta     { p: "...", alts: [string,...], certa: índice numérico da alterna
       </form>
 
       <div class="painel"><table id="tabela-licoes"></table></div>
+      <div class="painel oculto" id="painel-desempenho">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <h3 style="font-size:15px" id="titulo-desempenho">Desempenho</h3>
+          <button class="btn linha branco" onclick="document.getElementById('painel-desempenho').classList.add('oculto')">Fechar</button>
+        </div>
+        <p style="font-size:12px;color:#7F8C8D;margin:0 0 10px">Taxa de acerto de cada pergunta, considerando todas as tentativas de todos os alunos. Pior primeiro.</p>
+        <div id="corpo-desempenho"></div>
+      </div>
     </section>
 
     <section id="aba-jogadores" class="oculto">
@@ -420,12 +428,32 @@ async function carregarLicoes(){
         <td><span class="selo ${l.publicado?'on':'off'}">${l.publicado?'publicada':'rascunho'}</span></td>
         <td class="acoes">
           <button class="btn linha branco" onclick="editarLicao('${l.id}')">Editar</button>
+          <button class="btn linha branco" onclick="verDesempenho('${l.id}')">Desempenho</button>
           <button class="btn linha branco" onclick="baixarLicao('${l.id}')">Baixar JSON</button>
           <button class="btn linha erro" onclick="excluirLicao('${l.id}','${esc(l.titulo)}')">Excluir</button>
         </td>
       </tr>`;
     }).join('') || '<tr><td colspan="6">Nenhuma lição ainda.</td></tr>'}`;
 }
+window.verDesempenho = async (id) => {
+  const d = await api('licao_desempenho', {query: `&id=${id}`}).catch(e => { alert(e.message); return null; });
+  if(!d) return;
+  $('#titulo-desempenho').textContent = 'Desempenho — ' + d.titulo;
+  $('#corpo-desempenho').innerHTML = d.perguntas.map(p => {
+    const semDados = p.taxaAcerto === null;
+    const cor = semDados ? '#BDC3C7' : p.taxaAcerto >= 70 ? 'var(--mata)' : p.taxaAcerto >= 40 ? 'var(--moeda)' : 'var(--erro)';
+    return `<div class="bloco-preview">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+        <b>${esc(p.pergunta)}</b>
+        <span style="white-space:nowrap;font-weight:900;color:${cor}">${semDados ? 'sem tentativas' : p.taxaAcerto + '% acerto'}</span>
+      </div>
+      ${semDados ? '' : `<p style="font-size:12px;color:#7F8C8D;margin:4px 0 0">${p.acertos} de ${p.tentativas} tentativa(s) certa(s)</p>`}
+      ${p.alts.map((a,i) => `<span class="op ${i===p.certa?'certa':''}">${esc(a)}</span>`).join('')}
+    </div>`;
+  }).join('');
+  $('#painel-desempenho').classList.remove('oculto');
+  $('#painel-desempenho').scrollIntoView({behavior:'smooth'});
+};
 
 const EXEMPLO_BLOCOS = [
   {tipo:'texto', paragrafos:['Explique o assunto aqui. Use [[termo|uma explicação que aparece num popup]] pra destacar uma palavra-chave.']},
