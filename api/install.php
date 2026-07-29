@@ -65,6 +65,20 @@ try {
     INDEX (mundo_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
+  // um registro por pergunta respondida (todas as tentativas, não só a última) —
+  // alimenta as métricas de desempenho do painel e o resumo do responsável
+  $pdo->exec('CREATE TABLE IF NOT EXISTS respostas (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    jogador_id      INT NOT NULL,
+    licao_id        VARCHAR(24) NOT NULL,
+    indice_pergunta INT NOT NULL,
+    resposta        INT NOT NULL,
+    acertou         TINYINT(1) NOT NULL,
+    criado_em       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (jogador_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    INDEX (licao_id), INDEX (jogador_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
   // conta do painel — roda de novo pra trocar a senha (edite config.php e recarregue esta página)
   $st = $pdo->prepare('INSERT INTO admins (usuario, senha_hash) VALUES (?, ?)
     ON DUPLICATE KEY UPDATE senha_hash = VALUES(senha_hash)');

@@ -9,6 +9,7 @@
      GET  ?acao=carregar                               -> devolve o estado salvo
      POST ?acao=salvar          {...estado}            -> grava o estado
      POST ?acao=completar_licao {licaoId, respostas}   -> confere gabarito e credita moedas/XP
+     GET  ?acao=resumo_responsavel                     -> painel de acompanhamento (mesmo login do jogador)
    ========================================================= */
 
 declare(strict_types=1);
@@ -87,9 +88,15 @@ try {
     if ($gabaritoJson === false) responder(['erro' => 'Lição sem gabarito no servidor.'], 422);
     $gabarito = json_decode((string)$gabaritoJson, true) ?? [];
 
+    // grava cada resposta (todas as tentativas, não só a última) — é o que alimenta
+    // "onde a criança mais erra" no painel do responsável e no painel do Hostmaster
+    $insResposta = bd()->prepare('INSERT INTO respostas (jogador_id, licao_id, indice_pergunta, resposta, acertou) VALUES (?, ?, ?, ?, ?)');
     $acertos = 0;
     foreach ($gabarito as $i => $certa) {
-      if ((int)($respostas[$i] ?? -1) === $certa) $acertos++;
+      $respondida = (int)($respostas[$i] ?? -1);
+      $acertou = $respondida === $certa;
+      if ($acertou) $acertos++;
+      $insResposta->execute([$id, $licaoId, $i, $respondida, $acertou ? 1 : 0]);
     }
     $total = count($gabarito);
     $meta = (int)ceil($total * 2 / 3);
@@ -111,6 +118,65 @@ try {
     responder([
       'ok' => true, 'acertos' => $acertos, 'total' => $total,
       'moedas' => $moedas, 'xp' => $xp, 'licoesFeitas' => $estado['licoesFeitas'],
+    ]);
+  }
+
+  if ($acao === 'resumo_responsavel') {
+    $st = bd()->prepare('SELECT apelido, estado, criado_em, atualizado_em FROM jogadores WHERE id = ?');
+    $st->execute([$id]);
+    $jogador = $st->fetch(PDO::FETCH_ASSOC);
+    $estado = json_decode((string)$jogador['estado'], true) ?: [];
+    $licoesFeitas = $estado['licoesFeitas'] ?? [];
+
+    $licoesInfo = [];
+    if ($licoesFeitas) {
+      $marcas = implode(',', array_fill(0, count($licoesFeitas), '?'));
+      $st = bd()->prepare("SELECT l.id, l.titulo, l.emoji, m.nome AS mundo FROM licoes l
+        JOIN mundos m ON m.id = l.mundo_id WHERE l.id IN ($marcas)");
+      $st->execute($licoesFeitas);
+      $licoesInfo = $st->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // desempenho por pergunta: taxa de acerto de cada pergunta que essa criança já
+    // respondeu, cruzado com o texto da pergunta pra dar contexto (pior primeiro)
+    $st = bd()->prepare('SELECT licao_id, indice_pergunta, COUNT(*) tentativas, SUM(acertou) acertos
+      FROM respostas WHERE jogador_id = ? GROUP BY licao_id, indice_pergunta');
+    $st->execute([$id]);
+    $porPergunta = $st->fetchAll(PDO::FETCH_ASSOC);
+    $blocosPorLicao = [];
+    $desempenho = [];
+    foreach ($porPergunta as $linha) {
+      $licaoId = $linha['licao_id'];
+      if (!isset($blocosPorLicao[$licaoId])) {
+        $stB = bd()->prepare('SELECT titulo, blocos FROM licoes WHERE id = ?');
+        $stB->execute([$licaoId]);
+        $l = $stB->fetch(PDO::FETCH_ASSOC);
+        $blocosPorLicao[$licaoId] = $l ? [
+          'titulo' => $l['titulo'],
+          'perguntas' => array_values(array_filter(json_decode($l['blocos'], true) ?: [], fn($b) => $b['tipo'] === 'pergunta')),
+        ] : null;
+      }
+      $info = $blocosPorLicao[$licaoId];
+      $pergunta = $info['perguntas'][(int)$linha['indice_pergunta']]['p'] ?? null;
+      if (!$info || !$pergunta) continue; // lição/pergunta editada ou apagada depois da tentativa
+      $tentativas = (int)$linha['tentativas'];
+      $acertos = (int)$linha['acertos'];
+      $desempenho[] = [
+        'licaoTitulo' => $info['titulo'], 'pergunta' => $pergunta,
+        'tentativas' => $tentativas, 'acertos' => $acertos,
+        'taxaAcerto' => round($acertos / $tentativas * 100),
+      ];
+    }
+    usort($desempenho, fn($a, $b) => $a['taxaAcerto'] <=> $b['taxaAcerto']);
+
+    responder([
+      'apelido' => $jogador['apelido'],
+      'nivel' => intdiv((int)($estado['xp'] ?? 0), 120) + 1,
+      'moedas' => (int)($estado['moedas'] ?? 0), 'xp' => (int)($estado['xp'] ?? 0),
+      'streakAtual' => (int)($estado['streak']['atual'] ?? 0), 'streakMelhor' => (int)($estado['streak']['melhor'] ?? 0),
+      'criadoEm' => $jogador['criado_em'], 'atualizadoEm' => $jogador['atualizado_em'],
+      'licoesFeitas' => $licoesInfo,
+      'desempenho' => array_slice($desempenho, 0, 10),
     ]);
   }
 
