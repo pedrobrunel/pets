@@ -576,12 +576,22 @@ function pintarCampoDestino(){
     /* a primeira opção é um placeholder vazio DE PROPÓSITO: sem ele o <select> assume
        sozinho o primeiro item da lista, e um ponto acabava salvo apontando pro mapa
        errado sem ninguém ter escolhido nada. Vazio = o servidor recusa e diz o motivo. */
-    wrap.innerHTML = `<label>qual</label>
-      <select id="ponto-destino">
-        <option value="">— escolha —</option>
-        ${lista.map(o => `<option value="${esc(o.id)}" ${o.id===p.destino?'selected':''}>${esc(o.rotulo)}</option>`).join('')}
-      </select>
-      ${lista.length ? '' : '<p class="dica-editor">Nada cadastrado desse tipo ainda.</p>'}`;
+    // sem nada pra escolher, o campo era um beco sem saída com um aviso cinza minúsculo:
+    // agora diz em vermelho o que falta fazer antes (criar o outro mapa, o mundo, a lição)
+    const comoResolver = {
+      cena: 'Você só tem este mapa. Crie o mapa de destino primeiro, em <b>+ Novo mapa</b> — depois volte aqui pra ligar os dois.',
+      mundo: 'Nenhum mundo cadastrado. Crie um na aba <b>Mundos</b> primeiro.',
+      licao: 'Nenhuma lição cadastrada. Crie uma na aba <b>Lições</b> primeiro.',
+    };
+    wrap.innerHTML = lista.length
+      ? `<label>qual</label>
+         <select id="ponto-destino">
+           <option value="">— escolha —</option>
+           ${lista.map(o => `<option value="${esc(o.id)}" ${o.id===p.destino?'selected':''}>${esc(o.rotulo)}</option>`).join('')}
+         </select>`
+      : `<label>qual</label>
+         <select id="ponto-destino"><option value="">— nada disponível —</option></select>
+         <div class="aviso-form erro" style="display:block">${comoResolver[tipo] || 'Nada cadastrado desse tipo ainda.'}</div>`;
   }
   $('#ponto-destino').oninput = salvarCampoPonto;
   $('#ponto-destino').onchange = salvarCampoPonto;
