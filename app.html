@@ -173,24 +173,21 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 .barra .cheio{display:block;height:100%;border-radius:999px 0 0 999px;transition:width .5s cubic-bezier(.3,1.4,.5,1)}
 .barra .valor{width:38px;text-align:right;font-size:13px;font-weight:900}
 
-/* ---------- ilha do saber (cena com prédios clicáveis) ---------- */
-.cena-mundos{position:relative;margin:4px 0 16px}
+/* ---------- ilha do saber (cena imersiva em tela cheia, com prédios clicáveis) ---------- */
+body.tela-cheia #topo, body.tela-cheia #rodape{display:none}
+body.tela-cheia{overflow:hidden}
+body.tela-cheia #app{padding:0;max-width:none}
+#tela-trilhas.ativa{position:fixed;inset:0;z-index:40;background:#8ecfe8;animation:none}
 .cena-scroll{
-  overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
-  border:var(--borda) solid var(--contorno);border-bottom-width:8px;border-radius:var(--r);
-  background:#8ecfe8;
+  width:100%;height:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+  cursor:grab;
+  scrollbar-width:none;    /* firefox: sem barra visível, mas continua rolável */
+  -ms-overflow-style:none; /* edge antigo */
 }
-.cena-quadro{position:relative;display:inline-block;vertical-align:top;line-height:0}
-.cena-img{display:block;height:230px;width:auto;max-width:none}
-.seta-cena{
-  position:absolute;top:50%;transform:translateY(-50%);z-index:2;
-  width:38px;height:38px;border-radius:50%;display:grid;place-items:center;
-  background:#fff;border:3px solid var(--contorno);font-size:20px;font-weight:900;line-height:1;
-  cursor:pointer;box-shadow:0 3px 0 var(--contorno);color:var(--tinta);padding:0;
-}
-.seta-cena.esquerda{left:-6px}
-.seta-cena.direita{right:-6px}
-.seta-cena:active{transform:translateY(-50%) translateY(3px);box-shadow:none}
+.cena-scroll::-webkit-scrollbar{display:none} /* chrome/safari: idem */
+.cena-scroll.arrastando{cursor:grabbing;scroll-snap-type:none}
+.cena-quadro{position:relative;height:100%;display:inline-block;vertical-align:top;line-height:0}
+.cena-img{display:block;height:100%;width:auto;max-width:none;-webkit-user-drag:none;user-select:none;pointer-events:none}
 .predio{
   position:absolute;background:none;border:none;cursor:pointer;padding:0;
   display:flex;align-items:flex-end;justify-content:center;
@@ -205,6 +202,13 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
   padding:2px 8px;font-size:11px;font-weight:900;box-shadow:0 2px 0 var(--contorno);white-space:nowrap;
 }
 .predio-selo.completo{background:var(--moeda)}
+.btn-voltar-cena{
+  position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:41;
+  display:flex;align-items:center;gap:6px;background:rgba(44,62,80,.55);color:#fff;
+  border:none;border-radius:999px;padding:8px 14px 8px 10px;font-size:13px;font-weight:800;
+  cursor:pointer;backdrop-filter:blur(2px);
+}
+.btn-voltar-cena:active{background:rgba(44,62,80,.75)}
 
 .mundo-emblema{
   position:relative;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:28px;
@@ -684,6 +688,8 @@ function ir(tela, dados){
   const semScroll = tela === 'arcade';
   document.body.classList.toggle('sem-scroll', semScroll);
   if(semScroll) ajustarAlturaTela(secao);
+  // ilha do saber é imersiva: ocupa a tela toda, sem topo/rodapé — só o botão de voltar
+  document.body.classList.toggle('tela-cheia', tela === 'trilhas');
 }
 function ajustarAlturaTela(secao){
   const topoEl = document.querySelector('.topo');
@@ -978,7 +984,7 @@ const progressoMundo = t => {
   const feitas = t.licoes.filter(l=>estado.licoesFeitas.includes(l.id)).length;
   return {feitas, total: t.licoes.length, completo: feitas === t.licoes.length};
 };
-/* posição (% da imagem assets/mapa-mundos.png) do prédio de cada mundo que já
+/* posição (% da imagem assets/mapa-mundosv2.webp) do prédio de cada mundo que já
    existe hoje — estimada visualmente, então pode precisar de ajuste fino */
 const CENA_MUNDOS = {
   por: {left:'9%',  top:'22%', width:'12%', height:'25%'},
@@ -999,45 +1005,51 @@ const CENA_EM_BREVE = [
   {nome:'Arte',            left:'55%', top:'45%', width:'11%', height:'28%'},
   {nome:'Educação Física', left:'65%', top:'48%', width:'18%', height:'25%'},
 ];
-function rolarCena(dir){
-  const el = $('#cena-scroll');
-  el.scrollBy({left: dir * el.clientWidth * 0.8, behavior:'smooth'});
+// arrasta com o mouse pra rolar a cena (toque já rola nativo); um clique-arrastado
+// não deve "vazar" como clique num prédio, por isso o stopPropagation no capture
+function ativarArrastoCena(el){
+  let arrastando = false, moveu = false, inicioX = 0, inicioScroll = 0;
+  el.addEventListener('pointerdown', e => {
+    if(e.pointerType === 'touch') return; // touch já rola nativo, não precisa emular
+    arrastando = true; moveu = false;
+    inicioX = e.clientX; inicioScroll = el.scrollLeft;
+    el.classList.add('arrastando');
+    el.setPointerCapture(e.pointerId);
+  });
+  el.addEventListener('pointermove', e => {
+    if(!arrastando) return;
+    const dx = e.clientX - inicioX;
+    if(Math.abs(dx) > 4) moveu = true;
+    el.scrollLeft = inicioScroll - dx;
+  });
+  const soltar = () => { arrastando = false; el.classList.remove('arrastando'); };
+  el.addEventListener('pointerup', soltar);
+  el.addEventListener('pointercancel', soltar);
+  el.addEventListener('click', e => { if(moveu){ e.stopPropagation(); moveu = false; } }, true);
 }
 RENDER.trilhas = () => {
-  const comPredio = TRILHAS.filter(t => CENA_MUNDOS[t.id]);
-  const semPredio = TRILHAS.filter(t => !CENA_MUNDOS[t.id]);
   $('#tela-trilhas').innerHTML = `
-    <div class="titulo-secao"><h2>Ilha do saber</h2><small>toque num prédio pra entrar</small></div>
-    <div class="cena-mundos">
-      <button class="seta-cena esquerda" aria-label="Rolar pra esquerda" onclick="rolarCena(-1)">‹</button>
-      <div class="cena-scroll" id="cena-scroll">
-        <div class="cena-quadro">
-          <picture>
-            <source srcset="assets/mapa-mundos.webp" type="image/webp">
-            <img class="cena-img" src="assets/mapa-mundos.png" alt="Ilha do saber, com um prédio pra cada matéria">
-          </picture>
-          ${comPredio.map(t => {
-            const pos = CENA_MUNDOS[t.id];
-            const {feitas, total, completo} = progressoMundo(t);
-            return `<button class="predio" style="left:${pos.left};top:${pos.top};width:${pos.width};height:${pos.height}"
-              onclick="ir('mundo','${t.id}')" aria-label="${esc(t.nome)}">
-              <span class="predio-selo ${completo?'completo':''}">${completo?'👑':`${feitas}/${total}`}</span>
-            </button>`;
-          }).join('')}
-          ${CENA_EM_BREVE.map(p => `<button class="predio em-breve"
-            style="left:${p.left};top:${p.top};width:${p.width};height:${p.height}"
-            onclick="brinde('${p.nome} ainda não tem lições — em breve! 🚧')" aria-label="${p.nome} (em breve)"></button>`).join('')}
-        </div>
+    <button class="btn-voltar-cena" onclick="ir('casa')" aria-label="Voltar pro meu bicho">🐾 Meu bicho</button>
+    <div class="cena-scroll" id="cena-scroll">
+      <div class="cena-quadro">
+        <picture>
+          <source srcset="assets/mapa-mundosv2.webp" type="image/webp">
+          <img class="cena-img" src="assets/mapa-mundosv2.png" alt="Ilha do saber, com um prédio pra cada matéria">
+        </picture>
+        ${TRILHAS.filter(t => CENA_MUNDOS[t.id]).map(t => {
+          const pos = CENA_MUNDOS[t.id];
+          const {feitas, total, completo} = progressoMundo(t);
+          return `<button class="predio" style="left:${pos.left};top:${pos.top};width:${pos.width};height:${pos.height}"
+            onclick="ir('mundo','${t.id}')" aria-label="${esc(t.nome)}">
+            <span class="predio-selo ${completo?'completo':''}">${completo?'👑':`${feitas}/${total}`}</span>
+          </button>`;
+        }).join('')}
+        ${CENA_EM_BREVE.map(p => `<button class="predio em-breve"
+          style="left:${p.left};top:${p.top};width:${p.width};height:${p.height}"
+          onclick="brinde('${p.nome} ainda não tem lições — em breve! 🚧')" aria-label="${p.nome} (em breve)"></button>`).join('')}
       </div>
-      <button class="seta-cena direita" aria-label="Rolar pra direita" onclick="rolarCena(1)">›</button>
-    </div>
-    ${semPredio.length ? `
-      <div class="titulo-secao"><h2 style="font-size:19px">Outros mundos</h2></div>
-      <div class="mundos-atalho">
-        ${semPredio.map(t => `<button class="mundo-atalho" style="--tc:${t.cor}" onclick="ir('mundo','${t.id}')">
-          <span>${t.emoji}</span>${esc(t.nome)}</button>`).join('')}
-      </div>` : ''}
-    <p class="aviso">Cada mundo tem suas próprias lições — leitura, atividades e um quizzinho no final. Errou? Sem drama: dá pra refazer quantas vezes quiser.</p>`;
+    </div>`;
+  ativarArrastoCena($('#cena-scroll'));
 };
 
 /* ---------- 6b. TELA: MUNDO (uma trilha por dentro, com identidade própria) ---------- */
