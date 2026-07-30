@@ -222,6 +222,61 @@ body.tela-cheia #app{padding:0;max-width:none}
 .btn.amarelo{--bg:var(--moeda);--edge:var(--moeda-rim);color:var(--tinta);text-shadow:none}
 .btn-voltar-cena{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:41}
 
+/* ---------- viagem entre mapas ----------
+   Duas cortinas fecham (de cima e de baixo), o bicho aparece "viajando" com o nome do
+   destino, e aí abrem revelando o mapa novo. Fica acima da cena (z 40) e do botão
+   Voltar (z 41). Como a abertura só acontece depois que a imagem carregou, isso também
+   faz o papel de tela de carregamento: nunca se vê um mapa pela metade. */
+#transicao-cena{position:fixed;inset:0;z-index:60;pointer-events:none;visibility:hidden}
+#transicao-cena.ativa{visibility:visible;pointer-events:all}
+#transicao-cena .cortina{
+  position:absolute;left:-2%;width:104%;height:52%;background:var(--tinta);
+  /* curva pouco arrastada de propósito: com um ease-in-out simétrico a cortina ainda
+     estava a 100px de fechar no fim da duração, e o momento "fechado" mal aparecia */
+  transform:translateY(var(--fora));transition:transform .38s cubic-bezier(.32,0,.24,1);
+}
+/* as duas metades têm 52% e se sobrepõem 4% no meio: sem borda na emenda, porque a
+   linha caía exatamente em cima do bicho e parecia defeito */
+#transicao-cena .cortina-cima{top:0;--fora:-101%}
+#transicao-cena .cortina-baixo{bottom:0;--fora:101%}
+#transicao-cena.fechada .cortina{transform:translateY(0)}
+#transicao-cena .viajante{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;opacity:0;transform:translateY(16px) scale(.9);
+  transition:opacity .26s ease, transform .34s cubic-bezier(.34,1.56,.64,1);
+}
+/* cartão adesivo, igual ao resto do jogo — cobre a emenda das cortinas */
+#transicao-cena .viajante .cartao-viagem{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  background:#35485C;border:4px solid var(--jabuti);border-bottom-width:9px;border-radius:22px;
+  padding:18px 30px 16px;
+}
+#transicao-cena.fechada .viajante{opacity:1;transform:none;transition-delay:.2s}
+#transicao-cena .viajante svg{width:96px;height:auto;animation:balanca-viagem 1s ease-in-out infinite}
+#transicao-cena .viajante .indo{
+  font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1.5px;color:var(--moeda);
+}
+#transicao-cena .viajante .destino{
+  font-family:'Baloo 2',cursive;font-size:26px;color:#fff;text-align:center;padding:0 24px;line-height:1.15;
+}
+#transicao-cena .viajante .pontinhos{display:flex;gap:6px;margin-top:2px}
+#transicao-cena .viajante .pontinhos i{
+  width:8px;height:8px;border-radius:50%;background:var(--moeda);animation:pula-ponto 1s ease-in-out infinite;
+}
+#transicao-cena .viajante .pontinhos i:nth-child(2){animation-delay:.15s}
+#transicao-cena .viajante .pontinhos i:nth-child(3){animation-delay:.3s}
+@keyframes balanca-viagem{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-9px) rotate(3deg)}}
+@keyframes pula-ponto{0%,100%{transform:translateY(0);opacity:.45}50%{transform:translateY(-6px);opacity:1}}
+/* o mapa novo entra com um leve zoom-out, reforçando a sensação de "cheguei" */
+#tela-trilhas.chegando .cena-img{animation:chega-mapa .7s ease-out}
+@keyframes chega-mapa{from{transform:scale(1.06)}to{transform:none}}
+/* quem pediu menos animação no sistema recebe só um corte rápido */
+@media (prefers-reduced-motion: reduce){
+  #transicao-cena .cortina{transition-duration:.12s}
+  #transicao-cena .viajante svg, #transicao-cena .viajante .pontinhos i{animation:none}
+  #tela-trilhas.chegando .cena-img{animation:none}
+}
+
 .mundo-emblema{
   position:relative;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:28px;
   background:var(--tc);border:3px solid var(--contorno);margin-bottom:2px;
@@ -515,6 +570,8 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
 
 <div id="brinde" role="status" aria-live="polite"></div>
 <div id="modal-fundo" class="modal-fundo" hidden onclick="if(event.target===this) fecharModal()"></div>
+<!-- cortina da viagem entre mapas: cobre a tela, espera a imagem nova carregar e abre -->
+<div id="transicao-cena" aria-hidden="true"></div>
 <script>
 /* =========================================================
    BICHOTECA — protótipo funcional (100% front-end)
@@ -1074,10 +1131,15 @@ function ativarArrastoCena(el){
   el.addEventListener('pointercancel', soltar);
   el.addEventListener('click', e => { if(moveu){ e.stopPropagation(); moveu = false; } }, true);
 }
+let viajando = false; // true enquanto a cortina da troca de mapa está no ar
 /* toca num ponto do mapa: resolve o destino conforme o catálogo de links.
    Os pontos são acessados por índice (nunca interpolando texto do painel dentro de um
    onclick) — rótulo com apóstrofo quebraria o HTML, e o texto vem de fora do código. */
 function abrirPonto(i){
+  // durante a viagem a cortina já cobre a tela, mas um toque duplo rápido consegue
+  // escapar antes dela aparecer — sem esta trava, cada toque empilhava um passo no
+  // caminho e o "Voltar" precisava ser apertado várias vezes pra sair
+  if(viajando) return;
   const p = (cenaAtual?.pontos || [])[i];
   if(!p) return;
   if(p.tipo === 'mundo') return ir('mundo', p.destino);
@@ -1093,13 +1155,78 @@ function abrirPonto(i){
     const jaNoCaminho = pilhaCenas.indexOf(proxima.id);
     if(jaNoCaminho >= 0) pilhaCenas = pilhaCenas.slice(0, jaNoCaminho);
     else pilhaCenas.push(cenaAtual.id);
-    return ir('trilhas', proxima.id);
+    return viajarPraCena(proxima);
   }
 }
 // "Voltar" desfaz um passo do caminho entre mapas; na cena inicial, sai pra casa
 function voltarDaCena(){
+  if(viajando) return; // idem: sem isso o passo era removido da pilha e a viagem recusada
   const anterior = pilhaCenas.pop();
-  anterior ? ir('trilhas', anterior) : ir('casa');
+  if(!anterior) return ir('casa');
+  const cena = acharCena(anterior);
+  cena ? viajarPraCena(cena) : ir('casa');
+}
+
+/* ---------- transição de viagem entre mapas ----------
+   Cortina fecha → troca a cena por baixo → espera a imagem do mapa novo carregar
+   (com teto de tempo, pra imagem pesada ou fora do ar não travar o jogo) → cortina abre. */
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+// quem pede menos movimento no sistema não deve esperar MAIS: o CSS encurtava a animação
+// mas o JS seguia com os tempos cheios, e a viagem ficava até mais demorada. Aqui os
+// tempos vêm juntos, então o modo reduzido é um corte rápido de verdade.
+const tempoViagem = () => matchMedia('(prefers-reduced-motion: reduce)').matches
+  ? {fecha: 140, segura: 120, abre: 140, tetoImagem: 1200}
+  : {fecha: 480, segura: 520, abre: 420, tetoImagem: 1800};
+async function viajarPraCena(cena){
+  if(viajando) return; // toque duplo não deve disparar duas viagens
+  viajando = true;
+  const t = tempoViagem();
+  const ov = $('#transicao-cena');
+  ov.innerHTML = `<div class="cortina cortina-cima"></div><div class="cortina cortina-baixo"></div>
+    <div class="viajante">
+      <div class="cartao-viagem">
+        ${svgBicho(estado.tipo, {equipado: estado.equipado})}
+        <span class="indo">Indo para</span>
+        <span class="destino">${esc(cena.nome)}</span>
+        <span class="pontinhos"><i></i><i></i><i></i></span>
+      </div>
+    </div>`;
+  ov.classList.add('ativa');
+  await esperar(20);            // deixa o navegador aplicar o estado inicial antes de animar
+  ov.classList.add('fechada');
+  // 100ms de folga além da duração da transição (.38s): no fim exato dela ainda sobrava
+  // uma fresta de ~25px na emenda, e a troca do mapa podia aparecer por um quadro
+  await esperar(t.fecha);
+
+  const inicioFechada = performance.now();
+  ir('trilhas', cena.id);
+  await esperarImagemDaCena(t.tetoImagem);
+  /* segura a tela fechada por um tempo mínimo: com imagem em cache a espera acabava em
+     ~100ms e o "Indo para <mapa>" piscava sem dar tempo de ler. Se a imagem demorar
+     mais que isso, o tempo dela manda e ninguém espera duas vezes. */
+  const fechadaPor = performance.now() - inicioFechada;
+  if(fechadaPor < t.segura) await esperar(t.segura - fechadaPor);
+
+  const secao = $('#tela-trilhas');
+  secao.classList.add('chegando');
+  ov.classList.remove('fechada');
+  await esperar(t.abre);        // cortina abrindo
+  ov.classList.remove('ativa');
+  ov.innerHTML = '';
+  secao.classList.remove('chegando');
+  viajando = false;
+}
+// resolve quando a imagem do mapa terminar de carregar, ou no teto de tempo — o que vier antes
+function esperarImagemDaCena(tetoMs){
+  const img = document.querySelector('#tela-trilhas .cena-img');
+  if(!img || img.complete) return esperar(220);
+  return Promise.race([
+    new Promise(r => {
+      img.addEventListener('load', r, {once:true});
+      img.addEventListener('error', r, {once:true}); // imagem quebrada: segue e mostra o que der
+    }),
+    esperar(tetoMs),
+  ]);
 }
 RENDER.trilhas = (idCena) => {
   // sem argumento (toque na aba Trilhas) = volta pro começo do mapa e esquece o caminho
