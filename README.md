@@ -143,7 +143,9 @@ Duas proteções contra link quebrado, em camadas:
 
 Uma cena é marcada como **inicial** — é a que abre quando o aluno toca em *Trilhas*. Só uma pode ser inicial por vez. O botão **Voltar** desfaz um passo do caminho percorrido entre mapas (ilha → porto → *Voltar* volta pra ilha); na cena inicial, ele sai pra casa.
 
-Trocar de mapa tem uma transição de viagem (`viajarPraCena` no `app.html`): duas cortinas fecham, o bicho do aluno aparece com o nome do destino, e abrem no mapa novo. Ela **espera a imagem do mapa terminar de carregar** antes de abrir — ou seja, também faz o papel de tela de carregamento, então nunca se vê um mapa pela metade. Tem teto de tempo pra imagem pesada não travar o jogo, e quem usa `prefers-reduced-motion` no sistema recebe um corte rápido em vez da animação.
+Trocar de mapa tem uma transição animada em três tempos (`viajarPraCena` no `app.html`): uma bolinha nasce **exatamente no ponto que o aluno tocou** e cresce até cobrir a tela (íris via `clip-path`), o bicho dele salta pra dentro de um anel girando com o nome do destino e os pontinhos entrando em cascata, e a íris fecha revelando o mapa novo. ~1,6s.
+
+A íris só fecha **depois que a imagem do mapa terminou de carregar** — ou seja, a transição também faz o papel de tela de carregamento, e nunca se vê um mapa pela metade. Tem teto de 1,8s pra imagem pesada não travar o jogo. Quem usa `prefers-reduced-motion` no sistema recebe um corte rápido (~0,5s) em vez da animação: os tempos de CSS e de JS saem do mesmo lugar (`tempoViagem`), senão o modo reduzido acaba ficando mais **lento** que o normal.
 
 > ⚠️ **A imagem que você sobe pelo painel fica só no servidor** (`assets/cenas/`), fora do Git — por isso `assets/cenas/*` está no `.gitignore`. Duas consequências: o `dangerous-clean-slate` do deploy tem que continuar desligado (agora por dois motivos, não só pelo `api/config.php`), e essa pasta precisa entrar no seu backup, porque o "Baixar backup" do painel exporta o *desenho* dos mapas (posições e destinos), não os bytes das imagens.
 
