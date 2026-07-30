@@ -222,58 +222,85 @@ body.tela-cheia #app{padding:0;max-width:none}
 .btn.amarelo{--bg:var(--moeda);--edge:var(--moeda-rim);color:var(--tinta);text-shadow:none}
 .btn-voltar-cena{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:41}
 
-/* ---------- viagem entre mapas ----------
-   Duas cortinas fecham (de cima e de baixo), o bicho aparece "viajando" com o nome do
-   destino, e aí abrem revelando o mapa novo. Fica acima da cena (z 40) e do botão
-   Voltar (z 41). Como a abertura só acontece depois que a imagem carregou, isso também
-   faz o papel de tela de carregamento: nunca se vê um mapa pela metade. */
-#transicao-cena{position:fixed;inset:0;z-index:60;pointer-events:none;visibility:hidden}
+/* ---------- viagem entre mapas (íris animada) ----------
+   Sequência: uma bolinha nasce EXATAMENTE onde o dedo tocou e cresce até tomar a tela
+   → o bicho salta pra dentro de um anel girando, com o nome do destino e os pontinhos
+   entrando em cascata → a íris fecha revelando o mapa novo. Fica acima da cena (z 40) e
+   do botão Voltar (z 41). A íris só fecha depois que a imagem carregou, então isso
+   também faz o papel de tela de carregamento: nunca se vê um mapa pela metade.
+   --cx/--cy são o ponto de origem, escritos pelo JS a partir do botão tocado. */
+#transicao-cena{position:fixed;inset:0;z-index:60;pointer-events:none;visibility:hidden;--cx:50%;--cy:50%}
 #transicao-cena.ativa{visibility:visible;pointer-events:all}
-#transicao-cena .cortina{
-  position:absolute;left:-2%;width:104%;height:52%;background:var(--tinta);
-  /* curva pouco arrastada de propósito: com um ease-in-out simétrico a cortina ainda
-     estava a 100px de fechar no fim da duração, e o momento "fechado" mal aparecia */
-  transform:translateY(var(--fora));transition:transform .38s cubic-bezier(.32,0,.24,1);
+#transicao-cena .iris{
+  position:absolute;inset:0;
+  background:radial-gradient(circle at var(--cx) var(--cy), #3E5A76 0%, var(--tinta) 68%);
+  clip-path:circle(0 at var(--cx) var(--cy));
 }
-/* as duas metades têm 52% e se sobrepõem 4% no meio: sem borda na emenda, porque a
-   linha caía exatamente em cima do bicho e parecia defeito */
-#transicao-cena .cortina-cima{top:0;--fora:-101%}
-#transicao-cena .cortina-baixo{bottom:0;--fora:101%}
-#transicao-cena.fechada .cortina{transform:translateY(0)}
-#transicao-cena .viajante{
-  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:2px;opacity:0;transform:translateY(16px) scale(.9);
-  transition:opacity .26s ease, transform .34s cubic-bezier(.34,1.56,.64,1);
+/* 150% do raio de referência cobre a diagonal inteira, de qualquer ponto de origem */
+#transicao-cena.abrindo .iris{animation:iris-cresce .44s cubic-bezier(.22,.61,.36,1) forwards}
+#transicao-cena.cheia  .iris{clip-path:circle(150% at var(--cx) var(--cy))}
+#transicao-cena.fechando .iris{animation:iris-encolhe .44s cubic-bezier(.55,.06,.68,.19) forwards}
+@keyframes iris-cresce{from{clip-path:circle(0 at var(--cx) var(--cy))}to{clip-path:circle(150% at var(--cx) var(--cy))}}
+@keyframes iris-encolhe{from{clip-path:circle(150% at var(--cx) var(--cy))}to{clip-path:circle(0 at var(--cx) var(--cy))}}
+
+#transicao-cena .palco-viagem{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+/* o opacity:0 vai nos elementos que a cascata anima — nunca no wrapper, senão ele
+   esconde tudo mesmo com os filhos já visíveis */
+#transicao-cena .anel-bicho,
+#transicao-cena .indo,
+#transicao-cena .destino,
+#transicao-cena .pontinhos{opacity:0}
+/* cascata: cada elemento entra um pouco depois do anterior — é o que dá o ar de vídeo */
+#transicao-cena.cheia .anel-bicho,
+#transicao-cena.cheia .indo,
+#transicao-cena.cheia .destino,
+#transicao-cena.cheia .pontinhos{animation:entra-cascata .42s cubic-bezier(.34,1.56,.64,1) forwards}
+#transicao-cena.cheia .anel-bicho{animation-delay:0s}
+#transicao-cena.cheia .indo     {animation-delay:.10s}
+#transicao-cena.cheia .destino  {animation-delay:.17s}
+#transicao-cena.cheia .pontinhos{animation-delay:.25s}
+#transicao-cena.fechando .palco-viagem{animation:sai-conteudo .16s ease-in forwards}
+@keyframes entra-cascata{from{opacity:0;transform:translateY(18px) scale(.82)}to{opacity:1;transform:none}}
+@keyframes sai-conteudo{to{opacity:0;transform:scale(.9)}}
+
+#transicao-cena .palco-viagem{grid-auto-flow:row;gap:0}
+#transicao-cena .anel-bicho{
+  position:relative;width:132px;height:132px;display:grid;place-items:center;margin:0 auto 10px;
 }
-/* cartão adesivo, igual ao resto do jogo — cobre a emenda das cortinas */
-#transicao-cena .viajante .cartao-viagem{
-  display:flex;flex-direction:column;align-items:center;gap:2px;
-  background:#35485C;border:4px solid var(--jabuti);border-bottom-width:9px;border-radius:22px;
-  padding:18px 30px 16px;
+/* anel tracejado girando: leitura imediata de "carregando" */
+#transicao-cena .anel-bicho::before{
+  content:'';position:absolute;inset:0;border-radius:50%;
+  border:4px dashed rgba(241,196,15,.75);animation:gira-anel 3.2s linear infinite;
 }
-#transicao-cena.fechada .viajante{opacity:1;transform:none;transition-delay:.2s}
-#transicao-cena .viajante svg{width:96px;height:auto;animation:balanca-viagem 1s ease-in-out infinite}
-#transicao-cena .viajante .indo{
-  font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1.5px;color:var(--moeda);
+#transicao-cena .anel-bicho svg{width:96px;height:auto;animation:flutua-bicho 1.4s ease-in-out infinite}
+#transicao-cena .indo{
+  display:block;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1.6px;color:var(--moeda);
 }
-#transicao-cena .viajante .destino{
-  font-family:'Baloo 2',cursive;font-size:26px;color:#fff;text-align:center;padding:0 24px;line-height:1.15;
+#transicao-cena .destino{
+  display:block;font-family:'Baloo 2',cursive;font-size:27px;color:#fff;padding:0 26px;line-height:1.12;margin-top:2px;
 }
-#transicao-cena .viajante .pontinhos{display:flex;gap:6px;margin-top:2px}
-#transicao-cena .viajante .pontinhos i{
-  width:8px;height:8px;border-radius:50%;background:var(--moeda);animation:pula-ponto 1s ease-in-out infinite;
+#transicao-cena .pontinhos{display:flex;gap:7px;justify-content:center;margin-top:12px}
+#transicao-cena .pontinhos i{
+  width:9px;height:9px;border-radius:50%;background:var(--moeda);
+  animation:pula-ponto 1.1s ease-in-out infinite;
 }
-#transicao-cena .viajante .pontinhos i:nth-child(2){animation-delay:.15s}
-#transicao-cena .viajante .pontinhos i:nth-child(3){animation-delay:.3s}
-@keyframes balanca-viagem{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-9px) rotate(3deg)}}
-@keyframes pula-ponto{0%,100%{transform:translateY(0);opacity:.45}50%{transform:translateY(-6px);opacity:1}}
+#transicao-cena .pontinhos i:nth-child(2){animation-delay:.16s}
+#transicao-cena .pontinhos i:nth-child(3){animation-delay:.32s}
+@keyframes gira-anel{to{transform:rotate(360deg)}}
+@keyframes flutua-bicho{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-8px) rotate(3deg)}}
+@keyframes pula-ponto{0%,100%{transform:translateY(0) scale(.8);opacity:.4}50%{transform:translateY(-7px) scale(1);opacity:1}}
 /* o mapa novo entra com um leve zoom-out, reforçando a sensação de "cheguei" */
 #tela-trilhas.chegando .cena-img{animation:chega-mapa .7s ease-out}
 @keyframes chega-mapa{from{transform:scale(1.06)}to{transform:none}}
-/* quem pediu menos animação no sistema recebe só um corte rápido */
+/* quem pediu menos animação no sistema: sem íris, sem cascata, sem loop — só um corte */
 @media (prefers-reduced-motion: reduce){
-  #transicao-cena .cortina{transition-duration:.12s}
-  #transicao-cena .viajante svg, #transicao-cena .viajante .pontinhos i{animation:none}
+  #transicao-cena.abrindo .iris, #transicao-cena.fechando .iris{animation:none}
+  #transicao-cena.abrindo .iris{clip-path:circle(150% at var(--cx) var(--cy))}
+  #transicao-cena.cheia .anel-bicho, #transicao-cena.cheia .indo,
+  #transicao-cena.cheia .destino, #transicao-cena.cheia .pontinhos{animation:none;opacity:1}
+  #transicao-cena .anel-bicho::before, #transicao-cena .anel-bicho svg,
+  #transicao-cena .pontinhos i{animation:none}
+  #transicao-cena.fechando .palco-viagem{animation:none;opacity:0}
   #tela-trilhas.chegando .cena-img{animation:none}
 }
 
@@ -1131,12 +1158,13 @@ function ativarArrastoCena(el){
   el.addEventListener('pointercancel', soltar);
   el.addEventListener('click', e => { if(moveu){ e.stopPropagation(); moveu = false; } }, true);
 }
-let viajando = false; // true enquanto a cortina da troca de mapa está no ar
+let viajando = false; // true enquanto a íris da troca de mapa está no ar
 /* toca num ponto do mapa: resolve o destino conforme o catálogo de links.
    Os pontos são acessados por índice (nunca interpolando texto do painel dentro de um
-   onclick) — rótulo com apóstrofo quebraria o HTML, e o texto vem de fora do código. */
-function abrirPonto(i){
-  // durante a viagem a cortina já cobre a tela, mas um toque duplo rápido consegue
+   onclick) — rótulo com apóstrofo quebraria o HTML, e o texto vem de fora do código.
+   `el` é o botão tocado: dele sai o ponto de origem da íris. */
+function abrirPonto(i, el){
+  // durante a viagem a íris já cobre a tela, mas um toque duplo rápido consegue
   // escapar antes dela aparecer — sem esta trava, cada toque empilhava um passo no
   // caminho e o "Voltar" precisava ser apertado várias vezes pra sair
   if(viajando) return;
@@ -1155,8 +1183,15 @@ function abrirPonto(i){
     const jaNoCaminho = pilhaCenas.indexOf(proxima.id);
     if(jaNoCaminho >= 0) pilhaCenas = pilhaCenas.slice(0, jaNoCaminho);
     else pilhaCenas.push(cenaAtual.id);
-    return viajarPraCena(proxima);
+    return viajarPraCena(proxima, origemDoToque(el));
   }
+}
+// centro do botão tocado, em pixel de tela: é onde a bolinha da íris nasce
+function origemDoToque(el){
+  if(!el || !el.getBoundingClientRect) return null;
+  const r = el.getBoundingClientRect();
+  if(!r.width && !r.height) return null;
+  return {x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2)};
 }
 // "Voltar" desfaz um passo do caminho entre mapas; na cena inicial, sai pra casa
 function voltarDaCena(){
@@ -1168,50 +1203,60 @@ function voltarDaCena(){
 }
 
 /* ---------- transição de viagem entre mapas ----------
-   Cortina fecha → troca a cena por baixo → espera a imagem do mapa novo carregar
-   (com teto de tempo, pra imagem pesada ou fora do ar não travar o jogo) → cortina abre. */
+   1) bolinha nasce no ponto tocado e cresce até cobrir a tela
+   2) bicho + destino + pontinhos entram em cascata (é a fase de carregamento)
+   3) íris fecha revelando o mapa novo
+   A fase 3 só começa depois que a imagem do mapa carregou (com teto de tempo, pra
+   imagem pesada ou fora do ar não travar o jogo). */
 const esperar = ms => new Promise(r => setTimeout(r, ms));
 // quem pede menos movimento no sistema não deve esperar MAIS: o CSS encurtava a animação
 // mas o JS seguia com os tempos cheios, e a viagem ficava até mais demorada. Aqui os
 // tempos vêm juntos, então o modo reduzido é um corte rápido de verdade.
+/* "segura" (700ms) é o tempo mínimo com a tela coberta. Não é folga arbitrária: a
+   cascata do conteúdo termina em ~670ms (último atraso .25s + duração .42s), então
+   cortar antes disso deixaria o nome do destino aparecendo pela metade. */
 const tempoViagem = () => matchMedia('(prefers-reduced-motion: reduce)').matches
-  ? {fecha: 140, segura: 120, abre: 140, tetoImagem: 1200}
-  : {fecha: 480, segura: 520, abre: 420, tetoImagem: 1800};
-async function viajarPraCena(cena){
+  ? {abre: 60,  segura: 140, fecha: 60,  tetoImagem: 1200}
+  : {abre: 440, segura: 700, fecha: 420, tetoImagem: 1800};
+async function viajarPraCena(cena, origem){
   if(viajando) return; // toque duplo não deve disparar duas viagens
   viajando = true;
   const t = tempoViagem();
   const ov = $('#transicao-cena');
-  ov.innerHTML = `<div class="cortina cortina-cima"></div><div class="cortina cortina-baixo"></div>
-    <div class="viajante">
-      <div class="cartao-viagem">
-        ${svgBicho(estado.tipo, {equipado: estado.equipado})}
+  // origem da íris: o ponto tocado. Sem ele (ex.: botão Voltar), nasce do centro.
+  ov.style.setProperty('--cx', origem ? origem.x + 'px' : '50%');
+  ov.style.setProperty('--cy', origem ? origem.y + 'px' : '50%');
+  ov.innerHTML = `<div class="iris"></div>
+    <div class="palco-viagem">
+      <div>
+        <div class="anel-bicho">${svgBicho(estado.tipo, {equipado: estado.equipado})}</div>
         <span class="indo">Indo para</span>
         <span class="destino">${esc(cena.nome)}</span>
         <span class="pontinhos"><i></i><i></i><i></i></span>
       </div>
     </div>`;
   ov.classList.add('ativa');
-  await esperar(20);            // deixa o navegador aplicar o estado inicial antes de animar
-  ov.classList.add('fechada');
-  // 100ms de folga além da duração da transição (.38s): no fim exato dela ainda sobrava
-  // uma fresta de ~25px na emenda, e a troca do mapa podia aparecer por um quadro
-  await esperar(t.fecha);
+  await esperar(20);              // deixa o navegador aplicar o estado inicial antes de animar
+  ov.classList.add('abrindo');
+  await esperar(t.abre);          // bolinha crescendo até cobrir a tela
 
-  const inicioFechada = performance.now();
+  // "cheia" trava a íris coberta e dispara a cascata do conteúdo
+  ov.classList.add('cheia');
+  ov.classList.remove('abrindo');
+  const inicioCheia = performance.now();
   ir('trilhas', cena.id);
   await esperarImagemDaCena(t.tetoImagem);
-  /* segura a tela fechada por um tempo mínimo: com imagem em cache a espera acabava em
-     ~100ms e o "Indo para <mapa>" piscava sem dar tempo de ler. Se a imagem demorar
-     mais que isso, o tempo dela manda e ninguém espera duas vezes. */
-  const fechadaPor = performance.now() - inicioFechada;
-  if(fechadaPor < t.segura) await esperar(t.segura - fechadaPor);
+  /* segura a tela coberta por um tempo mínimo: com imagem em cache a espera acabava em
+     ~100ms, a cascata era cortada no meio e o nome do destino piscava sem dar tempo de
+     ler. Se a imagem demorar mais que isso, o tempo dela manda e ninguém espera duas vezes. */
+  const cobertaPor = performance.now() - inicioCheia;
+  if(cobertaPor < t.segura) await esperar(t.segura - cobertaPor);
 
   const secao = $('#tela-trilhas');
   secao.classList.add('chegando');
-  ov.classList.remove('fechada');
-  await esperar(t.abre);        // cortina abrindo
-  ov.classList.remove('ativa');
+  ov.classList.add('fechando');
+  await esperar(t.fecha);         // íris encolhendo, revelando o mapa
+  ov.className = '';             // limpa ativa/cheia/fechando de uma vez
   ov.innerHTML = '';
   secao.classList.remove('chegando');
   viajando = false;
@@ -1255,7 +1300,7 @@ RENDER.trilhas = (idCena) => {
           }
           return `<button class="predio ${p.mostrarDica?'com-dica':''}"
             style="left:${p.x}%;top:${p.y}%;width:${p.largura}%;height:${p.altura}%"
-            onclick="abrirPonto(${i})" aria-label="${esc(p.rotulo)}">${selo}</button>`;
+            onclick="abrirPonto(${i}, this)" aria-label="${esc(p.rotulo)}">${selo}</button>`;
         }).join('')}
       </div>
     </div>`;
