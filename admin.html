@@ -165,6 +165,48 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
 .opcao-linha button{flex:none}
 .opcao-missao{font-size:11px;color:#7F8C8D;font-weight:800;white-space:nowrap}
 .npc-thumb{width:34px;height:34px;border-radius:8px;object-fit:cover;vertical-align:-10px;margin-right:6px;background:#F4F6F7}
+
+/* --- editor de diálogo em fluxograma (canvas de nós + linhas) --- */
+#btn-modo-lista.ativo, #btn-modo-fluxo.ativo{background:var(--tinta);color:#fff;border-color:var(--tinta)}
+.fluxo-canvas-wrap{
+  position:relative;overflow:auto;background:#F4F6F7;border:1px solid var(--contorno);border-radius:10px;
+  max-height:60vh;
+}
+.fluxo-canvas{position:relative;min-width:1600px;min-height:900px;transform-origin:0 0}
+.fluxo-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.no-fluxo{
+  position:absolute;width:220px;background:#fff;border:2px solid var(--contorno);border-radius:10px;
+  box-shadow:0 2px 6px rgba(0,0,0,.08);padding:0;
+}
+.no-fluxo.raiz{border-color:var(--mata);box-shadow:0 0 0 2px var(--mata) inset, 0 2px 6px rgba(0,0,0,.08)}
+.no-fluxo-cabecalho{
+  display:flex;align-items:center;gap:4px;padding:6px 8px;background:#F8F9F9;border-bottom:1px solid var(--contorno);
+  border-radius:8px 8px 0 0;cursor:move;
+}
+.no-fluxo-cabecalho input{
+  width:70px;font-family:'DejaVu Sans Mono',Consolas,monospace;font-size:11px;padding:4px 6px;
+}
+.no-fluxo-cabecalho .selo-raiz{background:#D5F5E3;color:#1E8449;font-size:9px;font-weight:800;padding:2px 6px;border-radius:999px;white-space:nowrap}
+.no-fluxo-cabecalho button{flex:none;padding:3px 6px;font-size:11px}
+.no-fluxo-corpo{padding:8px}
+.no-fluxo textarea{width:100%;min-height:44px;font-size:12px;font-family:inherit;padding:6px 8px;resize:vertical}
+.opcao-fluxo{display:flex;align-items:center;gap:4px;margin-top:6px;position:relative}
+.opcao-fluxo input{flex:1;font-size:12px;padding:5px 7px}
+.opcao-fluxo button{flex:none;padding:3px 6px;font-size:11px}
+.porta-saida{
+  flex:none;width:14px;height:14px;border-radius:50%;background:var(--ceu);border:2px solid #fff;
+  box-shadow:0 0 0 1px var(--ceu);cursor:crosshair;
+}
+.porta-saida.conectada{background:var(--mata);box-shadow:0 0 0 1px var(--mata)}
+.no-fluxo-corpo .add-op-fluxo{width:100%;margin-top:8px}
+.fluxo-painel{
+  position:fixed;top:10vh;right:24px;width:300px;max-height:76vh;overflow-y:auto;
+  background:#fff;border:1px solid var(--contorno);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);
+  z-index:60;padding:14px;
+}
+.fluxo-painel-cabecalho{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.fluxo-painel-cabecalho button{padding:3px 8px}
+body.conectando-fluxo{cursor:crosshair}
 .dias-semana{display:flex;gap:6px;flex-wrap:wrap}
 .dias-semana button{
   background:#fff;border:1px solid var(--contorno);border-radius:8px;padding:7px 10px;font-size:12px;font-weight:800;cursor:pointer;
@@ -357,7 +399,7 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
             Cada nó é uma fala do NPC (o balãozinho) com até 4 botões de resposta. Cada botão pode levar a outro nó
             ou encerrar a conversa. O nó com a faixa verde é onde a conversa começa — escolha em "nó inicial" no card dele.
           </p>
-          <div style="display:flex;gap:8px;align-items:center;margin:8px 0">
+          <div style="display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap">
             <select id="npc-modelo-dialogo" style="max-width:220px">
               <option value="">— começar de um modelo —</option>
               <option value="lojista">Lojista</option>
@@ -365,8 +407,43 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
               <option value="recado">Só um recado</option>
             </select>
             <button type="button" class="btn linha branco" id="btn-usar-modelo">Usar modelo</button>
+            <div style="margin-left:auto;display:flex;gap:6px">
+              <button type="button" class="btn linha branco ativo" id="btn-modo-lista" data-modo="lista">📋 Lista</button>
+              <button type="button" class="btn linha branco" id="btn-modo-fluxo" data-modo="fluxo">🕸️ Fluxograma</button>
+            </div>
           </div>
+
           <div id="npc-nos"></div>
+
+          <div id="npc-fluxo-wrap" class="oculto">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <span style="font-size:11px;font-weight:800;color:#566573">ZOOM</span>
+              <button type="button" class="btn linha branco" data-fzoom="1">Ajustar</button>
+              <button type="button" class="btn linha branco" data-fzoom="1.5">1.5×</button>
+              <button type="button" class="btn linha branco" data-fzoom="2">2×</button>
+              <button type="button" class="btn linha branco" style="margin-left:auto" id="btn-add-no-fluxo">+ novo nó</button>
+            </div>
+            <div class="fluxo-canvas-wrap" id="fluxo-canvas-wrap">
+              <div class="fluxo-canvas" id="fluxo-canvas">
+                <svg class="fluxo-svg" id="fluxo-svg">
+                  <defs>
+                    <marker id="fluxo-seta" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                      <path d="M0,0 L6,3 L0,6 Z" fill="var(--ceu)"></path>
+                    </marker>
+                  </defs>
+                </svg>
+              </div>
+            </div>
+            <p class="dica-editor">Arraste o topo de um nó pra mover. Arraste a bolinha de um botão até outro nó pra ligar — soltar em espaço vazio desliga (vira "encerrar conversa"). Clique na ⚙ de um botão pra editar missão/condição.</p>
+          </div>
+
+          <div class="fluxo-painel oculto" id="fluxo-painel">
+            <div class="fluxo-painel-cabecalho">
+              <b id="fluxo-painel-titulo">Opção</b>
+              <button type="button" class="btn linha branco" id="btn-fechar-painel">✕</button>
+            </div>
+            <div id="fluxo-painel-corpo"></div>
+          </div>
         </div>
 
         <div id="npc-aviso" class="aviso-form"></div>
@@ -1099,7 +1176,7 @@ function novoNo(){
   if(!dialogoEdit.inicial) dialogoEdit.inicial = chave;
   return chave;
 }
-$('#btn-add-no').onclick = () => { novoNo(); renderNos(); };
+$('#btn-add-no').onclick = () => { novoNo(); sincronizarDialogo(); };
 
 // pontos de partida prontos, pra não montar a árvore inteira do zero toda vez — quem
 // usa edita o texto e os botões depois, a estrutura (quantos nós, o que leva a onde) já vem pronta
@@ -1122,7 +1199,7 @@ $('#btn-usar-modelo').onclick = () => {
   if(Object.keys(dialogoEdit.nos).some(k => dialogoEdit.nos[k].texto) && !confirm('Isso substitui o diálogo atual pelo modelo. Continuar?')) return;
   dialogoEdit = JSON.parse(JSON.stringify(MODELOS_DIALOGO[chave]));
   nosOrdem = Object.keys(dialogoEdit.nos);
-  renderNos();
+  sincronizarDialogo();
 };
 
 function renderNos(){
@@ -1193,25 +1270,26 @@ function renderNos(){
 window.mudarAcaoOpcao = (chave, i, tipo) => {
   const op = dialogoEdit.nos[chave].opcoes[i];
   op.acao = tipo ? {tipo, missaoId: op.acao?.missaoId || ''} : null;
-  renderNos();
+  if(modoDialogo === 'lista') renderNos(); else renderPainelOpcao(chave, i);
 };
 window.mudarCondicaoOpcao = (chave, i, estado) => {
   const op = dialogoEdit.nos[chave].opcoes[i];
   op.mostrarSe = estado ? {estado, missaoId: op.mostrarSe?.missaoId || ''} : null;
-  renderNos();
+  if(modoDialogo === 'lista') renderNos(); else renderPainelOpcao(chave, i);
 };
 window.renomearNo = (antiga, novaBruta) => {
   const nova = novaBruta.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 24) || antiga;
-  if(nova === antiga){ renderNos(); return; }
-  if(dialogoEdit.nos[nova]){ alert('Já existe um nó com essa chave.'); renderNos(); return; }
+  if(nova === antiga){ sincronizarDialogo(); return; }
+  if(dialogoEdit.nos[nova]){ alert('Já existe um nó com essa chave.'); sincronizarDialogo(); return; }
   dialogoEdit.nos[nova] = dialogoEdit.nos[antiga];
   delete dialogoEdit.nos[antiga];
   nosOrdem = nosOrdem.map(k => k === antiga ? nova : k);
   if(dialogoEdit.inicial === antiga) dialogoEdit.inicial = nova;
   Object.values(dialogoEdit.nos).forEach(no => no.opcoes.forEach(op => { if(op.proximo === antiga) op.proximo = nova; }));
-  renderNos();
+  fecharPainelOpcao();
+  sincronizarDialogo();
 };
-window.tornarInicial = (chave) => { dialogoEdit.inicial = chave; renderNos(); };
+window.tornarInicial = (chave) => { dialogoEdit.inicial = chave; sincronizarDialogo(); };
 window.removerNo = (chave) => {
   if(nosOrdem.length <= 1) return;
   nosOrdem = nosOrdem.filter(k => k !== chave);
@@ -1220,20 +1298,229 @@ window.removerNo = (chave) => {
   // apontando pra um nó que não existe mais (o que travaria o diálogo pro aluno)
   Object.values(dialogoEdit.nos).forEach(no => no.opcoes.forEach(op => { if(op.proximo === chave) op.proximo = null; }));
   if(dialogoEdit.inicial === chave) dialogoEdit.inicial = nosOrdem[0];
-  renderNos();
+  fecharPainelOpcao();
+  sincronizarDialogo();
 };
 window.adicionarOpcao = (chave) => {
   const no = dialogoEdit.nos[chave];
   if(no.opcoes.length >= 4) return;
   no.opcoes.push({rotulo:'', proximo:null});
-  renderNos();
+  sincronizarDialogo();
 };
 window.removerOpcao = (chave, i) => {
   const no = dialogoEdit.nos[chave];
   if(no.opcoes.length <= 1) return;
   no.opcoes.splice(i, 1);
-  renderNos();
+  fecharPainelOpcao();
+  sincronizarDialogo();
 };
+
+/* ---------- mesmo diálogo, agora em fluxograma: nós arrastáveis + linhas entre eles ----------
+   Não substitui a lista — os dois modos leem e escrevem no mesmo dialogoEdit, então dá pra
+   trocar de visão a qualquer momento sem perder nada. */
+let modoDialogo = 'lista', fluxoZoom = 1, conectando = null, painelOpcao = null;
+function sincronizarDialogo(){ modoDialogo === 'lista' ? renderNos() : renderFluxo(); }
+function trocarModoDialogo(modo){
+  modoDialogo = modo;
+  $('#btn-modo-lista').classList.toggle('ativo', modo === 'lista');
+  $('#btn-modo-fluxo').classList.toggle('ativo', modo === 'fluxo');
+  $('#npc-nos').classList.toggle('oculto', modo !== 'lista');
+  $('#npc-fluxo-wrap').classList.toggle('oculto', modo !== 'fluxo');
+  fecharPainelOpcao();
+  sincronizarDialogo();
+}
+$('#btn-modo-lista').onclick = () => trocarModoDialogo('lista');
+$('#btn-modo-fluxo').onclick = () => trocarModoDialogo('fluxo');
+$$('#npc-fluxo-wrap [data-fzoom]').forEach(b => b.onclick = () => {
+  fluxoZoom = Number(b.dataset.fzoom);
+  $('#fluxo-canvas').style.transform = `scale(${fluxoZoom})`;
+  redesenharConexoes();
+});
+$('#btn-add-no-fluxo').onclick = () => {
+  novoNo(); // sem x/y ainda — garantirPosicoes() (dentro de renderFluxo) acha um lugar livre no grid
+  renderFluxo();
+};
+
+// nó sem posição salva (diálogo antigo, ou recém-criado na lista) ganha um lugar num
+// grid simples — só precisa acontecer uma vez, a posição fica gravada dali pra frente
+function garantirPosicoes(){
+  nosOrdem.forEach((chave, i) => {
+    const no = dialogoEdit.nos[chave];
+    if(no.x == null || no.y == null){ no.x = 40 + (i % 4) * 260; no.y = 40 + Math.floor(i / 4) * 210; }
+  });
+}
+function renderFluxo(){
+  garantirPosicoes();
+  const canvas = $('#fluxo-canvas');
+  canvas.style.transform = `scale(${fluxoZoom})`;
+  canvas.querySelectorAll('.no-fluxo').forEach(el => el.remove());
+  nosOrdem.forEach(chave => {
+    const no = dialogoEdit.nos[chave];
+    const raiz = chave === dialogoEdit.inicial;
+    const el = document.createElement('div');
+    el.className = 'no-fluxo' + (raiz ? ' raiz' : '');
+    el.style.left = no.x + 'px'; el.style.top = no.y + 'px';
+    el.dataset.chave = chave;
+    el.innerHTML = `
+      <div class="no-fluxo-cabecalho">
+        <input type="text" value="${esc(chave)}" onchange="renomearNo('${esc(chave)}', this.value)" title="chave do nó">
+        ${raiz ? '<span class="selo-raiz">🟢 inicial</span>' : `<button type="button" class="btn linha branco" onclick="tornarInicial('${esc(chave)}')" title="tornar nó inicial">📍</button>`}
+        <button type="button" class="btn linha erro" style="margin-left:auto" onclick="removerNo('${esc(chave)}')" ${nosOrdem.length<=1?'disabled':''} title="excluir nó">🗑</button>
+      </div>
+      <div class="no-fluxo-corpo">
+        <textarea maxlength="300" oninput="dialogoEdit.nos['${esc(chave)}'].texto=this.value" placeholder="fala do NPC...">${esc(no.texto)}</textarea>
+        ${no.opcoes.map((op, i) => `
+          <div class="opcao-fluxo">
+            <input type="text" maxlength="40" value="${esc(op.rotulo)}" placeholder="botão"
+              oninput="dialogoEdit.nos['${esc(chave)}'].opcoes[${i}].rotulo=this.value">
+            <button type="button" class="btn linha branco" onclick="abrirPainelOpcao('${esc(chave)}', ${i})" title="ação / mostrar se">⚙</button>
+            <button type="button" class="btn linha erro" onclick="removerOpcao('${esc(chave)}', ${i})" ${no.opcoes.length<=1?'disabled':''}>✕</button>
+            <div class="porta-saida ${op.proximo?'conectada':''}" data-chave="${esc(chave)}" data-i="${i}" title="arraste até outro nó pra ligar"></div>
+          </div>`).join('')}
+        <button type="button" class="btn linha branco add-op-fluxo" ${no.opcoes.length>=4?'disabled':''} onclick="adicionarOpcao('${esc(chave)}')">+ botão</button>
+      </div>`;
+    canvas.appendChild(el);
+    ativarDragNoFluxo(el, chave);
+    el.querySelectorAll('.porta-saida').forEach(ativarConectorFluxo);
+  });
+  redesenharConexoes();
+}
+function ativarDragNoFluxo(el, chave){
+  const cabecalho = el.querySelector('.no-fluxo-cabecalho');
+  let inicio = null, base = null;
+  cabecalho.addEventListener('pointerdown', ev => {
+    if(ev.target.tagName === 'INPUT' || ev.target.tagName === 'BUTTON') return;
+    inicio = {x: ev.clientX, y: ev.clientY};
+    base = {x: dialogoEdit.nos[chave].x, y: dialogoEdit.nos[chave].y};
+    cabecalho.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+  });
+  cabecalho.addEventListener('pointermove', ev => {
+    if(!inicio) return;
+    const no = dialogoEdit.nos[chave];
+    no.x = Math.max(0, base.x + (ev.clientX - inicio.x) / fluxoZoom);
+    no.y = Math.max(0, base.y + (ev.clientY - inicio.y) / fluxoZoom);
+    el.style.left = no.x + 'px'; el.style.top = no.y + 'px';
+    redesenharConexoes();
+  });
+  const soltar = () => { inicio = null; base = null; };
+  cabecalho.addEventListener('pointerup', soltar);
+  cabecalho.addEventListener('pointercancel', soltar);
+}
+function pontoSaidaTela(chave, i){
+  const dot = $(`.porta-saida[data-chave="${CSS.escape(chave)}"][data-i="${i}"]`);
+  const canvasEl = $('#fluxo-canvas');
+  if(!dot || !canvasEl) return null;
+  const canvasRect = canvasEl.getBoundingClientRect(), dotRect = dot.getBoundingClientRect();
+  return {
+    x: (dotRect.left + dotRect.width/2 - canvasRect.left) / fluxoZoom,
+    y: (dotRect.top + dotRect.height/2 - canvasRect.top) / fluxoZoom,
+  };
+}
+function ativarConectorFluxo(dot){
+  dot.addEventListener('pointerdown', ev => {
+    ev.stopPropagation(); ev.preventDefault();
+    conectando = {chave: dot.dataset.chave, i: Number(dot.dataset.i)};
+    dot.setPointerCapture(ev.pointerId);
+    document.body.classList.add('conectando-fluxo');
+  });
+  dot.addEventListener('pointermove', ev => {
+    if(!conectando) return;
+    const origem = pontoSaidaTela(conectando.chave, conectando.i);
+    const canvasEl = $('#fluxo-canvas');
+    if(!origem || !canvasEl) return;
+    const canvasRect = canvasEl.getBoundingClientRect();
+    let temp = $('#linha-temp');
+    if(!temp){
+      temp = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      temp.id = 'linha-temp';
+      temp.setAttribute('stroke', 'var(--erro)'); temp.setAttribute('stroke-width', '2'); temp.setAttribute('stroke-dasharray', '5,4');
+      $('#fluxo-svg').appendChild(temp);
+    }
+    temp.setAttribute('x1', origem.x); temp.setAttribute('y1', origem.y);
+    temp.setAttribute('x2', (ev.clientX - canvasRect.left) / fluxoZoom); temp.setAttribute('y2', (ev.clientY - canvasRect.top) / fluxoZoom);
+  });
+  dot.addEventListener('pointerup', ev => {
+    if(!conectando) return;
+    const {chave, i} = conectando;
+    // solta em cima de outro nó = liga; solta em espaço vazio (ou no próprio nó) = desliga
+    const alvoEl = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.no-fluxo');
+    dialogoEdit.nos[chave].opcoes[i].proximo = (alvoEl && alvoEl.dataset.chave !== chave) ? alvoEl.dataset.chave : null;
+    conectando = null;
+    document.body.classList.remove('conectando-fluxo');
+    $('#linha-temp')?.remove();
+    renderFluxo();
+  });
+  dot.addEventListener('pointercancel', () => {
+    conectando = null;
+    document.body.classList.remove('conectando-fluxo');
+    $('#linha-temp')?.remove();
+  });
+}
+function redesenharConexoes(){
+  const svg = $('#fluxo-svg'), canvasEl = $('#fluxo-canvas');
+  if(!svg || !canvasEl) return;
+  svg.querySelectorAll('.linha-conexao').forEach(l => l.remove());
+  const canvasRect = canvasEl.getBoundingClientRect();
+  nosOrdem.forEach(chave => {
+    dialogoEdit.nos[chave].opcoes.forEach((op, i) => {
+      if(!op.proximo || !dialogoEdit.nos[op.proximo]) return;
+      const origem = pontoSaidaTela(chave, i);
+      const alvoEl = $(`.no-fluxo[data-chave="${CSS.escape(op.proximo)}"]`);
+      if(!origem || !alvoEl) return;
+      const alvoRect = alvoEl.getBoundingClientRect();
+      const destino = {x: (alvoRect.left - canvasRect.left) / fluxoZoom, y: (alvoRect.top + alvoRect.height/2 - canvasRect.top) / fluxoZoom};
+      const curva = Math.max((destino.x - origem.x) / 2, 40);
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('class', 'linha-conexao');
+      path.setAttribute('d', `M${origem.x},${origem.y} C${origem.x+curva},${origem.y} ${destino.x-curva},${destino.y} ${destino.x},${destino.y}`);
+      path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'var(--ceu)'); path.setAttribute('stroke-width', '2.5');
+      path.setAttribute('marker-end', 'url(#fluxo-seta)');
+      svg.appendChild(path);
+    });
+  });
+}
+// painel lateral: onde ficam "ação" e "mostrar se" quando editando no fluxograma —
+// não cabe direito dentro do card pequeno do nó, então abre à parte, sem fechar o canvas
+function renderPainelOpcao(chave, i){
+  const no = dialogoEdit.nos[chave];
+  if(!no || !no.opcoes[i]){ fecharPainelOpcao(); return; }
+  const op = no.opcoes[i];
+  painelOpcao = {chave, i};
+  const acaoTipo = op.acao?.tipo || '', mostrarEstado = op.mostrarSe?.estado || '';
+  const opcoesMissao = (selecionado) => `<option value="">— escolha —</option>` +
+    missoesCache.map(m => `<option value="${esc(m.id)}" ${m.id===selecionado?'selected':''}>${esc(m.titulo)}${m.publicado?'':' (rascunho)'}</option>`).join('');
+  $('#fluxo-painel-titulo').textContent = `"${op.rotulo || '(sem texto)'}" · nó "${chave}"`;
+  $('#fluxo-painel-corpo').innerHTML = `
+    <label style="margin-top:0">missão</label>
+    <div class="opcao-linha">
+      <select onchange="mudarAcaoOpcao('${esc(chave)}', ${i}, this.value)">
+        <option value="" ${!acaoTipo?'selected':''}>nenhuma ação</option>
+        <option value="oferecer" ${acaoTipo==='oferecer'?'selected':''}>oferecer</option>
+        <option value="entregar" ${acaoTipo==='entregar'?'selected':''}>entregar</option>
+      </select>
+      <select ${!acaoTipo?'disabled':''} onchange="dialogoEdit.nos['${esc(chave)}'].opcoes[${i}].acao.missaoId=this.value">
+        ${opcoesMissao(op.acao?.missaoId)}
+      </select>
+    </div>
+    <label>mostrar se</label>
+    <div class="opcao-linha">
+      <select onchange="mudarCondicaoOpcao('${esc(chave)}', ${i}, this.value)">
+        <option value="" ${!mostrarEstado?'selected':''}>sempre</option>
+        <option value="sem_missao" ${mostrarEstado==='sem_missao'?'selected':''}>sem essa missão</option>
+        <option value="missao_ativa" ${mostrarEstado==='missao_ativa'?'selected':''}>com ela ativa</option>
+        <option value="missao_pronta" ${mostrarEstado==='missao_pronta'?'selected':''}>pronta pra entregar</option>
+        <option value="missao_completa" ${mostrarEstado==='missao_completa'?'selected':''}>já completou</option>
+      </select>
+      <select ${!mostrarEstado?'disabled':''} onchange="dialogoEdit.nos['${esc(chave)}'].opcoes[${i}].mostrarSe.missaoId=this.value">
+        ${opcoesMissao(op.mostrarSe?.missaoId)}
+      </select>
+    </div>`;
+  $('#fluxo-painel').classList.remove('oculto');
+}
+function fecharPainelOpcao(){ painelOpcao = null; $('#fluxo-painel')?.classList.add('oculto'); }
+window.abrirPainelOpcao = (chave, i) => renderPainelOpcao(chave, i);
+$('#btn-fechar-painel').onclick = fecharPainelOpcao;
 
 $('#npc-imagem-tipo').addEventListener('change', () => {
   $('#npc-aviso-lottie').style.display = $('#npc-imagem-tipo').value === 'lottie' ? 'block' : 'none';
@@ -1276,7 +1563,7 @@ function limparFormNpc(){
 $('#btn-novo-npc').onclick = () => {
   limparFormNpc();
   novoNo();
-  renderNos();
+  sincronizarDialogo();
   $('#titulo-form-npc').textContent = 'Novo NPC';
   $('#form-npc').classList.remove('oculto');
   $('#form-npc').scrollIntoView({behavior:'smooth'});
@@ -1303,7 +1590,7 @@ window.editarNpc = async (id) => {
   dialogoEdit = n.dialogo && n.dialogo.nos && Object.keys(n.dialogo.nos).length ? n.dialogo : {inicial:'', nos:{}};
   nosOrdem = Object.keys(dialogoEdit.nos);
   if(!nosOrdem.length) novoNo();
-  renderNos();
+  sincronizarDialogo();
   $('#btn-excluir-npc').classList.remove('oculto');
   $('#titulo-form-npc').textContent = 'Editar NPC';
   $('#form-npc').classList.remove('oculto');
