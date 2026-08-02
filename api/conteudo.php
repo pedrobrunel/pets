@@ -85,6 +85,23 @@ try {
     'descricao' => $it['descricao'],
   ], $itensLinhas);
 
+  // móveis: catálogo da Loja de Móveis. imagemFrente é obrigatória; as outras 3 rotações
+  // são opcionais — o app.html cai pra frente quando faltar uma (ver README do painel)
+  $moveisLinhas = bd()->query('SELECT id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda FROM moveis WHERE publicado = 1 ORDER BY ordem, nome')
+    ->fetchAll(PDO::FETCH_ASSOC);
+  $pastaMoveis = dirname(__DIR__) . '/assets/moveis';
+  $moveisPublicados = array_column($moveisLinhas, 'id');
+  $urlMovel = fn($nome) => $nome !== '' && is_file($pastaMoveis . '/' . $nome) ? 'assets/moveis/' . $nome : '';
+  $saidaMoveis = array_map(fn($m) => [
+    'id' => $m['id'], 'nome' => $m['nome'], 'preco' => (int)$m['preco'], 'rotativel' => (bool)$m['rotativel'],
+    'imagemFrenteUrl' => $urlMovel($m['imagem_frente']), 'imagemDireitaUrl' => $urlMovel($m['imagem_direita']),
+    'imagemVersoUrl' => $urlMovel($m['imagem_verso']), 'imagemEsquerdaUrl' => $urlMovel($m['imagem_esquerda']),
+  ], $moveisLinhas);
+
+  // fundo da Casa: uma imagem só, configurada no painel (aba Móveis) — vale pra todo mundo
+  $casaFundo = (string)(bd()->query('SELECT casa_fundo FROM configuracoes WHERE id = 1')->fetchColumn() ?: '');
+  $casaConfig = ['fundoUrl' => $urlMovel($casaFundo)];
+
   $existe = [
     'cena'  => array_column(bd()->query('SELECT id FROM cenas')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'mundo' => array_column(bd()->query('SELECT id FROM mundos')->fetchAll(PDO::FETCH_ASSOC), 'id'),
@@ -140,9 +157,12 @@ try {
     ];
   }
 
-  echo json_encode(['mundos' => $saidaMundos, 'cenas' => $saidaCenas, 'npcs' => $saidaNpcs, 'missoes' => $saidaMissoes, 'itens' => $saidaItens], JSON_UNESCAPED_UNICODE);
+  echo json_encode([
+    'mundos' => $saidaMundos, 'cenas' => $saidaCenas, 'npcs' => $saidaNpcs, 'missoes' => $saidaMissoes,
+    'itens' => $saidaItens, 'moveis' => $saidaMoveis, 'casaConfig' => $casaConfig,
+  ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
   error_log('[bichoteca-conteudo] ' . $e->getMessage());
   http_response_code(500);
-  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => []]);
+  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => [], 'moveis' => [], 'casaConfig' => ['fundoUrl' => '']]);
 }

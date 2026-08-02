@@ -152,6 +152,29 @@ nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 .palco .nuvem{position:absolute;top:26px;left:-70px;width:78px;height:26px;background:#fff;
   border:3px solid var(--contorno);border-radius:999px;animation:passeia 26s linear infinite}
 @keyframes passeia{from{left:-90px}to{left:110%}}
+/* quarto: quando a Casa tem fundo configurado (aba Móveis do painel), o palco vira o
+   chão do quarto — móveis colocados ficam entre o fundo e o bicho (z-index:1 < 2) */
+.palco.quarto{background-size:cover;background-position:center;min-height:230px}
+.movel-colocado{position:absolute;transform:translate(-50%,-50%);z-index:1;filter:drop-shadow(0 4px 4px rgba(0,0,0,.25))}
+.movel-colocado img{display:block;width:78px;height:auto;pointer-events:none}
+/* em modo decorar o bicho (z-index:2) não pode tampar os controles de girar/guardar —
+   sobe o móvel acima dele só enquanto edita; fora disso ele some atrás do bicho normal */
+.palco.editando .movel-colocado{cursor:grab;touch-action:none;z-index:3}
+.palco.editando .movel-colocado:active{cursor:grabbing}
+.movel-colocado .controles-movel{position:absolute;top:-14px;left:50%;transform:translateX(-50%);
+  display:flex;gap:4px;white-space:nowrap}
+.movel-colocado .controles-movel button{
+  width:26px;height:26px;border-radius:50%;border:2px solid var(--contorno);background:#fff;
+  font-size:13px;line-height:1;padding:0;cursor:pointer;box-shadow:0 2px 3px rgba(0,0,0,.18)
+}
+.faixa-decorar{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:10px 4px;margin-top:8px}
+.faixa-decorar .movel-bandeja{
+  flex:none;display:flex;flex-direction:column;align-items:center;gap:4px;width:64px;
+  background:#fff;border:2px solid var(--contorno);border-radius:12px;padding:6px;cursor:pointer
+}
+.faixa-decorar .movel-bandeja img{width:44px;height:44px;object-fit:contain}
+.faixa-decorar .movel-bandeja span{font-size:10px;font-weight:800;text-align:center;line-height:1.15}
+.faixa-decorar .vazio{font-size:12px;font-weight:700;opacity:.7;padding:6px}
 .bicho{width:200px;height:200px;display:block;margin:0 auto;position:relative;z-index:2}
 .bicho .corpo-todo{transform-origin:100px 190px;animation:pula 2.6s ease-in-out infinite}
 @keyframes pula{0%,100%{transform:translateY(0) scaleY(1)}45%{transform:translateY(-7px) scaleY(1.02)}55%{transform:translateY(0) scaleY(.98)}}
@@ -636,6 +659,8 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
   <section id="tela-arcade" class="tela"></section>
   <!-- ====== LOJA ====== -->
   <section id="tela-loja" class="tela"></section>
+  <!-- ====== LOJA DE MÓVEIS ====== -->
+  <section id="tela-lojamoveis" class="tela"></section>
   <!-- ====== MURAL ====== -->
   <section id="tela-mural" class="tela"></section>
   <!-- ====== PERFIL ====== -->
@@ -757,6 +782,7 @@ const estado = {
   equipado:[], mochila:[], inventario:{},
   licoesFeitas:[], recordes:{memoria:null, chuva:0, toca:0},
   missoes:{}, cenasVisitadas:[], gatilhosAtivos:[], itensColetados:[],
+  moveisComprados:[], casaMoveis:[],
   streak:{atual:0, melhor:0, ultimoDia:null},
   recados:[
     {av:'🦔', aut:'Nina_Ouriço', txt:'Terminei a trilha de Biologia! 🎉'},
@@ -893,15 +919,111 @@ function barra(rotulo, valor, cor){
     <span class="trilho"><span class="cheio" style="width:${lim(valor)}%;background:${cor}"></span></span>
     <span class="valor">${lim(valor)}</span></div>`;
 }
+
+/* ---------- decoração da Casa (móveis comprados, estilo Club Penguin) ----------
+   Só aparece quando o Hostmaster configura um fundo (aba Móveis do painel) — sem
+   fundo, a Casa segue com o visual padrão de sempre. Posição em % (igual aos pontos
+   de mapa), então funciona em qualquer tamanho de tela. Tudo client-trusted, mesmo
+   nível de confiança de mochila/equipado (ver estado.php). */
+let modoDecorar = false;
+const movelImagemPorRotacao = (m, rotacao) => {
+  const porSlot = [m.imagemFrenteUrl, m.imagemDireitaUrl, m.imagemVersoUrl, m.imagemEsquerdaUrl];
+  return porSlot[rotacao] || m.imagemFrenteUrl;
+};
+function alternarDecorar(){ modoDecorar = !modoDecorar; RENDER.casa(); }
+function renderCamadaMoveis(){
+  const palco = $('#tela-casa .palco');
+  const camada = $('#camada-moveis');
+  if(!palco || !camada) return;
+  palco.classList.toggle('editando', modoDecorar);
+  camada.innerHTML = estado.casaMoveis.map(inst => {
+    const m = acharMovel(inst.tipoId);
+    if(!m) return '';
+    const url = movelImagemPorRotacao(m, inst.rotacao || 0);
+    return `<div class="movel-colocado" data-uid="${esc(inst.uid)}" style="left:${inst.x}%;top:${inst.y}%">
+      ${modoDecorar ? `<div class="controles-movel">
+        ${m.rotativel ? `<button type="button" onclick="girarMovel('${esc(inst.uid)}')" title="Girar">🔄</button>` : ''}
+        <button type="button" onclick="removerMovelDaCasa('${esc(inst.uid)}')" title="Guardar">✕</button>
+      </div>` : ''}
+      ${url ? `<img src="${esc(url)}" alt="${esc(m.nome)}">` : ''}
+    </div>`;
+  }).join('');
+  if(modoDecorar) camada.querySelectorAll('.movel-colocado').forEach(ativarDragMovel);
+}
+function renderFaixaDecorar(){
+  const faixa = $('#faixa-decorar');
+  if(!faixa) return;
+  const colocados = estado.casaMoveis.map(i => i.tipoId);
+  const disponiveis = estado.moveisComprados.filter(id => !colocados.includes(id)).map(acharMovel).filter(Boolean);
+  faixa.innerHTML = disponiveis.length
+    ? disponiveis.map(m => `<div class="movel-bandeja" onclick="colocarMovelNaCasa('${esc(m.id)}')">
+        ${m.imagemFrenteUrl ? `<img src="${esc(m.imagemFrenteUrl)}" alt="">` : ''}
+        <span>${esc(m.nome)}</span>
+      </div>`).join('')
+    : `<span class="vazio">Tudo colocado! Compre mais na Loja de Móveis.</span>`;
+}
+// entra perto do chão, espalhado (não em cima do bicho, que fica mais no centro/alto do
+// quarto) — a pessoa arrasta pra onde quiser depois, isso é só o ponto de partida
+const POSICOES_INICIAIS_MOVEL = [{x:22,y:85},{x:78,y:85},{x:50,y:90},{x:12,y:70},{x:88,y:70}];
+window.colocarMovelNaCasa = (tipoId) => {
+  const pos = POSICOES_INICIAIS_MOVEL[estado.casaMoveis.length % POSICOES_INICIAIS_MOVEL.length];
+  estado.casaMoveis.push({uid: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2,6), tipoId, x:pos.x, y:pos.y, rotacao:0});
+  renderCamadaMoveis(); renderFaixaDecorar();
+  agendarSalvar();
+};
+window.removerMovelDaCasa = (uid) => {
+  estado.casaMoveis = estado.casaMoveis.filter(i => i.uid !== uid);
+  renderCamadaMoveis(); renderFaixaDecorar();
+  agendarSalvar();
+};
+window.girarMovel = (uid) => {
+  const inst = estado.casaMoveis.find(i => i.uid === uid);
+  if(!inst) return;
+  inst.rotacao = ((inst.rotacao || 0) + 1) % 4;
+  renderCamadaMoveis();
+  agendarSalvar();
+};
+function ativarDragMovel(el){
+  const uid = el.dataset.uid;
+  let inicio = null, base = null, palcoRect = null;
+  el.addEventListener('pointerdown', ev => {
+    if(ev.target.closest('.controles-movel')) return;
+    const inst = estado.casaMoveis.find(i => i.uid === uid);
+    if(!inst) return;
+    palcoRect = el.closest('.palco').getBoundingClientRect();
+    inicio = {x: ev.clientX, y: ev.clientY};
+    base = {x: inst.x, y: inst.y};
+    el.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+  });
+  el.addEventListener('pointermove', ev => {
+    if(!inicio) return;
+    const inst = estado.casaMoveis.find(i => i.uid === uid);
+    if(!inst) return;
+    inst.x = Math.min(100, Math.max(0, base.x + (ev.clientX - inicio.x) / palcoRect.width * 100));
+    inst.y = Math.min(100, Math.max(0, base.y + (ev.clientY - inicio.y) / palcoRect.height * 100));
+    el.style.left = inst.x + '%'; el.style.top = inst.y + '%';
+  });
+  const soltar = () => { if(inicio) agendarSalvar(); inicio = null; base = null; };
+  el.addEventListener('pointerup', soltar);
+  el.addEventListener('pointercancel', soltar);
+}
+
 RENDER.casa = () => {
   const h = humor();
   const pendentes = TRILHAS.flatMap(t=>t.licoes).filter(l=>!estado.licoesFeitas.includes(l.id));
   const proxima = pendentes[0];
+  const temFundo = !!CASA_CONFIG.fundoUrl;
   $('#tela-casa').innerHTML = `
-    <div class="palco">
-      <div class="sol"></div><div class="nuvem"></div>
+    <div class="palco ${temFundo?'quarto':''}" style="${temFundo?`background-image:url('${esc(CASA_CONFIG.fundoUrl)}')`:''}">
+      ${temFundo ? '' : '<div class="sol"></div><div class="nuvem"></div>'}
+      <div id="camada-moveis"></div>
       ${svgBicho(estado.tipo,{equipado:estado.equipado, classe: h.min>=70?'feliz':''})}
     </div>
+    ${temFundo ? `<div style="text-align:center;margin-top:8px">
+      <button class="btn ${modoDecorar?'roxo':'branco'} pequeno" onclick="alternarDecorar()">${modoDecorar ? '✅ Pronto' : '🛋️ Decorar'}</button>
+    </div>
+    ${modoDecorar ? '<div class="faixa-decorar" id="faixa-decorar"></div>' : ''}` : ''}
     <div style="text-align:center"><span class="placa-nome">${h.emoji} ${esc(estado.apelido)}</span></div>
     ${estado.streak.atual >= 1 ? `<div style="text-align:center;margin-top:6px">
       <span class="chip"><svg viewBox="0 0 24 24" style="width:14px;height:14px;vertical-align:-2px"><path d="M12 2c1 4-3 5-3 8.5a3.5 3.5 0 007 0c0-1.5-1-2-1-3.2 1.5 1 2.5 3 2.5 5.2 0 3.6-2.7 6.5-7 6.5s-7-2.9-7-6.5C3.5 8 6.5 4.5 12 2z" fill="var(--manga)" stroke="var(--manga-rim)" stroke-width=".8"/></svg> ${estado.streak.atual} dia${estado.streak.atual===1?'':'s'} seguido${estado.streak.atual===1?'':'s'}</span></div>` : ''}
@@ -930,6 +1052,7 @@ RENDER.casa = () => {
       <button class="btn roxo grande" onclick="ir('loja')">🍉 Alimentar</button>
     </div>
     <div style="margin-top:12px"><button class="btn branco grande" onclick="ir('perfil')">🪪 Ver minha carteirinha</button></div>`;
+  if(temFundo){ renderCamadaMoveis(); if(modoDecorar) renderFaixaDecorar(); }
 };
 
 /* desgaste suave: o bicho nunca "morre", só fica com saudade */
@@ -1200,6 +1323,11 @@ const acharMissao = id => MISSOES.find(m => m.id === id);
 // acessório, comprado com moeda): estes só existem, o aluno acha e pega, sem custo
 let ITENS_MAPA = [];
 const acharItemMapa = id => ITENS_MAPA.find(it => it.id === id);
+// móveis (catálogo da Loja de Móveis, aba Móveis) e fundo da Casa — comprado com moedas,
+// diferente dos itens de mapa acima que são achados de graça
+let MOVEIS = [];
+const acharMovel = id => MOVEIS.find(m => m.id === id);
+let CASA_CONFIG = {fundoUrl:''};
 /* agenda de um NPC: dias da semana, horário e período de datas, todos opcionais
    (vazio = sem restrição). Decidido com a hora do aparelho de quem está jogando —
    não tem por que ir no servidor só pra saber se "agora" está dentro da janela. */
@@ -2183,6 +2311,36 @@ function consumirItem(id){
   agendarSalvar();
 }
 
+/* ---------- 9b. TELA: LOJA DE MÓVEIS (decorar a Casa, estilo Club Penguin) ----------
+   Só alcançável por um ponto tipo "tela" num mapa (aba Mapas) — sem aba própria no
+   rodapé, igual à lição. Comprado aqui, o móvel fica disponível pra colocar na Casa. */
+RENDER.lojamoveis = () => {
+  $('#tela-lojamoveis').innerHTML = `
+    <div class="titulo-secao"><h2>Loja de Móveis</h2><small>você tem 🪙 ${estado.moedas}</small></div>
+    ${blocoNpcsDaTela('lojamoveis')}
+    <div class="grade-3">${MOVEIS.map(cartaoMovel).join('') || '<p class="vazio">Nenhum móvel à venda ainda.</p>'}</div>
+    <p style="font-size:12px;font-weight:700;opacity:.75;margin:14px 4px 0">Comprou? Vá pra Casa e toque em "Decorar" pra colocar o móvel no seu quarto.</p>`;
+};
+function cartaoMovel(m){
+  const tem = estado.moveisComprados.includes(m.id);
+  const podePagar = estado.moedas >= m.preco;
+  return `<div class="item-loja">
+    ${m.imagemFrenteUrl ? `<img src="${esc(m.imagemFrenteUrl)}" alt="" style="width:56px;height:56px;object-fit:contain">` : `<span class="emoji">🪑</span>`}
+    <b>${esc(m.nome)}</b>
+    <button class="btn pequeno ${tem ? 'roxo' : (podePagar?'':'bloq')}" ${tem?'disabled':''} onclick="comprarMovel('${m.id}')">${tem ? 'Você tem' : '🪙 '+m.preco}</button>
+  </div>`;
+}
+function comprarMovel(id){
+  const m = acharMovel(id);
+  if(!m || estado.moveisComprados.includes(id)) return;
+  if(estado.moedas < m.preco) return brinde('Faltam 🪙 ' + (m.preco-estado.moedas) + '. Bora jogar um minigame!');
+  estado.moedas -= m.preco;
+  estado.moveisComprados.push(id);
+  brinde(m.nome + ' comprado! Vá pra Casa decorar. 🛋️');
+  atualizarHud(); RENDER.lojamoveis();
+  agendarSalvar();
+}
+
 /* ---------- 10. TELA: MURAL (interação segura por blocos) ---------- */
 const BLOCOS = {
   inicio:['Oi, gente!','Mandei bem!','Alguém me ajuda?','Boa sorte pra todo mundo!'],
@@ -2366,6 +2524,8 @@ async function carregarConteudo(){
     if(Array.isArray(dados.npcs)) NPCS = dados.npcs;
     if(Array.isArray(dados.missoes)) MISSOES = dados.missoes;
     if(Array.isArray(dados.itens)) ITENS_MAPA = dados.itens;
+    if(Array.isArray(dados.moveis)) MOVEIS = dados.moveis;
+    if(dados.casaConfig) CASA_CONFIG = dados.casaConfig;
   }catch(e){ /* offline ou hospedagem sem PHP: fica com o conteúdo embutido */ }
 }
 // dispara já no carregamento da página — some com a espera perceptível, porque
