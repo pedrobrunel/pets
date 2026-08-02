@@ -157,6 +157,11 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
 .opcao-no select{flex:1}
 .opcao-no button{flex:none}
 .npc-thumb{width:34px;height:34px;border-radius:8px;object-fit:cover;vertical-align:-10px;margin-right:6px;background:#F4F6F7}
+.dias-semana{display:flex;gap:6px;flex-wrap:wrap}
+.dias-semana button{
+  background:#fff;border:1px solid var(--contorno);border-radius:8px;padding:7px 10px;font-size:12px;font-weight:800;cursor:pointer;
+}
+.dias-semana button.ativo{background:var(--tinta);color:#fff;border-color:var(--tinta)}
 
 .busca{margin-bottom:12px}
 .busca input{max-width:280px}
@@ -313,6 +318,21 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
           "só via ponto no mapa", ele só aparece onde você criar um ponto tipo "Conversar com um NPC", na aba Mapas.
         </p>
 
+        <label>quando ele aparece <span style="font-weight:700;color:#7F8C8D">(tudo opcional — vazio = sempre)</span></label>
+        <div class="dias-semana" id="npc-dias-semana"></div>
+        <div class="linha2" style="margin-top:8px">
+          <div><label style="margin-top:6px">horário — de</label><input type="text" id="npc-hora-inicio" placeholder="08:00" maxlength="5"></div>
+          <div><label style="margin-top:6px">até</label><input type="text" id="npc-hora-fim" placeholder="18:00" maxlength="5"></div>
+        </div>
+        <div class="linha2">
+          <div><label style="margin-top:6px">só a partir de</label><input type="text" id="npc-data-inicio" placeholder="AAAA-MM-DD" maxlength="10"></div>
+          <div><label style="margin-top:6px">até</label><input type="text" id="npc-data-fim" placeholder="AAAA-MM-DD" maxlength="10"></div>
+        </div>
+        <p class="dica-editor">
+          Fora do dia/horário/período escolhido, o NPC some — do mapa e da tela — como se não estivesse por aqui.
+          Útil pra eventos, feriados ou pra combinar com o horário de aula.
+        </p>
+
         <div class="check"><input type="checkbox" id="npc-publicado" checked><label style="margin:0" for="npc-publicado">publicado (aparece pro aluno)</label></div>
 
         <div class="editor-blocos">
@@ -324,6 +344,15 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
             Cada nó é uma fala do NPC (o balãozinho) com até 4 botões de resposta. Cada botão pode levar a outro nó
             ou encerrar a conversa. O nó com a faixa verde é onde a conversa começa — escolha em "nó inicial" no card dele.
           </p>
+          <div style="display:flex;gap:8px;align-items:center;margin:8px 0">
+            <select id="npc-modelo-dialogo" style="max-width:220px">
+              <option value="">— começar de um modelo —</option>
+              <option value="lojista">Lojista</option>
+              <option value="guia">Guia (avisos)</option>
+              <option value="recado">Só um recado</option>
+            </select>
+            <button type="button" class="btn linha branco" id="btn-usar-modelo">Usar modelo</button>
+          </div>
           <div id="npc-nos"></div>
         </div>
 
@@ -897,10 +926,20 @@ async function carregarNpcs(){
       <td><span class="selo ${n.publicado?'on':'off'}">${n.publicado?'publicado':'rascunho'}</span></td>
       <td class="acoes">
         <button class="btn linha branco" onclick="editarNpc('${n.id}')">Editar</button>
+        <button class="btn linha branco" onclick="duplicarNpc('${n.id}','${esc(n.nome)}')">Duplicar</button>
         <button class="btn linha erro" onclick="excluirNpc('${n.id}','${esc(n.nome)}')">Excluir</button>
       </td>
     </tr>`).join('') || '<tr><td colspan="5">Nenhum NPC ainda.</td></tr>'}`;
 }
+window.duplicarNpc = async (id, nome) => {
+  const novoId = prompt(`Duplicar "${nome}" — id do NPC novo (2 a 24 letras minúsculas ou números):`, id + '2');
+  if (!novoId) return;
+  try{
+    const r = await api('npc_duplicar', {method:'POST', corpo:{id, novoId: novoId.trim()}});
+    await carregarNpcs();
+    editarNpc(r.id); // já abre pra editar — a cópia entra como rascunho de propósito
+  }catch(e){ alert(e.message); }
+};
 
 function chaveNoLivre(base){
   let i = 1, chave = base + i;
@@ -915,6 +954,30 @@ function novoNo(){
   return chave;
 }
 $('#btn-add-no').onclick = () => { novoNo(); renderNos(); };
+
+// pontos de partida prontos, pra não montar a árvore inteira do zero toda vez — quem
+// usa edita o texto e os botões depois, a estrutura (quantos nós, o que leva a onde) já vem pronta
+const MODELOS_DIALOGO = {
+  lojista: {inicial:'oi', nos:{
+    oi: {texto:'Ô! Precisando de alguma coisa?', opcoes:[{rotulo:'O que você vende?', proximo:'vende'},{rotulo:'Só passando, valeu!', proximo:null}]},
+    vende: {texto:'Tenho um pouco de tudo — dá uma olhada aqui embaixo!', opcoes:[{rotulo:'Show, obrigado!', proximo:null}]},
+  }},
+  guia: {inicial:'oi', nos:{
+    oi: {texto:'Oi! Posso te dar uma dica sobre este lugar.', opcoes:[{rotulo:'Me conta!', proximo:'dica'},{rotulo:'Depois eu volto', proximo:null}]},
+    dica: {texto:'Explique aqui a dica ou o aviso que o NPC vai dar.', opcoes:[{rotulo:'Entendi, valeu!', proximo:null}]},
+  }},
+  recado: {inicial:'oi', nos:{
+    oi: {texto:'Escreva aqui o recado do NPC.', opcoes:[{rotulo:'OK!', proximo:null}]},
+  }},
+};
+$('#btn-usar-modelo').onclick = () => {
+  const chave = $('#npc-modelo-dialogo').value;
+  if(!chave) return;
+  if(Object.keys(dialogoEdit.nos).some(k => dialogoEdit.nos[k].texto) && !confirm('Isso substitui o diálogo atual pelo modelo. Continuar?')) return;
+  dialogoEdit = JSON.parse(JSON.stringify(MODELOS_DIALOGO[chave]));
+  nosOrdem = Object.keys(dialogoEdit.nos);
+  renderNos();
+};
 
 function renderNos(){
   const opcoesNo = (atualChave, selecionado) => nosOrdem
@@ -996,6 +1059,18 @@ const TELAS_NPC = [
 ];
 $('#npc-tela').innerHTML = TELAS_NPC.map(t => `<option value="${t.v}">${t.rotulo}</option>`).join('');
 
+const DIAS_SEMANA = [{v:1,rotulo:'seg'},{v:2,rotulo:'ter'},{v:3,rotulo:'qua'},{v:4,rotulo:'qui'},{v:5,rotulo:'sex'},{v:6,rotulo:'sáb'},{v:7,rotulo:'dom'}];
+let diasSemanaSel = [];
+$('#npc-dias-semana').innerHTML = DIAS_SEMANA.map(d => `<button type="button" data-dia="${d.v}">${d.rotulo}</button>`).join('');
+$$('#npc-dias-semana button').forEach(b => b.onclick = () => {
+  const dia = Number(b.dataset.dia);
+  diasSemanaSel = diasSemanaSel.includes(dia) ? diasSemanaSel.filter(d => d !== dia) : [...diasSemanaSel, dia];
+  pintarDiasSemana();
+});
+function pintarDiasSemana(){
+  $$('#npc-dias-semana button').forEach(b => b.classList.toggle('ativo', diasSemanaSel.includes(Number(b.dataset.dia))));
+}
+
 function limparFormNpc(){
   $('#form-npc').reset();
   $('#npc-id').disabled = false;
@@ -1005,6 +1080,8 @@ function limparFormNpc(){
   $('#btn-excluir-npc').classList.add('oculto');
   dialogoEdit = {inicial:'', nos:{}};
   nosOrdem = [];
+  diasSemanaSel = [];
+  pintarDiasSemana();
 }
 $('#btn-novo-npc').onclick = () => {
   limparFormNpc();
@@ -1027,6 +1104,12 @@ window.editarNpc = async (id) => {
   $('#npc-aviso-lottie').style.display = n.imagemTipo === 'lottie' ? 'block' : 'none';
   $('#npc-imagem').value = n.imagem;
   $('#npc-tela').value = n.tela || '';
+  diasSemanaSel = n.diasSemana ? n.diasSemana.split(',').map(Number) : [];
+  pintarDiasSemana();
+  $('#npc-hora-inicio').value = n.horaInicio || '';
+  $('#npc-hora-fim').value = n.horaFim || '';
+  $('#npc-data-inicio').value = n.dataInicio || '';
+  $('#npc-data-fim').value = n.dataFim || '';
   dialogoEdit = n.dialogo && n.dialogo.nos && Object.keys(n.dialogo.nos).length ? n.dialogo : {inicial:'', nos:{}};
   nosOrdem = Object.keys(dialogoEdit.nos);
   if(!nosOrdem.length) novoNo();
@@ -1052,6 +1135,8 @@ $('#form-npc').addEventListener('submit', async e => {
     await api('npc_salvar', {method:'POST', corpo:{
       id, nome: $('#npc-nome').value.trim(), emoji: $('#npc-emoji').value.trim() || '🧑',
       imagem: $('#npc-imagem').value.trim(), imagemTipo: $('#npc-imagem-tipo').value, tela: $('#npc-tela').value,
+      diasSemana: diasSemanaSel.join(','), horaInicio: $('#npc-hora-inicio').value.trim(), horaFim: $('#npc-hora-fim').value.trim(),
+      dataInicio: $('#npc-data-inicio').value.trim(), dataFim: $('#npc-data-fim').value.trim(),
       publicado: $('#npc-publicado').checked, ordem: Number($('#npc-ordem').value) || 0,
       dialogo: dialogoEdit,
     }});
