@@ -219,16 +219,18 @@ body.tela-cheia #app{padding:0;max-width:none}
   padding:2px 8px;font-size:11px;font-weight:900;box-shadow:0 2px 0 var(--contorno);white-space:nowrap;
 }
 .predio-selo.completo{background:var(--moeda)}
-/* item colecionável solto no mapa: um objeto de verdade (o binóculo), não um hotspot
-   invisível — flutua de leve pra chamar atenção, some pra sempre depois de tocado */
-.predio.item-mapa{align-items:center}
-.item-icone{
-  width:46px;height:46px;border-radius:50%;background:#fff;border:3px solid var(--moeda-rim);
-  display:flex;align-items:center;justify-content:center;font-size:22px;
-  box-shadow:0 3px 0 rgba(0,0,0,.15);animation:flutua-item 2.2s ease-in-out infinite;
+/* item colecionável solto no mapa: mostra a arte de verdade (o binóculo desenhado ali),
+   do tamanho da caixa que o painel definiu — disfarçado na cena, sem bolinha nem selo.
+   Só brilha ao passar o mouse, pra não denunciar o item de longe. Some pra sempre ao tocar. */
+.predio.item-mapa{align-items:center;justify-content:center}
+.item-figura{
+  max-width:100%;max-height:100%;pointer-events:none;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.3));transition:filter .15s ease;
 }
-.item-icone img{width:100%;height:100%;object-fit:cover;border-radius:50%}
-@keyframes flutua-item{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.item-figura.item-emoji{font-size:min(8vw, 40px);line-height:1}
+.item-mapa:hover .item-figura, .item-mapa:focus-visible .item-figura, .item-mapa:active .item-figura{
+  filter:drop-shadow(0 0 6px #fff) drop-shadow(0 0 12px rgba(255,255,255,.85));
+}
 .btn.amarelo{--bg:var(--moeda);--edge:var(--moeda-rim);color:var(--tinta);text-shadow:none}
 .btn-voltar-cena{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:41}
 
@@ -1550,10 +1552,12 @@ RENDER.trilhas = (idCena) => {
           }
           if(p.tipo === 'item'){
             const item = acharItemMapa(p.destino);
-            const figura = item?.imagemUrl ? `<img src="${esc(item.imagemUrl)}" alt="">` : esc(item?.emoji || '🔹');
+            const figura = item?.imagemUrl
+              ? `<img class="item-figura" src="${esc(item.imagemUrl)}" alt="">`
+              : `<span class="item-figura item-emoji">${esc(item?.emoji || '🔹')}</span>`;
             return `<button class="predio item-mapa ${p.mostrarDica?'com-dica':''}"
               style="left:${p.x}%;top:${p.y}%;width:${p.largura}%;height:${p.altura}%"
-              onclick="abrirPonto(${i}, this)" aria-label="${esc(p.rotulo)}"><span class="item-icone">${figura}</span></button>`;
+              onclick="abrirPonto(${i}, this)" aria-label="${esc(p.rotulo)}">${figura}</button>`;
           }
           return `<button class="predio ${p.mostrarDica?'com-dica':''}"
             style="left:${p.x}%;top:${p.y}%;width:${p.largura}%;height:${p.altura}%"
