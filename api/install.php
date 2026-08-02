@@ -214,11 +214,30 @@ try {
     imagem_direita  VARCHAR(160) NOT NULL DEFAULT \'\',
     imagem_verso    VARCHAR(160) NOT NULL DEFAULT \'\',
     imagem_esquerda VARCHAR(160) NOT NULL DEFAULT \'\',
+    dias_semana     VARCHAR(20) NOT NULL DEFAULT \'\',
+    hora_inicio     VARCHAR(5)  NOT NULL DEFAULT \'\',
+    hora_fim        VARCHAR(5)  NOT NULL DEFAULT \'\',
+    data_inicio     VARCHAR(10) NOT NULL DEFAULT \'\',
+    data_fim        VARCHAR(10) NOT NULL DEFAULT \'\',
     publicado       TINYINT(1) NOT NULL DEFAULT 1,
     ordem           INT NOT NULL DEFAULT 0,
     criado_em       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     atualizado_em   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  // agenda (estoque por tempo limitado) chegou depois de "moveis" já existir em produção
+  // — mesma checagem por INFORMATION_SCHEMA usada nos NPCs
+  $colunasMoveis = array_column($pdo->query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'moveis'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+  foreach ([
+    'dias_semana' => "VARCHAR(20) NOT NULL DEFAULT ''",
+    'hora_inicio' => "VARCHAR(5) NOT NULL DEFAULT ''",
+    'hora_fim'    => "VARCHAR(5) NOT NULL DEFAULT ''",
+    'data_inicio' => "VARCHAR(10) NOT NULL DEFAULT ''",
+    'data_fim'    => "VARCHAR(10) NOT NULL DEFAULT ''",
+  ] as $coluna => $definicao) {
+    if (!in_array($coluna, $colunasMoveis, true)) $pdo->exec("ALTER TABLE moveis ADD COLUMN $coluna $definicao");
+  }
 
   // configurações gerais do jogo: fundo da Casa e preço pra desbloquear a decoração —
   // um valor só, vale pra todo mundo (não é por jogador). Linha única (id sempre 1).

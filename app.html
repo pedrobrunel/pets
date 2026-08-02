@@ -535,15 +535,29 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
 .missao-item:last-child{border-bottom:none}
 .missao-status{font-size:16px;line-height:1.3}
 .aviso-mini{font-size:11px;font-weight:700;opacity:.6;text-align:center;margin:0}
-.trilha-conquistas{display:flex;overflow-x:auto;padding:6px 4px 6px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
-.conquista{flex:0 0 auto;width:70px;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;scroll-snap-align:start}
-.conquista::before{content:"";position:absolute;top:22px;right:50%;width:100%;height:4px;background:var(--tinta);z-index:-1}
-.conquista:first-child::before{display:none}
-.conquista .bolha{width:44px;height:44px;border-radius:50%;
-  background:var(--moeda);border:3px solid var(--moeda-rim);
-  display:grid;place-items:center;font-size:20px}
-.conquista.bloqueada .bolha{background:#D5DBDB;filter:grayscale(1);opacity:.6}
-.conquista span{font-size:10px;font-weight:900;text-align:center;line-height:1.15}
+/* álbum de conquistas: cartas colecionáveis — desbloqueada brilha tipo "carta rara",
+   bloqueada fica em silhueta cinza (dá pra ver o que falta, sem entregar o emoji) */
+.grade-conquistas{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:4px 0}
+.carta-conquista{
+  aspect-ratio:3/4;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:8px 6px;text-align:center;position:relative;overflow:hidden;border:3px solid var(--contorno);
+  transition:transform .15s ease;
+}
+.carta-conquista:active{transform:scale(.96)}
+.carta-conquista.desbloqueada{
+  background:linear-gradient(160deg,#FFF9E6 0%,#FFE9A8 45%,#FFD166 100%);
+  border-color:var(--moeda-rim);box-shadow:0 3px 0 var(--moeda-rim), 0 4px 8px rgba(0,0,0,.15);
+}
+.carta-conquista.desbloqueada::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.6) 48%,transparent 62%);
+  transform:translateX(-60%);animation:brilhoCarta 3.4s ease-in-out infinite;
+}
+@keyframes brilhoCarta{0%,15%{transform:translateX(-60%)}55%,100%{transform:translateX(60%)}}
+.carta-conquista.bloqueada{background:#EDF0F1;border-color:#D5DBDB;color:#95A5A6}
+.carta-conquista .emoji-conquista{font-size:28px;line-height:1;margin-bottom:6px;position:relative;z-index:1}
+.carta-conquista .cadeado-conquista{font-size:22px;margin-bottom:6px;opacity:.55}
+.carta-conquista .nome-conquista{font-size:10.5px;font-weight:900;line-height:1.2;position:relative;z-index:1}
 
 /* ---------- balão / aviso ---------- */
 #brinde{
@@ -665,6 +679,8 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
   <section id="tela-casa" class="tela"></section>
   <!-- ====== EDITAR CASA (decoração de verdade) ====== -->
   <section id="tela-editarcasa" class="tela"></section>
+  <!-- ====== VISITAR CASA (de outro jogador, só ver) ====== -->
+  <section id="tela-vercasa" class="tela"></section>
   <!-- ====== TRILHAS (mapa de mundos) ====== -->
   <section id="tela-trilhas" class="tela"></section>
   <!-- ====== MUNDO (uma trilha por dentro) ====== -->
@@ -948,7 +964,7 @@ const movelImagemPorRotacao = (m, rotacao) => {
   const porSlot = [m.imagemFrenteUrl, m.imagemDireitaUrl, m.imagemVersoUrl, m.imagemEsquerdaUrl];
   return porSlot[rotacao] || m.imagemFrenteUrl;
 };
-function renderCamadaMoveis(editavel, telaId='editarcasa'){
+function renderCamadaMoveis(editavel, telaId='editarcasa', moveisColocados=null){
   // não usa ".tela.ativa": ir() só marca a tela nova como ativa DEPOIS de chamar
   // RENDER[tela](), então durante o primeiro render essa busca ainda pegaria a tela
   // anterior — por isso o id explícito, em vez de adivinhar qual tela está visível
@@ -957,7 +973,7 @@ function renderCamadaMoveis(editavel, telaId='editarcasa'){
   const camada = raiz?.querySelector('.camada-moveis');
   if(!palco || !camada) return;
   palco.classList.toggle('editando', editavel);
-  camada.innerHTML = estado.casaMoveis.map(inst => {
+  camada.innerHTML = (moveisColocados || estado.casaMoveis).map(inst => {
     const m = acharMovel(inst.tipoId);
     if(!m) return '';
     const url = movelImagemPorRotacao(m, inst.rotacao || 0);
@@ -1051,6 +1067,13 @@ RENDER.casa = () => {
       <p style="font-size:13px;margin:4px 0 10px">Desbloqueie pra decorar o quarto com os móveis que comprar.</p>
       <button class="btn amarelo" onclick="desbloquearCasa()">Desbloquear por 🪙 ${CASA_CONFIG.precoCasa}</button>
     </div>` : ''}
+    ${temFundo && logado ? `<div class="sticker" style="margin-top:14px">
+      <b style="font-family:'Baloo 2';font-size:16px;display:block;margin-bottom:6px">👀 Visitar a casa de um amigo</b>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="campo-visitar" placeholder="apelido do amigo" maxlength="14" style="flex:1">
+        <button class="btn azul pequeno" onclick="visitarCasaDigitada()">Ir</button>
+      </div>
+    </div>` : ''}
     <div style="text-align:center"><span class="placa-nome">${h.emoji} ${esc(estado.apelido)}</span></div>
     ${estado.streak.atual >= 1 ? `<div style="text-align:center;margin-top:6px">
       <span class="chip"><svg viewBox="0 0 24 24" style="width:14px;height:14px;vertical-align:-2px"><path d="M12 2c1 4-3 5-3 8.5a3.5 3.5 0 007 0c0-1.5-1-2-1-3.2 1.5 1 2.5 3 2.5 5.2 0 3.6-2.7 6.5-7 6.5s-7-2.9-7-6.5C3.5 8 6.5 4.5 12 2z" fill="var(--manga)" stroke="var(--manga-rim)" stroke-width=".8"/></svg> ${estado.streak.atual} dia${estado.streak.atual===1?'':'s'} seguido${estado.streak.atual===1?'':'s'}</span></div>` : ''}
@@ -1115,6 +1138,45 @@ RENDER.editarcasa = () => {
       <button class="btn amarelo" onclick="desbloquearCasa()">Desbloquear por 🪙 ${CASA_CONFIG.precoCasa}</button>
     </div>`}`;
   if(casaAtiva){ renderCamadaMoveis(true); renderFaixaDecorar(); }
+};
+
+/* ---------- 4c. TELA: VISITAR CASA (de outro jogador — só ver, sem interação) ----------
+   Digita um apelido (mesma validação do login) e vê a casa dele, se ele já tiver
+   desbloqueado e decorado uma. Sem chat, sem contato — é o mural (recados), que já
+   mostra apelido de verdade, levado um passo adiante: dá pra ver a casa, não só o nome. */
+function visitarCasaDigitada(){
+  const apelido = $('#campo-visitar').value.trim();
+  if(!apelido) return;
+  ir('vercasa', apelido);
+}
+RENDER.vercasa = async (apelido) => {
+  $('#tela-vercasa').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
+    <div class="titulo-secao"><h2>👀 Casa de ${esc(apelido)}</h2></div>
+    <p class="aviso" style="margin-top:12px">Procurando...</p>`;
+  let dados;
+  try{
+    const r = await fetch('api/estado.php?acao=ver_casa&apelido=' + encodeURIComponent(apelido), {cache:'no-store'});
+    dados = await r.json();
+    if(!r.ok) throw new Error(dados.erro || 'Não foi possível ver essa casa.');
+  }catch(e){
+    $('#tela-vercasa').innerHTML = `
+      <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
+      <div class="titulo-secao"><h2>👀 Casa de ${esc(apelido)}</h2></div>
+      <p class="vazio">${esc(e.message)}</p>`;
+    return;
+  }
+  const temCasa = !!CASA_CONFIG.fundoUrl && dados.casaDesbloqueada;
+  $('#tela-vercasa').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
+    <div class="titulo-secao"><h2>👀 Casa de ${esc(dados.apelido)}</h2></div>
+    ${temCasa ? `
+      <div class="palco quarto" style="background-image:url('${esc(CASA_CONFIG.fundoUrl)}')">
+        <div class="camada-moveis"></div>
+        ${svgBicho(dados.tipo, {equipado: dados.equipado})}
+      </div>
+    ` : `<p class="vazio">${esc(dados.apelido)} ainda não decorou uma casa.</p>`}`;
+  if(temCasa) renderCamadaMoveis(false, 'vercasa', dados.casaMoveis);
 };
 
 /* desgaste suave: o bicho nunca "morre", só fica com saudade */
@@ -1390,26 +1452,29 @@ const acharItemMapa = id => ITENS_MAPA.find(it => it.id === id);
 let MOVEIS = [];
 const acharMovel = id => MOVEIS.find(m => m.id === id);
 let CASA_CONFIG = {fundoUrl:'', precoCasa:5000};
-/* agenda de um NPC: dias da semana, horário e período de datas, todos opcionais
-   (vazio = sem restrição). Decidido com a hora do aparelho de quem está jogando —
-   não tem por que ir no servidor só pra saber se "agora" está dentro da janela. */
-function npcAtivoAgora(n){
+/* agenda: dias da semana, horário e período de datas, todos opcionais (vazio = sem
+   restrição). Decidido com a hora do aparelho de quem está jogando — não tem por que ir
+   no servidor só pra saber se "agora" está dentro da janela. Mesmo formato usado pelos
+   NPCs (diasSemana/horaInicio/horaFim/dataInicio/dataFim) e agora pelos móveis também
+   (estoque por tempo limitado na Loja de Móveis) — qualquer objeto com esses campos serve. */
+function dentroDaAgenda(a){
   const agora = new Date();
-  if(n.dataInicio && hojeStr() < n.dataInicio) return false;
-  if(n.dataFim && hojeStr() > n.dataFim) return false;
-  if(n.diasSemana && n.diasSemana.length){
+  if(a.dataInicio && hojeStr() < a.dataInicio) return false;
+  if(a.dataFim && hojeStr() > a.dataFim) return false;
+  if(a.diasSemana && a.diasSemana.length){
     const dia = agora.getDay() === 0 ? 7 : agora.getDay(); // 1=segunda...7=domingo
-    if(!n.diasSemana.includes(dia)) return false;
+    if(!a.diasSemana.includes(dia)) return false;
   }
-  if(n.horaInicio && n.horaFim){
+  if(a.horaInicio && a.horaFim){
     const minutosAgora = agora.getHours()*60 + agora.getMinutes();
-    const [hi, mi] = n.horaInicio.split(':').map(Number), [hf, mf] = n.horaFim.split(':').map(Number);
+    const [hi, mi] = a.horaInicio.split(':').map(Number), [hf, mf] = a.horaFim.split(':').map(Number);
     const ini = hi*60+mi, fim = hf*60+mf;
     const dentro = ini <= fim ? (minutosAgora >= ini && minutosAgora <= fim) : (minutosAgora >= ini || minutosAgora <= fim);
     if(!dentro) return false;
   }
   return true;
 }
+const npcAtivoAgora = n => dentroDaAgenda(n);
 
 /* ---------- missões (catálogo central; o NPC só referencia pelo diálogo) ----------
    estado.missoes: {missaoId: 'ativa'|'completa'}. "pronta" não é gravado — é calculado
@@ -2450,17 +2515,22 @@ function consumirItem(id){
 /* ---------- 9b. TELA: LOJA DE MÓVEIS (decorar a Casa, estilo Club Penguin) ----------
    Só alcançável por um ponto tipo "tela" num mapa (aba Mapas) — sem aba própria no
    rodapé, igual à lição. Comprado aqui, o móvel fica disponível pra colocar na Casa. */
+// agenda opcional (mesmo formato dos NPCs) -> "estoque por tempo limitado": o móvel só
+// aparece no catálogo dentro da janela configurada, decidido com a hora do aparelho
+const temAgenda = a => !!(a.horaInicio || a.dataInicio || (a.diasSemana && a.diasSemana.length));
 RENDER.lojamoveis = () => {
+  const disponiveis = MOVEIS.filter(dentroDaAgenda);
   $('#tela-lojamoveis').innerHTML = `
     <div class="titulo-secao"><h2>Loja de Móveis</h2><small>você tem 🪙 ${estado.moedas}</small></div>
     ${blocoNpcsDaTela('lojamoveis')}
-    <div class="grade-3">${MOVEIS.map(cartaoMovel).join('') || '<p class="vazio">Nenhum móvel à venda ainda.</p>'}</div>
-    <p style="font-size:12px;font-weight:700;opacity:.75;margin:14px 4px 0">Comprou? Vá pra Casa e toque em "Decorar" pra colocar o móvel no seu quarto.</p>`;
+    <div class="grade-3">${disponiveis.map(cartaoMovel).join('') || '<p class="vazio">Nenhum móvel à venda no momento — volte mais tarde!</p>'}</div>
+    <p style="font-size:12px;font-weight:700;opacity:.75;margin:14px 4px 0">Comprou? Vá pra Casa e toque em "Editar minha casa" pra colocar o móvel no seu quarto.</p>`;
 };
 function cartaoMovel(m){
   const tem = estado.moveisComprados.includes(m.id);
   const podePagar = estado.moedas >= m.preco;
   return `<div class="item-loja">
+    ${temAgenda(m) ? `<span class="chip" style="display:block;font-size:9px;padding:2px 6px;margin:-4px auto 6px;width:fit-content">⏳ por tempo limitado</span>` : ''}
     ${m.imagemFrenteUrl ? `<img src="${esc(m.imagemFrenteUrl)}" alt="" style="width:56px;height:56px;object-fit:contain">` : `<span class="emoji">🪑</span>`}
     <b>${esc(m.nome)}</b>
     <button class="btn pequeno ${tem ? 'roxo' : (podePagar?'':'bloq')}" ${tem?'disabled':''} onclick="comprarMovel('${m.id}')">${tem ? 'Você tem' : '🪙 '+m.preco}</button>
@@ -2556,11 +2626,13 @@ RENDER.perfil = () => {
     </div>
 
     <div class="titulo-secao" style="margin:8px 4px 6px"><h2 style="font-size:19px">Conquistas</h2><small>${MEDALHAS.filter(m=>m.ok()).length}/${MEDALHAS.length}</small></div>
-    <div class="trilha-conquistas">${MEDALHAS.map(m=>
-      `<div class="conquista ${m.ok()?'':'bloqueada'}">
-         <div class="bolha">${m.ok()?m.emoji:'🔒'}</div>
-         <span>${m.nome}</span>
-       </div>`).join('')}</div>
+    <div class="grade-conquistas">${MEDALHAS.map(m=>{
+      const ok = m.ok();
+      return `<div class="carta-conquista ${ok?'desbloqueada':'bloqueada'}">
+         ${ok ? `<span class="emoji-conquista">${m.emoji}</span>` : `<span class="cadeado-conquista">🔒</span>`}
+         <span class="nome-conquista">${m.nome}</span>
+       </div>`;
+    }).join('')}</div>
 
     <div class="perfil-rodape">
       <button class="btn branco pequeno" onclick="compartilhar()">🔗 Compartilhar</button>
