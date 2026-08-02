@@ -134,6 +134,11 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
   border:2px solid var(--erro);border-radius:3px;cursor:nwse-resize;
 }
 .ponto-marca:not(.selecionada) .alca{display:none}
+/* item: mostra a imagem/emoji de verdade dentro da caixa, do tamanho dela — é a mesma
+   arte que o aluno vê, pra dar pra posicionar/redimensionar olhando o objeto real */
+.figura-marca{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.figura-marca img{max-width:100%;max-height:100%;object-fit:contain}
+.figura-marca.emoji-marca{font-size:min(6vw, 36px)}
 .lista-pontos{max-height:280px;overflow-y:auto;border:1px solid var(--contorno);border-radius:8px}
 .lista-pontos button{
   display:block;width:100%;text-align:left;background:#fff;border:none;border-bottom:1px solid #F4F6F7;
@@ -712,6 +717,8 @@ async function atualizarListaCenas(){
   ).join('') || '<option value="">Nenhum mapa ainda</option>';
   if(anterior && cenasCache.some(c => c.id === anterior)) $('#seletor-cena').value = anterior;
   destinosCache = await api('destinos').catch(() => null);
+  // pra desenhar a imagem de verdade do item no editor (não só um retângulo genérico)
+  itensCache = (await api('itens_listar').catch(() => ({itens:[]}))).itens;
 }
 async function carregarCenas(){
   await atualizarListaCenas();
@@ -750,7 +757,13 @@ function desenharMarcas(){
     el.style.left = p.x + '%'; el.style.top = p.y + '%';
     el.style.width = p.largura + '%'; el.style.height = p.altura + '%';
     el.dataset.i = i;
-    el.innerHTML = `<span class="rotulo-marca">${esc(p.rotulo || '(sem rótulo)')}</span><span class="alca"></span>`;
+    // item mostra a imagem/emoji de verdade, do tamanho da caixa — é a mesma arte que
+    // vai aparecer pro aluno, pra dar pra posicionar e redimensionar vendo o objeto real
+    const item = p.tipo === 'item' ? itensCache.find(it => it.id === p.destino) : null;
+    const figuraItem = item
+      ? (item.imagemUrl ? `<img class="figura-marca" src="${esc(item.imagemUrl)}" alt="">` : `<span class="figura-marca emoji-marca">${esc(item.emoji)}</span>`)
+      : '';
+    el.innerHTML = `${figuraItem}<span class="rotulo-marca">${esc(p.rotulo || '(sem rótulo)')}</span><span class="alca"></span>`;
     quadro.appendChild(el);
   });
   pintarListaPontos();
