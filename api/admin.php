@@ -54,9 +54,10 @@
      POST ?acao=movel_excluir         {id}
      POST ?acao=movel_duplicar        {id, novoId} -> clona um móvel (fica como rascunho)
      POST ?acao=movel_imagem          (multipart: arquivo, slot=frente|direita|verso|esquerda) -> sobe imagem pra assets/moveis/
-     GET  ?acao=casa_config_obter     -> fundo atual da Casa
+     GET  ?acao=casa_config_obter     -> fundo e preço de desbloqueio atuais da Casa
      POST ?acao=casa_fundo_imagem     (multipart: arquivo) -> sobe e já grava o fundo da Casa
      POST ?acao=casa_fundo_remover    -> volta a Casa pro visual padrão (sem fundo)
+     POST ?acao=casa_preco_salvar     {precoCasa} -> preço em moedas pra desbloquear a decoração
    ========================================================= */
 
 declare(strict_types=1);
@@ -1263,11 +1264,20 @@ try {
     responder(['ok' => true, 'slot' => $slot, 'imagem' => $nome, 'imagemUrl' => 'assets/moveis/' . $nome]);
   }
 
-  /* ---------- Configurações gerais (por ora só o fundo da Casa) ---------- */
+  /* ---------- Configurações gerais (fundo da Casa + preço pra desbloquear) ---------- */
 
   if ($acao === 'casa_config_obter') {
-    $fundo = (string)(bd()->query('SELECT casa_fundo FROM configuracoes WHERE id = 1')->fetchColumn() ?: '');
-    responder(['fundo' => $fundo, 'fundoUrl' => caminhoPublicoMovel($fundo)]);
+    $c = bd()->query('SELECT casa_fundo, preco_casa FROM configuracoes WHERE id = 1')->fetch(PDO::FETCH_ASSOC) ?: ['casa_fundo' => '', 'preco_casa' => 5000];
+    responder(['fundo' => $c['casa_fundo'], 'fundoUrl' => caminhoPublicoMovel($c['casa_fundo']), 'precoCasa' => (int)$c['preco_casa']]);
+  }
+
+  if ($acao === 'casa_preco_salvar') {
+    $d = corpo();
+    if (!is_numeric($d['precoCasa'] ?? null) || (int)$d['precoCasa'] < 0 || (int)$d['precoCasa'] > 10000000) {
+      responder(['erro' => '"precoCasa" precisa ser um número entre 0 e 10000000.'], 422);
+    }
+    bd()->prepare('UPDATE configuracoes SET preco_casa = ? WHERE id = 1')->execute([(int)$d['precoCasa']]);
+    responder(['ok' => true]);
   }
 
   if ($acao === 'casa_fundo_imagem') {

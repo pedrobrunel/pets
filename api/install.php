@@ -220,13 +220,23 @@ try {
     atualizado_em   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
-  // configurações gerais do jogo: por ora só o fundo da Casa (uma imagem só, vale pra
-  // todo mundo — não é por jogador). Linha única (id sempre 1), criada abaixo se faltar.
+  // configurações gerais do jogo: fundo da Casa e preço pra desbloquear a decoração —
+  // um valor só, vale pra todo mundo (não é por jogador). Linha única (id sempre 1).
   $pdo->exec('CREATE TABLE IF NOT EXISTS configuracoes (
-    id        TINYINT PRIMARY KEY DEFAULT 1,
-    casa_fundo VARCHAR(160) NOT NULL DEFAULT \'\'
+    id         TINYINT PRIMARY KEY DEFAULT 1,
+    casa_fundo VARCHAR(160) NOT NULL DEFAULT \'\',
+    preco_casa INT NOT NULL DEFAULT 5000
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
-  $pdo->exec('INSERT IGNORE INTO configuracoes (id, casa_fundo) VALUES (1, \'\')');
+  // preco_casa chegou depois de "configuracoes" já existir em produção — mesma checagem
+  // por INFORMATION_SCHEMA usada nas outras colunas novas deste arquivo. Roda ANTES do
+  // INSERT logo abaixo, senão o INSERT referencia uma coluna que ainda não existe.
+  $colunasConfig = array_column($pdo->query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracoes'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+  if (!in_array('preco_casa', $colunasConfig, true)) {
+    $pdo->exec('ALTER TABLE configuracoes ADD COLUMN preco_casa INT NOT NULL DEFAULT 5000');
+  }
+  $pdo->exec('INSERT IGNORE INTO configuracoes (id, casa_fundo, preco_casa) VALUES (1, \'\', 5000)');
 
   // pasta das imagens enviadas pelo painel (as do repositório continuam em assets/)
   $pastaCenas = dirname(__DIR__) . '/assets/cenas';

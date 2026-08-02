@@ -584,6 +584,14 @@ body.conectando-fluxo{cursor:crosshair}
         <input type="file" id="input-casa-fundo" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="casa-fundo-aviso" class="aviso-form"></div>
         <button type="button" class="btn linha erro" id="btn-remover-casa-fundo" style="margin-top:10px">Remover fundo</button>
+
+        <label style="margin-top:16px">preço pra desbloquear a decoração (moedas)</label>
+        <p class="sub" style="margin-top:0">o aluno vê a Casa normal de sempre, mas só ganha acesso ao modo Decorar depois de pagar esse valor uma vez.</p>
+        <div class="linha3">
+          <div><input type="number" id="casa-preco" value="5000" min="0"></div>
+          <div><button type="button" class="btn mata" id="btn-salvar-casa-preco">Salvar preço</button></div>
+        </div>
+        <div id="casa-preco-aviso" class="aviso-form"></div>
       </div>
 
       <button class="btn" id="btn-novo-movel" style="margin-bottom:14px">+ Novo móvel</button>
@@ -2084,11 +2092,20 @@ async function enviarImagemMovel(slot, arquivo){
   }finally{ zona.textContent = textoOriginal; }
 }
 
-/* fundo da Casa: configuração única (não é por móvel) */
+/* fundo da Casa e preço de desbloqueio: configuração única (não é por móvel) */
 async function carregarCasaFundo(){
-  const d = await api('casa_config_obter').catch(() => ({fundoUrl:''}));
+  const d = await api('casa_config_obter').catch(() => ({fundoUrl:'', precoCasa:5000}));
   $('#preview-casa-fundo').innerHTML = d.fundoUrl ? `<img class="casa-fundo-thumb" src="${esc(d.fundoUrl)}">` : '<p class="sub" style="margin:0">Nenhum fundo configurado ainda — a Casa usa o visual padrão.</p>';
+  $('#casa-preco').value = d.precoCasa ?? 5000;
 }
+$('#btn-salvar-casa-preco').onclick = async () => {
+  const aviso = $('#casa-preco-aviso');
+  aviso.style.display = 'none';
+  try{
+    await api('casa_preco_salvar', {method:'POST', corpo:{precoCasa: Number($('#casa-preco').value) || 0}});
+    aviso.className = 'aviso-form ok'; aviso.textContent = 'Preço salvo!'; aviso.style.display = 'block';
+  }catch(e){ aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block'; }
+};
 $('#zona-upload-casa-fundo').onclick = () => $('#input-casa-fundo').click();
 $('#input-casa-fundo').onchange = e => { if(e.target.files[0]) enviarCasaFundo(e.target.files[0]); };
 ['dragover','drop'].forEach(ev => $('#zona-upload-casa-fundo').addEventListener(ev, e => e.preventDefault()));
