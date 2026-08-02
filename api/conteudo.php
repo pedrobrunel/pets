@@ -40,10 +40,25 @@ try {
   $cenas = bd()->query('SELECT id, nome, imagem, inicial FROM cenas WHERE publicado = 1 ORDER BY ordem, nome')
     ->fetchAll(PDO::FETCH_ASSOC);
   $cenasPublicadas = array_column($cenas, 'id');
+
+  // NPCs: cada um tem uma imagem (png por enquanto) e um diálogo em árvore, só botões —
+  // nunca campo de texto livre pro aluno digitar, isso é regra do projeto (ver README).
+  $npcsLinhas = bd()->query('SELECT id, nome, emoji, imagem, imagem_tipo, dialogo FROM npcs WHERE publicado = 1 ORDER BY ordem, nome')
+    ->fetchAll(PDO::FETCH_ASSOC);
+  $pastaNpcs = dirname(__DIR__) . '/assets/npcs';
+  $npcsPublicados = array_column($npcsLinhas, 'id');
+  $saidaNpcs = array_map(fn($n) => [
+    'id' => $n['id'], 'nome' => $n['nome'], 'emoji' => $n['emoji'],
+    'imagemUrl' => $n['imagem'] !== '' && is_file($pastaNpcs . '/' . $n['imagem']) ? 'assets/npcs/' . $n['imagem'] : '',
+    'imagemTipo' => $n['imagem_tipo'],
+    'dialogo' => json_decode($n['dialogo'], true),
+  ], $npcsLinhas);
+
   $existe = [
     'cena'  => array_column(bd()->query('SELECT id FROM cenas')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'mundo' => array_column(bd()->query('SELECT id FROM mundos')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'licao' => array_column(bd()->query('SELECT id FROM licoes')->fetchAll(PDO::FETCH_ASSOC), 'id'),
+    'npc'   => array_column(bd()->query('SELECT id FROM npcs')->fetchAll(PDO::FETCH_ASSOC), 'id'),
   ];
   $stPontos = bd()->prepare('SELECT rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica
     FROM pontos WHERE cena_id = ? AND publicado = 1 ORDER BY id');
@@ -62,6 +77,7 @@ try {
           'mundo' => in_array($destino, $mundosPublicados, true),
           'cena'  => in_array($destino, $cenasPublicadas, true),
           'licao' => isset($licoesPublicadas[$destino]),
+          'npc'   => in_array($destino, $npcsPublicados, true),
         };
         if (!$publicado) {
           if (!in_array($destino, $existe[$tipo], true)) continue; // alvo apagado: ponto é lixo
@@ -87,9 +103,9 @@ try {
     ];
   }
 
-  echo json_encode(['mundos' => $saidaMundos, 'cenas' => $saidaCenas], JSON_UNESCAPED_UNICODE);
+  echo json_encode(['mundos' => $saidaMundos, 'cenas' => $saidaCenas, 'npcs' => $saidaNpcs], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
   error_log('[bichoteca-conteudo] ' . $e->getMessage());
   http_response_code(500);
-  echo json_encode(['mundos' => [], 'cenas' => []]);
+  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => []]);
 }

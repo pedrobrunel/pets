@@ -111,9 +111,28 @@ try {
     INDEX (cena_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
+  // NPCs: cada um tem uma imagem (por enquanto só png/webp/jpg — lottie é o próximo passo,
+  // a coluna imagem_tipo já existe pra não precisar migrar de novo depois) e um diálogo em
+  // árvore (JSON): nó inicial + nós com texto (balão de fala) e opções (botões) que levam a
+  // outro nó ou encerram a conversa. Sem campo de texto livre em lugar nenhum — só botões.
+  $pdo->exec('CREATE TABLE IF NOT EXISTS npcs (
+    id            VARCHAR(24) PRIMARY KEY,
+    nome          VARCHAR(60) NOT NULL,
+    emoji         VARCHAR(8)  NOT NULL DEFAULT \'🧑\',
+    imagem        VARCHAR(160) NOT NULL DEFAULT \'\',
+    imagem_tipo   VARCHAR(10) NOT NULL DEFAULT \'png\',
+    dialogo       JSON NOT NULL,
+    publicado     TINYINT(1) NOT NULL DEFAULT 1,
+    ordem         INT NOT NULL DEFAULT 0,
+    criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
   // pasta das imagens enviadas pelo painel (as do repositório continuam em assets/)
   $pastaCenas = dirname(__DIR__) . '/assets/cenas';
   if (!is_dir($pastaCenas)) @mkdir($pastaCenas, 0755, true);
+  $pastaNpcs = dirname(__DIR__) . '/assets/npcs';
+  if (!is_dir($pastaNpcs)) @mkdir($pastaNpcs, 0755, true);
 
   // conta do painel — roda de novo pra trocar a senha (edite config.php e recarregue esta página)
   $st = $pdo->prepare('INSERT INTO admins (usuario, senha_hash) VALUES (?, ?)

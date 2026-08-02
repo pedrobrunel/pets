@@ -29,6 +29,11 @@
      POST ?acao=pontos_salvar         {cenaId, pontos:[...]}  -> substitui os pontos da cena
      POST ?acao=cena_imagem           (multipart: arquivo) -> sobe imagem pra assets/cenas/
      GET  ?acao=destinos              -> catálogo de links possíveis pra um ponto
+     GET  ?acao=npcs_listar
+     GET  ?acao=npc_obter             ?id=xx
+     POST ?acao=npc_salvar            {id, nome, emoji, imagem, imagemTipo, publicado, ordem, dialogo:{inicial, nos:{...}}}
+     POST ?acao=npc_excluir           {id}
+     POST ?acao=npc_imagem            (multipart: arquivo) -> sobe imagem pra assets/npcs/
    ========================================================= */
 
 declare(strict_types=1);
@@ -43,7 +48,7 @@ const CORES_VALIDAS = ['var(--manga)', 'var(--rosa)', 'var(--mata)', 'var(--ceu)
 /* catálogo de links do jogo: pra onde um ponto de uma cena pode levar.
    "tela" é limitado às abas que existem em app.html (RENDER.*) — nada de string livre,
    senão um ponto mal configurado leva a criança pra uma tela que não existe. */
-const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso'];
+const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso', 'npc'];
 const TELAS_VALIDAS = ['casa', 'trilhas', 'arcade', 'loja', 'mural', 'perfil'];
 const EXTENSOES_IMAGEM = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg'];
 
@@ -60,6 +65,8 @@ function validarNomeImagem(string $nome): bool {
   return isset(EXTENSOES_IMAGEM[$ext]);
 }
 function pastaCenas(): string { return dirname(__DIR__) . '/assets/cenas'; }
+function pastaNpcs(): string { return dirname(__DIR__) . '/assets/npcs'; }
+function caminhoPublicoNpc(string $nome): string { return $nome === '' ? '' : 'assets/npcs/' . $nome; }
 /* a imagem pode estar em assets/cenas/ (enviada pelo painel) ou em assets/ (veio no
    repositório, como o mapa-mundosv2.webp da ilha) — o front tenta nessa ordem */
 function caminhoPublicoImagem(string $nome): string {
@@ -85,13 +92,43 @@ function validarPonto(array $p, int $i): ?string {
     return "Ponto \"$rotulo\": tela \"$destino\" não existe (use: " . implode(', ', TELAS_VALIDAS) . ').';
   }
   if ($tipo === 'aviso' && mb_strlen($destino) > 160) return "Ponto \"$rotulo\": o aviso passou de 160 caracteres.";
-  // mundo/cena/licao: confere se o alvo existe de verdade, pra não gerar link quebrado
-  $tabelas = ['mundo' => 'mundos', 'cena' => 'cenas', 'licao' => 'licoes'];
+  // mundo/cena/licao/npc: confere se o alvo existe de verdade, pra não gerar link quebrado
+  $tabelas = ['mundo' => 'mundos', 'cena' => 'cenas', 'licao' => 'licoes', 'npc' => 'npcs'];
   if (isset($tabelas[$tipo])) {
     $st = bd()->prepare('SELECT COUNT(*) FROM ' . $tabelas[$tipo] . ' WHERE id = ?');
     $st->execute([$destino]);
     if (!$st->fetchColumn()) return "Ponto \"$rotulo\": não existe $tipo com id \"$destino\".";
   }
+  return null;
+}
+
+/* chave de nó do diálogo: mais permissiva que validarId (aceita "_") pra não atrapalhar
+   quem nomeia nós tipo "boas_vindas", mas continua fechada — nada de string livre indo pro banco */
+function validarChaveNo(string $c): bool {
+  return (bool)preg_match('/^[a-z0-9_]{1,24}$/', $c);
+}
+
+/** valida a árvore de diálogo de um NPC. @return string|null mensagem de erro, ou null se ok */
+function validarDialogo(array $d): ?string {
+  if (!is_array($d['nos'] ?? null) || !$d['nos']) return 'O diálogo precisa ter ao menos 1 nó.';
+  if (count($d['nos']) > 60) return 'O diálogo passou de 60 nós — divida em outro NPC.';
+  foreach ($d['nos'] as $chave => $no) {
+    if (!is_string($chave) || !validarChaveNo($chave)) return "Nó \"$chave\": chave inválida (use letras minúsculas, números e _, até 24 caracteres).";
+    if (!is_array($no)) return "Nó \"$chave\": formato inválido.";
+    $texto = trim((string)($no['texto'] ?? ''));
+    if ($texto === '' || mb_strlen($texto) > 300) return "Nó \"$chave\": o texto do balão precisa ter de 1 a 300 caracteres.";
+    if (!is_array($no['opcoes'] ?? null) || !$no['opcoes']) return "Nó \"$chave\": precisa de ao menos 1 opção (botão).";
+    if (count($no['opcoes']) > 4) return "Nó \"$chave\": no máximo 4 opções por nó.";
+    foreach ($no['opcoes'] as $j => $op) {
+      if (!is_array($op)) return "Nó \"$chave\", opção $j: formato inválido.";
+      $rotulo = trim((string)($op['rotulo'] ?? ''));
+      if ($rotulo === '' || mb_strlen($rotulo) > 40) return "Nó \"$chave\", opção $j: o texto do botão precisa ter de 1 a 40 caracteres.";
+      $proximo = $op['proximo'] ?? null;
+      if ($proximo !== null && !isset($d['nos'][$proximo])) return "Nó \"$chave\", opção \"$rotulo\": aponta pra um nó que não existe.";
+    }
+  }
+  $inicial = $d['inicial'] ?? null;
+  if (!is_string($inicial) || !isset($d['nos'][$inicial])) return 'Escolha um nó inicial válido pro diálogo.';
   return null;
 }
 
@@ -629,18 +666,108 @@ try {
       'largura' => $info[0], 'altura' => $info[1]]);
   }
 
+  /* ---------- NPCs e seus diálogos ---------- */
+
+  if ($acao === 'npcs_listar') {
+    $linhas = bd()->query('SELECT id, nome, emoji, imagem, imagem_tipo, publicado, ordem FROM npcs ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    responder(['npcs' => array_map(fn($n) => [
+      'id' => $n['id'], 'nome' => $n['nome'], 'emoji' => $n['emoji'],
+      'imagem' => $n['imagem'], 'imagemUrl' => caminhoPublicoNpc($n['imagem']), 'imagemTipo' => $n['imagem_tipo'],
+      'publicado' => (bool)$n['publicado'], 'ordem' => (int)$n['ordem'],
+    ], $linhas)]);
+  }
+
+  if ($acao === 'npc_obter') {
+    $st = bd()->prepare('SELECT id, nome, emoji, imagem, imagem_tipo, dialogo, publicado, ordem FROM npcs WHERE id = ?');
+    $st->execute([(string)($_GET['id'] ?? '')]);
+    $n = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$n) responder(['erro' => 'NPC não encontrado.'], 404);
+    responder([
+      'id' => $n['id'], 'nome' => $n['nome'], 'emoji' => $n['emoji'],
+      'imagem' => $n['imagem'], 'imagemUrl' => caminhoPublicoNpc($n['imagem']), 'imagemTipo' => $n['imagem_tipo'],
+      'publicado' => (bool)$n['publicado'], 'ordem' => (int)$n['ordem'],
+      'dialogo' => json_decode($n['dialogo'], true),
+    ]);
+  }
+
+  if ($acao === 'npc_salvar') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    if (!validarId($id)) responder(['erro' => '"id" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
+    $nome = trim((string)($d['nome'] ?? ''));
+    if ($nome === '' || mb_strlen($nome) > 60) responder(['erro' => '"nome" precisa ter de 1 a 60 caracteres.'], 422);
+    $emoji = (string)($d['emoji'] ?? '🧑');
+    if ($emoji === '' || mb_strlen($emoji) > 8) responder(['erro' => '"emoji" é obrigatório.'], 422);
+    $imagem = trim((string)($d['imagem'] ?? ''));
+    $imagemTipo = (string)($d['imagemTipo'] ?? 'png');
+    if (!in_array($imagemTipo, ['png', 'lottie'], true)) responder(['erro' => '"imagemTipo" precisa ser "png" ou "lottie".'], 422);
+    $dialogo = $d['dialogo'] ?? null;
+    if (!is_array($dialogo)) responder(['erro' => 'Formato de diálogo inválido.'], 422);
+    $erro = validarDialogo($dialogo);
+    if ($erro) responder(['erro' => $erro], 422);
+    bd()->prepare('INSERT INTO npcs (id, nome, emoji, imagem, imagem_tipo, dialogo, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), imagem=VALUES(imagem), imagem_tipo=VALUES(imagem_tipo),
+        dialogo=VALUES(dialogo), publicado=VALUES(publicado), ordem=VALUES(ordem)')
+      ->execute([$id, $nome, $emoji, $imagem, $imagemTipo, json_encode($dialogo, JSON_UNESCAPED_UNICODE), !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0)]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'npc_excluir') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    // pontos que apontavam pra este NPC ficariam quebrados — avisa em vez de silenciar
+    $st = bd()->prepare('SELECT COUNT(*) FROM pontos WHERE tipo = "npc" AND destino = ?');
+    $st->execute([$id]);
+    $apontam = (int)$st->fetchColumn();
+    bd()->prepare('DELETE FROM npcs WHERE id = ?')->execute([$id]);
+    responder(['ok' => true, 'pontosOrfaos' => $apontam]);
+  }
+
+  if ($acao === 'npc_imagem') {
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || ($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+      $limite = ini_get('upload_max_filesize');
+      $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+        ? "A imagem passou do limite do servidor ($limite)."
+        : 'Nenhum arquivo recebido.';
+      responder(['erro' => $motivo], 422);
+    }
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_IMAGEM[$ext])) {
+      responder(['erro' => 'Formato não aceito. Use webp, png ou jpg (webp é o mais leve).'], 422);
+    }
+    // não confia na extensão nem no content-type do navegador: confirma que é imagem de verdade
+    $info = @getimagesize($arq['tmp_name']);
+    if (!$info || !in_array($info['mime'], EXTENSOES_IMAGEM, true)) {
+      responder(['erro' => 'O arquivo não é uma imagem válida.'], 422);
+    }
+    $base = strtolower(pathinfo((string)$arq['name'], PATHINFO_FILENAME));
+    $base = preg_replace('/[^a-z0-9_-]+/', '-', $base) ?: 'npc';
+    $base = trim($base, '-') ?: 'npc';
+    $nome = substr($base, 0, 60) . '-' . bin2hex(random_bytes(3)) . '.' . $ext;
+    if (!is_dir(pastaNpcs()) && !@mkdir(pastaNpcs(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta assets/npcs no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaNpcs() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo em assets/npcs (confira a permissão da pasta).'], 500);
+    }
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => 'assets/npcs/' . $nome]);
+  }
+
   if ($acao === 'destinos') {
     // "rascunho" vai junto: um ponto que aponta pra mundo/cena/lição não publicada é
     // escondido do aluno por conteudo.php, então o painel precisa poder avisar disso
     $mundos = bd()->query('SELECT id, nome, emoji, publicado FROM mundos ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     $cenas = bd()->query('SELECT id, nome, publicado FROM cenas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     $licoes = bd()->query('SELECT id, titulo, emoji, publicado FROM licoes ORDER BY mundo_id, ordem')->fetchAll(PDO::FETCH_ASSOC);
+    $npcs = bd()->query('SELECT id, nome, emoji, publicado FROM npcs ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     $marca = fn($rotulo, $pub) => $rotulo . ($pub ? '' : ' — rascunho, não aparece pro aluno');
     responder([
       'mundo' => array_map(fn($m) => ['id' => $m['id'], 'rotulo' => $marca($m['emoji'] . ' ' . $m['nome'], $m['publicado']), 'publicado' => (bool)$m['publicado']], $mundos),
       'cena'  => array_map(fn($c) => ['id' => $c['id'], 'rotulo' => $marca('🗺️ ' . $c['nome'], $c['publicado']), 'publicado' => (bool)$c['publicado']], $cenas),
       'licao' => array_map(fn($l) => ['id' => $l['id'], 'rotulo' => $marca($l['emoji'] . ' ' . $l['titulo'], $l['publicado']), 'publicado' => (bool)$l['publicado']], $licoes),
       'tela'  => array_map(fn($t) => ['id' => $t, 'rotulo' => ucfirst($t), 'publicado' => true], TELAS_VALIDAS),
+      'npc'   => array_map(fn($n) => ['id' => $n['id'], 'rotulo' => $marca($n['emoji'] . ' ' . $n['nome'], $n['publicado']), 'publicado' => (bool)$n['publicado']], $npcs),
     ]);
   }
 
