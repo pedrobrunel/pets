@@ -960,7 +960,7 @@ function renderFaixaDecorar(){
         ${m.imagemFrenteUrl ? `<img src="${esc(m.imagemFrenteUrl)}" alt="">` : ''}
         <span>${esc(m.nome)}</span>
       </div>`).join('')
-    : `<span class="vazio">Tudo colocado! Compre mais na Loja de Móveis.</span>`;
+    : `<span class="vazio">${estado.moveisComprados.length ? 'Tudo colocado! Compre mais na Loja de Móveis.' : 'Você ainda não comprou nenhum móvel — vá na Loja de Móveis!'}</span>`;
 }
 // entra perto do chão, espalhado (não em cima do bicho, que fica mais no centro/alto do
 // quarto) — a pessoa arrasta pra onde quiser depois, isso é só o ponto de partida
@@ -1480,6 +1480,9 @@ function abrirPonto(i, el){
   if(!p) return;
   if(p.tipo === 'mundo') return ir('mundo', p.destino);
   if(p.tipo === 'licao') return ir('licao', p.destino);
+  // "editarcasa" é um atalho pro ponto do mapa: leva pra Casa já no modo Decorar, sem
+  // precisar tocar no botão de novo — não é uma tela de verdade, então não passa por ir()
+  if(p.tipo === 'tela' && p.destino === 'editarcasa'){ modoDecorar = true; return ir('casa'); }
   if(p.tipo === 'tela')  return ir(p.destino);
   if(p.tipo === 'aviso') return brinde(p.destino);
   if(p.tipo === 'npc')   return abrirNpc(p.destino);

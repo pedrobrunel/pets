@@ -72,12 +72,16 @@ const CORES_VALIDAS = ['var(--manga)', 'var(--rosa)', 'var(--mata)', 'var(--ceu)
    "tela" é limitado às abas que existem em app.html (RENDER.*) — nada de string livre,
    senão um ponto mal configurado leva a criança pra uma tela que não existe. */
 const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso', 'npc', 'gatilho', 'item'];
-const TELAS_VALIDAS = ['casa', 'trilhas', 'arcade', 'loja', 'mural', 'perfil', 'lojamoveis'];
+// "editarcasa" não é uma tela de verdade (não tem RENDER.editarcasa nem <section> própria)
+// — é só um atalho que o app.html reconhece e traduz pra "abrir a Casa já no modo
+// Decorar". Fica em TELAS_VALIDAS (pra validar o ponto no mapa), mas fora de TELAS_NPC
+// (não faz sentido um NPC flutuar sozinho "no modo decorar").
+const TELAS_VALIDAS = ['casa', 'trilhas', 'arcade', 'loja', 'mural', 'perfil', 'lojamoveis', 'editarcasa'];
 // onde um NPC pode flutuar sozinho, sem precisar de ponto no mapa. Sem "trilhas": lá
 // quem posiciona um NPC é o ponto no mapa mesmo, senão teria dois jeitos de fazer a
 // mesma coisa competindo entre si.
 const TELAS_NPC = ['casa', 'arcade', 'loja', 'mural', 'perfil', 'lojamoveis'];
-const ROTULOS_TELA = ['lojamoveis' => 'Loja de Móveis'];
+const ROTULOS_TELA = ['lojamoveis' => 'Loja de Móveis', 'editarcasa' => 'Casa — editor de móveis'];
 const EXTENSOES_IMAGEM = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg'];
 
 /* catálogo de objetivos de missão — três tipos hoje, mas fechado e validado igual a
