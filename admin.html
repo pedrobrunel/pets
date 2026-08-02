@@ -195,6 +195,7 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
       <button data-aba="mapas">🗺️ Mapas</button>
       <button data-aba="npcs">🗨️ NPCs</button>
       <button data-aba="missoes">🎯 Missões</button>
+      <button data-aba="itens">🔭 Itens</button>
       <button data-aba="mundos">🎒 Mundos</button>
       <button data-aba="licoes">📚 Lições</button>
       <button data-aba="jogadores">🧒 Jogadores</button>
@@ -277,6 +278,9 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
                 <div id="ponto-destino-wrap" style="margin-top:8px"></div>
                 <label style="margin-top:10px"><input type="checkbox" id="ponto-selo" style="width:auto"> mostrar progresso (X/Y)</label>
                 <label style="margin:6px 0 0"><input type="checkbox" id="ponto-dica" style="width:auto"> piscar pra indicar que dá pra tocar</label>
+                <label style="margin-top:10px">só aparece se o aluno já tiver o item</label>
+                <select id="ponto-requisito"></select>
+                <p class="dica-editor">Opcional. Ex.: o binóculo destrava a janela — deixe "nenhum" pra sempre aparecer.</p>
                 <button type="button" class="btn erro linha" id="btn-excluir-ponto" style="margin-top:10px;width:100%">Remover este ponto</button>
               </div>
               <div id="pontos-aviso" class="aviso-form"></div>
@@ -445,6 +449,42 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
         <div id="missoes-import-aviso" class="aviso-form"></div>
         <button class="btn erro" id="btn-importar-missoes" style="margin-top:10px">Importar missões</button>
       </div>
+    </section>
+
+    <section id="aba-itens" class="oculto">
+      <h2>Itens</h2>
+      <p class="sub">objetos colecionáveis soltos nos mapas — sem preço, o aluno só acha e pega. Depois, na aba Mapas, coloque um ponto tipo "Pegar um item" pra ele aparecer.</p>
+      <button class="btn" id="btn-novo-item" style="margin-bottom:14px">+ Novo item</button>
+
+      <form id="form-item" class="oculto">
+        <h3 id="titulo-form-item" style="font-size:16px">Novo item</h3>
+        <div class="linha3">
+          <div><label>id (fixo, não dá pra editar depois)</label><input type="text" id="item-id" placeholder="ex.: binoculo"></div>
+          <div><label>emoji (usado até ter imagem)</label><input type="text" id="item-emoji" placeholder="🔭" value="🔹"></div>
+          <div><label>ordem</label><input type="number" id="item-ordem" value="0"></div>
+        </div>
+        <label>nome</label>
+        <input type="text" id="item-nome" placeholder="ex.: Binóculo">
+        <label>descrição (o aluno vê isso na mochila)</label>
+        <input type="text" id="item-descricao" placeholder="ex.: Serve pra ver de longe.">
+
+        <label>imagem (opcional)</label>
+        <div class="upload" id="zona-upload-item">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+        <input type="file" id="input-imagem-item" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
+        <input type="text" id="item-imagem" placeholder="nome do arquivo (preenchido pelo upload)" style="margin-top:8px">
+        <p class="dica-editor">Sem imagem, o item aparece no mapa como o emoji, num círculo. A imagem enviada fica em <code>assets/itens/</code>.</p>
+
+        <div class="check"><input type="checkbox" id="item-publicado" checked><label style="margin:0" for="item-publicado">publicado (aparece pro aluno)</label></div>
+
+        <div id="item-aviso" class="aviso-form"></div>
+        <div class="rodape-form">
+          <button type="submit" class="btn mata">Salvar item</button>
+          <button type="button" class="btn branco" id="btn-cancelar-item">Cancelar</button>
+          <button type="button" class="btn erro" id="btn-excluir-item" style="margin-left:auto">Excluir item</button>
+        </div>
+      </form>
+
+      <div class="painel"><table id="tabela-itens"></table></div>
     </section>
 
     <section id="aba-mundos" class="oculto">
@@ -629,6 +669,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   if(b.dataset.aba === 'mapas') carregarCenas();
   if(b.dataset.aba === 'npcs') carregarNpcs();
   if(b.dataset.aba === 'missoes') carregarMissoes();
+  if(b.dataset.aba === 'itens') carregarItens();
 });
 
 /* ---------- painel (métricas) ---------- */
@@ -654,6 +695,7 @@ const TIPOS_PONTO = [
   {v:'licao',   rotulo:'Uma lição específica'},
   {v:'npc',     rotulo:'Conversar com um NPC'},
   {v:'gatilho', rotulo:'Ativar um gatilho de missão'},
+  {v:'item',    rotulo:'Pegar um item (vai pro inventário)'},
   {v:'tela',    rotulo:'Uma tela do jogo'},
   {v:'aviso',   rotulo:'Só mostrar um recadinho'},
 ];
@@ -743,6 +785,9 @@ window.selecionarPonto = (i) => {
   $('#ponto-tipo').innerHTML = TIPOS_PONTO.map(t => `<option value="${t.v}" ${t.v===p.tipo?'selected':''}>${t.rotulo}</option>`).join('');
   $('#ponto-selo').checked = !!p.mostrarSelo;
   $('#ponto-dica').checked = !!p.mostrarDica;
+  const itensDisponiveis = (destinosCache && destinosCache.item) || [];
+  $('#ponto-requisito').innerHTML = `<option value="">— nenhum —</option>` +
+    itensDisponiveis.map(o => `<option value="${esc(o.id)}" ${o.id===p.requisitoItem?'selected':''}>${esc(o.rotulo)}</option>`).join('');
   pintarCampoDestino();
   desenharMarcas();
 };
@@ -771,6 +816,7 @@ function pintarCampoDestino(){
       licao: 'Nenhuma lição cadastrada. Crie uma na aba <b>Lições</b> primeiro.',
       npc: 'Nenhum NPC cadastrado. Crie um na aba <b>NPCs</b> primeiro.',
       gatilho: 'Nenhuma missão do tipo "gatilho" cadastrada ainda. Crie uma na aba <b>Missões</b> primeiro, escolhendo a chave lá.',
+      item: 'Nenhum item cadastrado. Crie um na aba <b>Itens</b> primeiro.',
     };
     wrap.innerHTML = lista.length
       ? `<label>qual</label>
@@ -793,9 +839,10 @@ function salvarCampoPonto(){
   p.destino = $('#ponto-destino') ? $('#ponto-destino').value : '';
   p.mostrarSelo = $('#ponto-selo').checked;
   p.mostrarDica = $('#ponto-dica').checked;
+  p.requisitoItem = $('#ponto-requisito').value;
   desenharMarcas();
 }
-['#ponto-rotulo','#ponto-selo','#ponto-dica'].forEach(s => {
+['#ponto-rotulo','#ponto-selo','#ponto-dica','#ponto-requisito'].forEach(s => {
   $(s).addEventListener('input', salvarCampoPonto);
   $(s).addEventListener('change', salvarCampoPonto);
 });
@@ -842,7 +889,7 @@ function ativarDesenhoMapa(){
       // ponto novo: nasce com tamanho zero e cresce enquanto arrasta
       modo = 'criar';
       pontosEdit.push({rotulo:'Novo ponto', x:inicio.x, y:inicio.y, largura:0, altura:0,
-        tipo:'mundo', destino:'', mostrarSelo:true, mostrarDica:false, publicado:true});
+        tipo:'mundo', destino:'', mostrarSelo:true, mostrarDica:false, requisitoItem:'', publicado:true});
       alvo = pontosEdit.length - 1;
       selecionarPonto(alvo);
     }
@@ -1447,6 +1494,97 @@ $('#btn-importar-missoes').onclick = async () => {
     carregarMissoes();
   }catch(e){ aviso.className='aviso-form erro'; aviso.textContent = e.message; aviso.style.display='block'; }
 };
+
+/* ---------- Itens colecionáveis (objetos soltos no mapa) ---------- */
+let itensCache = [];
+async function carregarItens(){
+  const d = await api('itens_listar').catch(() => ({itens:[]}));
+  itensCache = d.itens;
+  $('#tabela-itens').innerHTML = `
+    <tr><th>Ordem</th><th>Item</th><th>Status</th><th></th></tr>
+    ${itensCache.map(it => `<tr>
+      <td>${it.ordem}</td>
+      <td>${it.imagemUrl ? `<img class="npc-thumb" src="${esc(it.imagemUrl)}">` : ''}${it.emoji} ${esc(it.nome)} <code style="opacity:.5">${it.id}</code></td>
+      <td><span class="selo ${it.publicado?'on':'off'}">${it.publicado?'publicado':'rascunho'}</span></td>
+      <td class="acoes">
+        <button class="btn linha branco" onclick="editarItem('${it.id}')">Editar</button>
+        <button class="btn linha erro" onclick="excluirItem('${it.id}','${esc(it.nome)}')">Excluir</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="4">Nenhum item ainda.</td></tr>'}`;
+}
+function limparFormItem(){
+  $('#form-item').reset();
+  $('#item-id').disabled = false;
+  $('#item-emoji').value = '🔹';
+  $('#item-aviso').style.display = 'none';
+  $('#btn-excluir-item').classList.add('oculto');
+}
+$('#btn-novo-item').onclick = () => {
+  limparFormItem();
+  $('#titulo-form-item').textContent = 'Novo item';
+  $('#form-item').classList.remove('oculto');
+  $('#form-item').scrollIntoView({behavior:'smooth'});
+};
+$('#btn-cancelar-item').onclick = () => $('#form-item').classList.add('oculto');
+window.editarItem = async (id) => {
+  const it = await api('item_obter', {query:`&id=${encodeURIComponent(id)}`}).catch(e => { alert(e.message); return null; });
+  if(!it) return;
+  limparFormItem();
+  $('#item-id').value = it.id; $('#item-id').disabled = true;
+  $('#item-nome').value = it.nome; $('#item-emoji').value = it.emoji;
+  $('#item-descricao').value = it.descricao; $('#item-imagem').value = it.imagem;
+  $('#item-ordem').value = it.ordem; $('#item-publicado').checked = it.publicado;
+  $('#btn-excluir-item').classList.remove('oculto');
+  $('#titulo-form-item').textContent = 'Editar item';
+  $('#form-item').classList.remove('oculto');
+  $('#form-item').scrollIntoView({behavior:'smooth'});
+};
+window.excluirItem = async (id, nome) => {
+  if(!confirm(`Excluir o item "${nome}"? Pontos de mapa que dependem dele (pra pegar ou como requisito) param de funcionar.`)) return;
+  const r = await api('item_excluir', {method:'POST', corpo:{id}});
+  if(r.pontosAfetados) alert(`Item excluído. Atenção: ${r.pontosAfetados} ponto(s) de mapa dependiam dele.`);
+  $('#form-item').classList.add('oculto');
+  carregarItens();
+};
+$('#form-item').addEventListener('submit', async e => {
+  e.preventDefault();
+  const aviso = $('#item-aviso');
+  aviso.style.display = 'none';
+  try{
+    const id = $('#item-id').value.trim();
+    await api('item_salvar', {method:'POST', corpo:{
+      id, nome: $('#item-nome').value.trim(), emoji: $('#item-emoji').value.trim() || '🔹',
+      descricao: $('#item-descricao').value.trim(), imagem: $('#item-imagem').value.trim(),
+      publicado: $('#item-publicado').checked, ordem: Number($('#item-ordem').value) || 0,
+    }});
+    $('#form-item').classList.add('oculto');
+    carregarItens();
+  }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
+});
+
+$('#zona-upload-item').onclick = () => $('#input-imagem-item').click();
+$('#input-imagem-item').onchange = e => { if(e.target.files[0]) enviarImagemItem(e.target.files[0]); };
+['dragover','drop'].forEach(ev => $('#zona-upload-item').addEventListener(ev, e => e.preventDefault()));
+$('#zona-upload-item').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemItem(e.dataTransfer.files[0]); });
+async function enviarImagemItem(arquivo){
+  const aviso = $('#item-aviso');
+  const zona = $('#zona-upload-item');
+  const textoOriginal = zona.textContent;
+  zona.textContent = '⏳ Enviando…';
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    const r = await fetch('api/admin.php?acao=item_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    $('#item-imagem').value = d.imagem;
+    aviso.className = 'aviso-form ok';
+    aviso.textContent = 'Imagem enviada. Agora salve o item.';
+    aviso.style.display = 'block';
+  }catch(e){
+    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
+  }finally{ zona.textContent = textoOriginal; }
+}
 
 /* ---------- mundos ---------- */
 let mundosCache = [];

@@ -173,11 +173,39 @@ try {
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
+  /* itens colecionáveis: objetos soltos no mapa (o "binóculo"), sem preço nem moeda
+     envolvida — o jogador simplesmente acha e pega. Viram um ponto tipo "item" numa
+     cena; ao tocar, somem do mapa pra sempre e entram no inventário. Qualquer outro
+     ponto (de qualquer tipo) pode exigir um desses no inventário pra aparecer — é o
+     "binóculo desbloqueia a janela" sem precisar de mecânica nova pra cada caso. */
+  $pdo->exec('CREATE TABLE IF NOT EXISTS itens (
+    id            VARCHAR(24) PRIMARY KEY,
+    nome          VARCHAR(60) NOT NULL,
+    emoji         VARCHAR(8)  NOT NULL DEFAULT \'🔹\',
+    imagem        VARCHAR(160) NOT NULL DEFAULT \'\',
+    descricao     VARCHAR(200) NOT NULL DEFAULT \'\',
+    publicado     TINYINT(1) NOT NULL DEFAULT 1,
+    ordem         INT NOT NULL DEFAULT 0,
+    criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+  // requisito_item chegou depois de "pontos" já existir em produção — mesma checagem
+  // por INFORMATION_SCHEMA usada pra dias_semana/hora_inicio etc dos NPCs
+  $colunasPontos = array_column($pdo->query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pontos'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+  if (!in_array('requisito_item', $colunasPontos, true)) {
+    $pdo->exec("ALTER TABLE pontos ADD COLUMN requisito_item VARCHAR(24) NOT NULL DEFAULT ''");
+  }
+
   // pasta das imagens enviadas pelo painel (as do repositório continuam em assets/)
   $pastaCenas = dirname(__DIR__) . '/assets/cenas';
   if (!is_dir($pastaCenas)) @mkdir($pastaCenas, 0755, true);
   $pastaNpcs = dirname(__DIR__) . '/assets/npcs';
   if (!is_dir($pastaNpcs)) @mkdir($pastaNpcs, 0755, true);
+  $pastaItens = dirname(__DIR__) . '/assets/itens';
+  if (!is_dir($pastaItens)) @mkdir($pastaItens, 0755, true);
 
   // conta do painel — roda de novo pra trocar a senha (edite config.php e recarregue esta página)
   $st = $pdo->prepare('INSERT INTO admins (usuario, senha_hash) VALUES (?, ?)

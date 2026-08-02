@@ -219,6 +219,16 @@ body.tela-cheia #app{padding:0;max-width:none}
   padding:2px 8px;font-size:11px;font-weight:900;box-shadow:0 2px 0 var(--contorno);white-space:nowrap;
 }
 .predio-selo.completo{background:var(--moeda)}
+/* item colecionável solto no mapa: um objeto de verdade (o binóculo), não um hotspot
+   invisível — flutua de leve pra chamar atenção, some pra sempre depois de tocado */
+.predio.item-mapa{align-items:center}
+.item-icone{
+  width:46px;height:46px;border-radius:50%;background:#fff;border:3px solid var(--moeda-rim);
+  display:flex;align-items:center;justify-content:center;font-size:22px;
+  box-shadow:0 3px 0 rgba(0,0,0,.15);animation:flutua-item 2.2s ease-in-out infinite;
+}
+.item-icone img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+@keyframes flutua-item{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
 .btn.amarelo{--bg:var(--moeda);--edge:var(--moeda-rim);color:var(--tinta);text-shadow:none}
 .btn-voltar-cena{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:41}
 
@@ -741,7 +751,7 @@ const estado = {
   fome:72, felicidade:80, energia:90,
   equipado:[], mochila:[], inventario:{},
   licoesFeitas:[], recordes:{memoria:null, chuva:0, toca:0},
-  missoes:{}, cenasVisitadas:[], gatilhosAtivos:[],
+  missoes:{}, cenasVisitadas:[], gatilhosAtivos:[], itensColetados:[],
   streak:{atual:0, melhor:0, ultimoDia:null},
   recados:[
     {av:'🦔', aut:'Nina_Ouriço', txt:'Terminei a trilha de Biologia! 🎉'},
@@ -1181,6 +1191,10 @@ const acharNpc = id => NPCS.find(n => n.id === id);
 // missões (catálogo central, cadastrado na aba Missões) — o NPC só referencia o id
 let MISSOES = [];
 const acharMissao = id => MISSOES.find(m => m.id === id);
+// itens colecionáveis soltos no mapa (aba Itens) — diferente da ITENS da loja (comida/
+// acessório, comprado com moeda): estes só existem, o aluno acha e pega, sem custo
+let ITENS_MAPA = [];
+const acharItemMapa = id => ITENS_MAPA.find(it => it.id === id);
 /* agenda de um NPC: dias da semana, horário e período de datas, todos opcionais
    (vazio = sem restrição). Decidido com a hora do aparelho de quem está jogando —
    não tem por que ir no servidor só pra saber se "agora" está dentro da janela. */
@@ -1278,6 +1292,17 @@ function ativarGatilho(chave){
   const missao = MISSOES.find(m => m.tipo === 'gatilho' && m.objetivo.chave === chave);
   brinde(missao && statusMissao(missao.id) === 'pronta' ? `🎯 "${missao.titulo}" está pronta pra entregar!` : '✅ Feito!');
 }
+// item colecionável (o "binóculo"): toca, some do mapa pra sempre e vai pro inventário.
+// Outros pontos podem exigir esse item (requisitoItem) pra aparecer — é o "desbloqueia
+// um local novo" sem precisar de mecânica nova: só reavalia a cena depois de pegar.
+function coletarItem(itemId){
+  if(estado.itensColetados.includes(itemId)) return; // já era — o ponto nem deveria estar visível
+  const item = acharItemMapa(itemId);
+  estado.itensColetados.push(itemId);
+  agendarSalvar();
+  brinde(item ? `🎒 Você pegou: ${item.nome}!` : '🎒 Item guardado!');
+  if(cenaAtual) RENDER.trilhas(cenaAtual.id); // redesenha: o item some, e o que dependia dele pode aparecer
+}
 let cenaAtual = null;
 let pilhaCenas = []; // caminho percorrido entre mapas, pro "Voltar" desfazer um passo por vez
 // arrasta com o mouse pra rolar a cena (toque já rola nativo); um clique-arrastado
@@ -1326,6 +1351,7 @@ function abrirPonto(i, el){
   if(p.tipo === 'aviso') return brinde(p.destino);
   if(p.tipo === 'npc')   return abrirNpc(p.destino);
   if(p.tipo === 'gatilho') return ativarGatilho(p.destino);
+  if(p.tipo === 'item') return coletarItem(p.destino);
   if(p.tipo === 'cena'){
     const proxima = acharCena(p.destino);
     if(!proxima) return brinde('Esse caminho ainda não leva a nenhum lugar. 🚧');
@@ -1513,10 +1539,21 @@ RENDER.trilhas = (idCena) => {
             const npc = acharNpc(p.destino);
             if(!npc || !npcAtivoAgora(npc)) return '';
           }
+          // item já coletado não aparece mais (foi pego, some pra sempre); e QUALQUER
+          // ponto pode exigir um item no inventário pra sequer aparecer no mapa
+          if(p.tipo === 'item' && estado.itensColetados.includes(p.destino)) return '';
+          if(p.requisitoItem && !estado.itensColetados.includes(p.requisitoItem)) return '';
           let selo = '';
           if(mundo && p.mostrarSelo){
             const {feitas, total, completo} = progressoMundo(mundo);
             selo = `<span class="predio-selo ${completo?'completo':''}">${completo?'👑':`${feitas}/${total}`}</span>`;
+          }
+          if(p.tipo === 'item'){
+            const item = acharItemMapa(p.destino);
+            const figura = item?.imagemUrl ? `<img src="${esc(item.imagemUrl)}" alt="">` : esc(item?.emoji || '🔹');
+            return `<button class="predio item-mapa ${p.mostrarDica?'com-dica':''}"
+              style="left:${p.x}%;top:${p.y}%;width:${p.largura}%;height:${p.altura}%"
+              onclick="abrirPonto(${i}, this)" aria-label="${esc(p.rotulo)}"><span class="item-icone">${figura}</span></button>`;
           }
           return `<button class="predio ${p.mostrarDica?'com-dica':''}"
             style="left:${p.x}%;top:${p.y}%;width:${p.largura}%;height:${p.altura}%"
@@ -2055,7 +2092,8 @@ function trocarAbaLoja(aba){ lojaAba = aba; RENDER.loja(); }
 RENDER.loja = () => {
   const comidasNaMochila = ITENS.filter(i => i.tipo==='comida' && estado.inventario[i.id] > 0);
   const acessoriosNaMochila = ITENS.filter(i => i.tipo==='acessorio' && estado.mochila.includes(i.id));
-  const mochilaVazia = !comidasNaMochila.length && !acessoriosNaMochila.length;
+  const itensEspeciais = estado.itensColetados.map(acharItemMapa).filter(Boolean);
+  const mochilaVazia = !comidasNaMochila.length && !acessoriosNaMochila.length && !itensEspeciais.length;
   $('#tela-loja').innerHTML = `
     <div class="titulo-secao"><h2>Loja da vila</h2><small>você tem 🪙 ${estado.moedas}</small></div>
     ${blocoNpcsDaTela('loja')}
@@ -2081,6 +2119,13 @@ RENDER.loja = () => {
       ${acessoriosNaMochila.length ? `
         <div class="titulo-secao"><h2 style="font-size:21px">Acessórios</h2></div>
         <div class="grade-3">${acessoriosNaMochila.map(cartaoItem).join('')}</div>` : ''}
+      ${itensEspeciais.length ? `
+        <div class="titulo-secao"><h2 style="font-size:21px">Itens especiais</h2></div>
+        <div class="grade-3">${itensEspeciais.map(it => `<div class="item-loja">
+          ${it.imagemUrl ? `<img src="${esc(it.imagemUrl)}" alt="" style="width:32px;height:32px;border-radius:8px;object-fit:cover">` : `<span class="emoji">${esc(it.emoji)}</span>`}
+          <b>${esc(it.nome)}</b>
+          ${it.descricao ? `<small style="font-weight:700;color:#7F8C8D">${esc(it.descricao)}</small>` : ''}
+        </div>`).join('')}</div>` : ''}
       ${mochilaVazia ? `<p class="vazio"><span class="emoji">🎒</span>Sua mochila tá vazia. Compre algo na aba Comprar!</p>` : ''}
     `}`;
 };
@@ -2313,6 +2358,7 @@ async function carregarConteudo(){
     if(Array.isArray(dados.cenas) && dados.cenas.length) CENAS = dados.cenas;
     if(Array.isArray(dados.npcs)) NPCS = dados.npcs;
     if(Array.isArray(dados.missoes)) MISSOES = dados.missoes;
+    if(Array.isArray(dados.itens)) ITENS_MAPA = dados.itens;
   }catch(e){ /* offline ou hospedagem sem PHP: fica com o conteúdo embutido */ }
 }
 // dispara já no carregamento da página — some com a espera perceptível, porque
