@@ -155,6 +155,24 @@ try {
     if (!in_array($coluna, $colunasExistentes, true)) $pdo->exec("ALTER TABLE npcs ADD COLUMN $coluna $definicao");
   }
 
+  /* Missões: catálogo central, fora da página do NPC de propósito — um NPC só referencia
+     uma missão (nos botões do diálogo dele), nunca a "dona" dela. "objetivo" muda de cara
+     conforme o tipo (item pra entregar, cena pra visitar, ou gatilho pra ativar em algum
+     mapa) — mesmo padrão de "catálogo fechado validado no servidor" já usado em blocos,
+     pontos e diálogos. */
+  $pdo->exec('CREATE TABLE IF NOT EXISTS missoes (
+    id            VARCHAR(24) PRIMARY KEY,
+    titulo        VARCHAR(100) NOT NULL,
+    descricao     VARCHAR(300) NOT NULL DEFAULT \'\',
+    tipo          VARCHAR(20) NOT NULL,
+    objetivo      JSON NOT NULL,
+    premio        JSON NOT NULL,
+    publicado     TINYINT(1) NOT NULL DEFAULT 1,
+    ordem         INT NOT NULL DEFAULT 0,
+    criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
   // pasta das imagens enviadas pelo painel (as do repositório continuam em assets/)
   $pastaCenas = dirname(__DIR__) . '/assets/cenas';
   if (!is_dir($pastaCenas)) @mkdir($pastaCenas, 0755, true);

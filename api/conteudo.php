@@ -59,11 +59,26 @@ try {
     'dialogo' => json_decode($n['dialogo'], true),
   ], $npcsLinhas);
 
+  // missões: catálogo central, publicadas só. O NPC não guarda nada dela — só o id,
+  // nos botões do diálogo — então o app.html cruza os dois na hora de decidir o que mostrar.
+  $missoesLinhas = bd()->query('SELECT id, titulo, descricao, tipo, objetivo, premio FROM missoes WHERE publicado = 1 ORDER BY ordem, titulo')
+    ->fetchAll(PDO::FETCH_ASSOC);
+  $saidaMissoes = array_map(fn($m) => [
+    'id' => $m['id'], 'titulo' => $m['titulo'], 'descricao' => $m['descricao'], 'tipo' => $m['tipo'],
+    'objetivo' => json_decode($m['objetivo'], true), 'premio' => json_decode($m['premio'], true),
+  ], $missoesLinhas);
+  $gatilhosPublicados = array_values(array_filter(array_map(
+    fn($m) => $m['tipo'] === 'gatilho' ? (json_decode($m['objetivo'], true)['chave'] ?? '') : null,
+    $missoesLinhas
+  )));
+
   $existe = [
     'cena'  => array_column(bd()->query('SELECT id FROM cenas')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'mundo' => array_column(bd()->query('SELECT id FROM mundos')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'licao' => array_column(bd()->query('SELECT id FROM licoes')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'npc'   => array_column(bd()->query('SELECT id FROM npcs')->fetchAll(PDO::FETCH_ASSOC), 'id'),
+    'gatilho' => array_map(fn($m) => json_decode($m['objetivo'], true)['chave'] ?? '',
+      array_filter(bd()->query("SELECT objetivo FROM missoes WHERE tipo = 'gatilho'")->fetchAll(PDO::FETCH_ASSOC))),
   ];
   $stPontos = bd()->prepare('SELECT rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica
     FROM pontos WHERE cena_id = ? AND publicado = 1 ORDER BY id');
@@ -83,6 +98,7 @@ try {
           'cena'  => in_array($destino, $cenasPublicadas, true),
           'licao' => isset($licoesPublicadas[$destino]),
           'npc'   => in_array($destino, $npcsPublicados, true),
+          'gatilho' => in_array($destino, $gatilhosPublicados, true),
         };
         if (!$publicado) {
           if (!in_array($destino, $existe[$tipo], true)) continue; // alvo apagado: ponto é lixo
@@ -108,9 +124,9 @@ try {
     ];
   }
 
-  echo json_encode(['mundos' => $saidaMundos, 'cenas' => $saidaCenas, 'npcs' => $saidaNpcs], JSON_UNESCAPED_UNICODE);
+  echo json_encode(['mundos' => $saidaMundos, 'cenas' => $saidaCenas, 'npcs' => $saidaNpcs, 'missoes' => $saidaMissoes], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
   error_log('[bichoteca-conteudo] ' . $e->getMessage());
   http_response_code(500);
-  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => []]);
+  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => []]);
 }

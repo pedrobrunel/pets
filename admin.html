@@ -152,10 +152,13 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
 .no-dialogo .cabecalho-no input{width:140px;font-family:'DejaVu Sans Mono',Consolas,monospace;font-size:12px}
 .no-dialogo .cabecalho-no .selo-raiz{background:#D5F5E3;color:#1E8449;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;white-space:nowrap}
 .no-dialogo textarea{min-height:52px;font-family:inherit;font-size:13px}
-.opcao-no{display:flex;gap:6px;align-items:center;margin-top:6px}
-.opcao-no input{flex:1}
-.opcao-no select{flex:1}
-.opcao-no button{flex:none}
+.opcao-no{border:1px solid #ECF0F1;border-radius:8px;padding:8px;margin-top:8px;background:#FAFBFC}
+.opcao-linha{display:flex;gap:6px;align-items:center;margin-top:6px}
+.opcao-linha:first-child{margin-top:0}
+.opcao-linha input{flex:1}
+.opcao-linha select{flex:1}
+.opcao-linha button{flex:none}
+.opcao-missao{font-size:11px;color:#7F8C8D;font-weight:800;white-space:nowrap}
 .npc-thumb{width:34px;height:34px;border-radius:8px;object-fit:cover;vertical-align:-10px;margin-right:6px;background:#F4F6F7}
 .dias-semana{display:flex;gap:6px;flex-wrap:wrap}
 .dias-semana button{
@@ -191,6 +194,7 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
       <button data-aba="painel" class="ativo">📊 Painel</button>
       <button data-aba="mapas">🗺️ Mapas</button>
       <button data-aba="npcs">🗨️ NPCs</button>
+      <button data-aba="missoes">🎯 Missões</button>
       <button data-aba="mundos">🎒 Mundos</button>
       <button data-aba="licoes">📚 Lições</button>
       <button data-aba="jogadores">🧒 Jogadores</button>
@@ -365,6 +369,82 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
       </form>
 
       <div class="painel"><table id="tabela-npcs"></table></div>
+    </section>
+
+    <section id="aba-missoes" class="oculto">
+      <h2>Missões</h2>
+      <p class="sub">catálogo central de missões — fica fora da página do NPC de propósito. Depois, no diálogo de um NPC (aba NPCs), um botão pode oferecer ou cobrar a entrega de uma missão daqui.</p>
+      <button class="btn" id="btn-nova-missao" style="margin-bottom:14px">+ Nova missão</button>
+
+      <form id="form-missao" class="oculto">
+        <h3 id="titulo-form-missao" style="font-size:16px">Nova missão</h3>
+        <div class="linha3">
+          <div><label>id (fixo, não dá pra editar depois)</label><input type="text" id="missao-id" placeholder="ex.: trazer-melancia"></div>
+          <div><label>ordem</label><input type="number" id="missao-ordem" value="0"></div>
+          <div style="display:flex;flex-direction:column;justify-content:flex-end"><label class="check" style="margin:0"><input type="checkbox" id="missao-publicado" checked style="width:auto"> publicada</label></div>
+        </div>
+        <label>título</label>
+        <input type="text" id="missao-titulo" placeholder="ex.: Melancia fresquinha">
+        <label>descrição (o aluno vê isso)</label>
+        <input type="text" id="missao-descricao" placeholder="ex.: Traga 2 melancias pro Seu Lontra.">
+
+        <label>tipo de objetivo</label>
+        <select id="missao-tipo"></select>
+
+        <div id="missao-objetivo-entregar_item" class="oculto">
+          <div class="linha2">
+            <div><label>item da loja</label><select id="missao-item"></select></div>
+            <div><label>quantidade</label><input type="number" id="missao-quantidade" value="1" min="1" max="99"></div>
+          </div>
+        </div>
+        <div id="missao-objetivo-visitar_cena" class="oculto">
+          <label>mapa a visitar</label>
+          <select id="missao-cena"></select>
+        </div>
+        <div id="missao-objetivo-gatilho" class="oculto">
+          <label>chave do gatilho (você mesmo escolhe — depois cria um ponto tipo "gatilho" num mapa com essa mesma chave)</label>
+          <input type="text" id="missao-chave" placeholder="ex.: puxou-alavanca" maxlength="24">
+        </div>
+
+        <label>prêmio</label>
+        <div class="linha2">
+          <div><input type="number" id="missao-premio-moedas" placeholder="moedas" value="20" min="0" max="500"></div>
+          <div><input type="number" id="missao-premio-xp" placeholder="xp" value="20" min="0" max="500"></div>
+        </div>
+
+        <div id="missao-aviso" class="aviso-form"></div>
+        <div class="rodape-form">
+          <button type="submit" class="btn mata">Salvar missão</button>
+          <button type="button" class="btn branco" id="btn-cancelar-missao">Cancelar</button>
+          <button type="button" class="btn erro" id="btn-excluir-missao" style="margin-left:auto">Excluir missão</button>
+        </div>
+      </form>
+
+      <div class="painel"><table id="tabela-missoes"></table></div>
+
+      <div class="painel">
+        <h3 style="font-size:15px;margin-bottom:8px">Importar em massa</h3>
+        <p style="font-size:13px;color:#566573;margin:0 0 10px">
+          Cole (ou suba) um JSON com um array de missões — mesmos campos do formulário acima, em cada item.
+          Sobrescreve quem já tiver o mesmo <code>id</code>. Ou tudo entra, ou nada muda.
+        </p>
+        <details class="ajuda">
+          <summary>formato esperado</summary>
+          <pre>{"missoes": [
+  {"id":"trazer-melancia","titulo":"Melancia fresquinha","descricao":"Traga 2 melancias.",
+   "tipo":"entregar_item","objetivo":{"itemId":"melancia","quantidade":2},
+   "premio":{"moedas":20,"xp":20},"publicado":true,"ordem":0},
+  {"id":"visitar-porto","titulo":"Conheça o porto","descricao":"Vá até o mapa do porto.",
+   "tipo":"visitar_cena","objetivo":{"cenaId":"porto"},
+   "premio":{"moedas":15,"xp":15},"publicado":true,"ordem":1}
+]}</pre>
+        </details>
+        <div class="upload" id="zona-upload-missoes">📄 Arraste o arquivo .json aqui, ou clique pra escolher — ou cole direto no campo abaixo</div>
+        <input type="file" id="input-arquivo-missoes" accept=".json,application/json" class="oculto">
+        <textarea id="missoes-json" spellcheck="false" placeholder='{"missoes":[{"id":"...", ...}]}' style="margin-top:10px"></textarea>
+        <div id="missoes-import-aviso" class="aviso-form"></div>
+        <button class="btn erro" id="btn-importar-missoes" style="margin-top:10px">Importar missões</button>
+      </div>
     </section>
 
     <section id="aba-mundos" class="oculto">
@@ -548,6 +628,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   if(b.dataset.aba === 'painel') carregarPainel();
   if(b.dataset.aba === 'mapas') carregarCenas();
   if(b.dataset.aba === 'npcs') carregarNpcs();
+  if(b.dataset.aba === 'missoes') carregarMissoes();
 });
 
 /* ---------- painel (métricas) ---------- */
@@ -568,12 +649,13 @@ async function carregarPainel(){
    "Salvar pontos". Coordenadas sempre em % da imagem, nunca em pixel, porque a mesma
    cena é desenhada em telas de tamanhos completamente diferentes. */
 const TIPOS_PONTO = [
-  {v:'mundo', rotulo:'Trilha de uma matéria'},
-  {v:'cena',  rotulo:'Outro mapa'},
-  {v:'licao', rotulo:'Uma lição específica'},
-  {v:'npc',   rotulo:'Conversar com um NPC'},
-  {v:'tela',  rotulo:'Uma tela do jogo'},
-  {v:'aviso', rotulo:'Só mostrar um recadinho'},
+  {v:'mundo',   rotulo:'Trilha de uma matéria'},
+  {v:'cena',    rotulo:'Outro mapa'},
+  {v:'licao',   rotulo:'Uma lição específica'},
+  {v:'npc',     rotulo:'Conversar com um NPC'},
+  {v:'gatilho', rotulo:'Ativar um gatilho de missão'},
+  {v:'tela',    rotulo:'Uma tela do jogo'},
+  {v:'aviso',   rotulo:'Só mostrar um recadinho'},
 ];
 let cenasCache = [], cenaEdit = null, pontosEdit = [], pontoSel = -1, destinosCache = null;
 
@@ -688,6 +770,7 @@ function pintarCampoDestino(){
       mundo: 'Nenhum mundo cadastrado. Crie um na aba <b>Mundos</b> primeiro.',
       licao: 'Nenhuma lição cadastrada. Crie uma na aba <b>Lições</b> primeiro.',
       npc: 'Nenhum NPC cadastrado. Crie um na aba <b>NPCs</b> primeiro.',
+      gatilho: 'Nenhuma missão do tipo "gatilho" cadastrada ainda. Crie uma na aba <b>Missões</b> primeiro, escolhendo a chave lá.',
     };
     wrap.innerHTML = lista.length
       ? `<label>qual</label>
@@ -915,7 +998,10 @@ async function enviarImagemCena(arquivo){
 let npcsCache = [], npcEdit = null, dialogoEdit = null, nosOrdem = [];
 
 async function carregarNpcs(){
-  const d = await api('npcs_listar').catch(() => ({npcs:[]}));
+  const [d] = await Promise.all([
+    api('npcs_listar').catch(() => ({npcs:[]})),
+    carregarMissoesCache(),
+  ]);
   npcsCache = d.npcs;
   $('#tabela-npcs').innerHTML = `
     <tr><th>Ordem</th><th>NPC</th><th>Aparece em</th><th>Status</th><th></th></tr>
@@ -983,6 +1069,8 @@ function renderNos(){
   const opcoesNo = (atualChave, selecionado) => nosOrdem
     .filter(k => k !== atualChave)
     .map(k => `<option value="${esc(k)}" ${k===selecionado?'selected':''}>${esc(k)}${dialogoEdit.nos[k].texto ? ' — ' + esc(dialogoEdit.nos[k].texto.slice(0,24)) : ''}</option>`).join('');
+  const opcoesMissao = (selecionado) => `<option value="">— escolha —</option>` +
+    missoesCache.map(m => `<option value="${esc(m.id)}" ${m.id===selecionado?'selected':''}>${esc(m.titulo)}${m.publicado?'':' (rascunho)'}</option>`).join('');
 
   $('#npc-nos').innerHTML = nosOrdem.map(chave => {
     const no = dialogoEdit.nos[chave];
@@ -996,20 +1084,62 @@ function renderNos(){
       <label style="margin:0">fala do NPC (balão)</label>
       <textarea maxlength="300" oninput="dialogoEdit.nos['${esc(chave)}'].texto=this.value" placeholder="O que o NPC diz aqui...">${esc(no.texto)}</textarea>
       <label style="margin:8px 0 0">botões de resposta</label>
-      ${no.opcoes.map((op, i) => `<div class="opcao-no">
-        <input type="text" maxlength="40" value="${esc(op.rotulo)}" placeholder="texto do botão"
-          oninput="dialogoEdit.nos['${esc(chave)}'].opcoes[${i}].rotulo=this.value">
-        <select onchange="dialogoEdit.nos['${esc(chave)}'].opcoes[${i}].proximo=this.value||null">
-          <option value="" ${!op.proximo?'selected':''}>— encerrar conversa —</option>
-          ${opcoesNo(chave, op.proximo)}
-        </select>
-        <button type="button" class="btn linha erro" onclick="removerOpcao('${esc(chave)}', ${i})" ${no.opcoes.length<=1?'disabled':''}>✕</button>
-      </div>`).join('')}
+      ${no.opcoes.map((op, i) => {
+        const acaoTipo = op.acao?.tipo || '';
+        const mostrarEstado = op.mostrarSe?.estado || '';
+        return `<div class="opcao-no">
+        <div class="opcao-linha">
+          <input type="text" maxlength="40" value="${esc(op.rotulo)}" placeholder="texto do botão"
+            oninput="dialogoEdit.nos['${esc(chave)}'].opcoes[${i}].rotulo=this.value">
+          <button type="button" class="btn linha erro" onclick="removerOpcao('${esc(chave)}', ${i})" ${no.opcoes.length<=1?'disabled':''}>✕</button>
+        </div>
+        <div class="opcao-linha">
+          <select onchange="dialogoEdit.nos['${esc(chave)}'].opcoes[${i}].proximo=this.value||null">
+            <option value="" ${!op.proximo?'selected':''}>— encerrar conversa —</option>
+            ${opcoesNo(chave, op.proximo)}
+          </select>
+        </div>
+        <div class="opcao-linha">
+          <span class="opcao-missao">missão:</span>
+          <select onchange="mudarAcaoOpcao('${esc(chave)}', ${i}, this.value)">
+            <option value="" ${!acaoTipo?'selected':''}>nenhuma ação</option>
+            <option value="oferecer" ${acaoTipo==='oferecer'?'selected':''}>oferecer</option>
+            <option value="entregar" ${acaoTipo==='entregar'?'selected':''}>entregar</option>
+          </select>
+          <select ${!acaoTipo?'disabled':''} onchange="dialogoEdit.nos['${esc(chave)}'].opcoes[${i}].acao.missaoId=this.value">
+            ${opcoesMissao(op.acao?.missaoId)}
+          </select>
+        </div>
+        <div class="opcao-linha">
+          <span class="opcao-missao">mostrar se:</span>
+          <select onchange="mudarCondicaoOpcao('${esc(chave)}', ${i}, this.value)">
+            <option value="" ${!mostrarEstado?'selected':''}>sempre</option>
+            <option value="sem_missao" ${mostrarEstado==='sem_missao'?'selected':''}>sem essa missão</option>
+            <option value="missao_ativa" ${mostrarEstado==='missao_ativa'?'selected':''}>com ela ativa (aceita, entregue ou não)</option>
+            <option value="missao_pronta" ${mostrarEstado==='missao_pronta'?'selected':''}>só quando já pronta pra entregar</option>
+            <option value="missao_completa" ${mostrarEstado==='missao_completa'?'selected':''}>já completou</option>
+          </select>
+          <select ${!mostrarEstado?'disabled':''} onchange="dialogoEdit.nos['${esc(chave)}'].opcoes[${i}].mostrarSe.missaoId=this.value">
+            ${opcoesMissao(op.mostrarSe?.missaoId)}
+          </select>
+        </div>
+      </div>`;
+      }).join('')}
       <button type="button" class="btn linha branco" style="margin-top:8px" ${no.opcoes.length>=4?'disabled':''}
         onclick="adicionarOpcao('${esc(chave)}')">+ botão de resposta</button>
     </div>`;
   }).join('');
 }
+window.mudarAcaoOpcao = (chave, i, tipo) => {
+  const op = dialogoEdit.nos[chave].opcoes[i];
+  op.acao = tipo ? {tipo, missaoId: op.acao?.missaoId || ''} : null;
+  renderNos();
+};
+window.mudarCondicaoOpcao = (chave, i, estado) => {
+  const op = dialogoEdit.nos[chave].opcoes[i];
+  op.mostrarSe = estado ? {estado, missaoId: op.mostrarSe?.missaoId || ''} : null;
+  renderNos();
+};
 window.renomearNo = (antiga, novaBruta) => {
   const nova = novaBruta.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 24) || antiga;
   if(nova === antiga){ renderNos(); return; }
@@ -1169,6 +1299,154 @@ async function enviarImagemNpc(arquivo){
     aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
   }finally{ zona.textContent = textoOriginal; }
 }
+
+/* ---------- Missões (catálogo central — fora da página do NPC de propósito) ---------- */
+const TIPOS_MISSAO = [
+  {v:'entregar_item', rotulo:'Entregar item (trazer e dar pro NPC)'},
+  {v:'visitar_cena',  rotulo:'Visitar um mapa'},
+  {v:'gatilho',       rotulo:'Ativar um gatilho (tocar num ponto específico)'},
+];
+// espelha ITENS de app.html — só os "comida" entram em missão de entrega (ver nota em admin.php)
+const ITENS_COMIDA = [
+  {id:'melancia', rotulo:'🍉 Melancia'}, {id:'racao', rotulo:'🥣 Ração boa'},
+  {id:'peixe', rotulo:'🐟 Peixe fresco'}, {id:'bolo', rotulo:'🍰 Bolo de aniversário'},
+];
+let missoesCache = [], cenasParaMissaoCache = null;
+$('#missao-tipo').innerHTML = TIPOS_MISSAO.map(t => `<option value="${t.v}">${t.rotulo}</option>`).join('');
+$('#missao-item').innerHTML = ITENS_COMIDA.map(i => `<option value="${i.id}">${i.rotulo}</option>`).join('');
+
+async function carregarMissoesCache(){
+  const d = await api('missoes_listar').catch(() => ({missoes:[]}));
+  missoesCache = d.missoes;
+  return missoesCache;
+}
+async function carregarMissoes(){
+  await carregarMissoesCache();
+  $('#tabela-missoes').innerHTML = `
+    <tr><th>Ordem</th><th>Missão</th><th>Tipo</th><th>Prêmio</th><th>Status</th><th></th></tr>
+    ${missoesCache.map(m => {
+      const tipo = TIPOS_MISSAO.find(t => t.v === m.tipo);
+      return `<tr>
+        <td>${m.ordem}</td>
+        <td>${esc(m.titulo)} <code style="opacity:.5">${m.id}</code></td>
+        <td>${tipo ? esc(tipo.rotulo) : m.tipo}</td>
+        <td>🪙${m.premio?.moedas ?? 0} ⭐${m.premio?.xp ?? 0}</td>
+        <td><span class="selo ${m.publicado?'on':'off'}">${m.publicado?'publicada':'rascunho'}</span></td>
+        <td class="acoes">
+          <button class="btn linha branco" onclick="editarMissao('${m.id}')">Editar</button>
+          <button class="btn linha branco" onclick="duplicarMissao('${m.id}','${esc(m.titulo)}')">Duplicar</button>
+          <button class="btn linha erro" onclick="excluirMissao('${m.id}','${esc(m.titulo)}')">Excluir</button>
+        </td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6">Nenhuma missão ainda.</td></tr>'}`;
+}
+function pintarObjetivoMissao(){
+  const tipo = $('#missao-tipo').value;
+  ['entregar_item','visitar_cena','gatilho'].forEach(t =>
+    $('#missao-objetivo-' + t).classList.toggle('oculto', t !== tipo));
+}
+$('#missao-tipo').addEventListener('change', async () => {
+  pintarObjetivoMissao();
+  if($('#missao-tipo').value === 'visitar_cena') await popularCenasMissao();
+});
+async function popularCenasMissao(){
+  if(!cenasParaMissaoCache) cenasParaMissaoCache = (await api('cenas_listar').catch(() => ({cenas:[]}))).cenas;
+  $('#missao-cena').innerHTML = cenasParaMissaoCache.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')
+    || '<option value="">— nenhum mapa cadastrado —</option>';
+}
+function limparFormMissao(){
+  $('#form-missao').reset();
+  $('#missao-id').disabled = false;
+  $('#missao-aviso').style.display = 'none';
+  $('#btn-excluir-missao').classList.add('oculto');
+  pintarObjetivoMissao();
+}
+$('#btn-nova-missao').onclick = async () => {
+  limparFormMissao();
+  await popularCenasMissao();
+  $('#titulo-form-missao').textContent = 'Nova missão';
+  $('#form-missao').classList.remove('oculto');
+  $('#form-missao').scrollIntoView({behavior:'smooth'});
+};
+$('#btn-cancelar-missao').onclick = () => $('#form-missao').classList.add('oculto');
+window.editarMissao = async (id) => {
+  const m = await api('missao_obter', {query:`&id=${encodeURIComponent(id)}`}).catch(e => { alert(e.message); return null; });
+  if(!m) return;
+  limparFormMissao();
+  await popularCenasMissao();
+  $('#missao-id').value = m.id; $('#missao-id').disabled = true;
+  $('#missao-titulo').value = m.titulo; $('#missao-descricao').value = m.descricao;
+  $('#missao-ordem').value = m.ordem; $('#missao-publicado').checked = m.publicado;
+  $('#missao-tipo').value = m.tipo;
+  pintarObjetivoMissao();
+  if(m.tipo === 'entregar_item'){ $('#missao-item').value = m.objetivo.itemId; $('#missao-quantidade').value = m.objetivo.quantidade; }
+  if(m.tipo === 'visitar_cena'){ $('#missao-cena').value = m.objetivo.cenaId; }
+  if(m.tipo === 'gatilho'){ $('#missao-chave').value = m.objetivo.chave; }
+  $('#missao-premio-moedas').value = m.premio?.moedas ?? 0;
+  $('#missao-premio-xp').value = m.premio?.xp ?? 0;
+  $('#btn-excluir-missao').classList.remove('oculto');
+  $('#titulo-form-missao').textContent = 'Editar missão';
+  $('#form-missao').classList.remove('oculto');
+  $('#form-missao').scrollIntoView({behavior:'smooth'});
+};
+window.excluirMissao = async (id, titulo) => {
+  if(!confirm(`Excluir a missão "${titulo}"? Botões de NPC que a referenciam param de funcionar.`)) return;
+  const r = await api('missao_excluir', {method:'POST', corpo:{id}});
+  if(r.npcsAfetados) alert(`Missão excluída. Atenção: ela era referenciada em ${r.npcsAfetados} NPC(s) — reveja o diálogo deles.`);
+  $('#form-missao').classList.add('oculto');
+  carregarMissoes();
+};
+window.duplicarMissao = async (id, titulo) => {
+  const novoId = prompt(`Duplicar "${titulo}" — id da missão nova:`, id + '2');
+  if(!novoId) return;
+  try{
+    const r = await api('missao_duplicar', {method:'POST', corpo:{id, novoId: novoId.trim()}});
+    await carregarMissoes();
+    editarMissao(r.id);
+  }catch(e){ alert(e.message); }
+};
+function objetivoDoFormMissao(){
+  const tipo = $('#missao-tipo').value;
+  if(tipo === 'entregar_item') return {itemId: $('#missao-item').value, quantidade: Number($('#missao-quantidade').value) || 1};
+  if(tipo === 'visitar_cena') return {cenaId: $('#missao-cena').value};
+  if(tipo === 'gatilho') return {chave: $('#missao-chave').value.trim()};
+  return {};
+}
+$('#form-missao').addEventListener('submit', async e => {
+  e.preventDefault();
+  const aviso = $('#missao-aviso');
+  aviso.style.display = 'none';
+  try{
+    const id = $('#missao-id').value.trim();
+    await api('missao_salvar', {method:'POST', corpo:{
+      id, titulo: $('#missao-titulo').value.trim(), descricao: $('#missao-descricao').value.trim(),
+      tipo: $('#missao-tipo').value, objetivo: objetivoDoFormMissao(),
+      premio: {moedas: Number($('#missao-premio-moedas').value) || 0, xp: Number($('#missao-premio-xp').value) || 0},
+      publicado: $('#missao-publicado').checked, ordem: Number($('#missao-ordem').value) || 0,
+    }});
+    $('#form-missao').classList.add('oculto');
+    carregarMissoes();
+  }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
+});
+
+/* importar em massa: mesmo padrão de upload/colar-JSON já usado nas lições e no backup */
+$('#zona-upload-missoes').onclick = () => $('#input-arquivo-missoes').click();
+$('#input-arquivo-missoes').onchange = e => { if(e.target.files[0]) lerArquivoNoCampo(e.target.files[0], '#missoes-json'); };
+['dragover','drop'].forEach(ev => $('#zona-upload-missoes').addEventListener(ev, e => e.preventDefault()));
+$('#zona-upload-missoes').addEventListener('drop', e => { if(e.dataTransfer.files[0]) lerArquivoNoCampo(e.dataTransfer.files[0], '#missoes-json'); });
+$('#btn-importar-missoes').onclick = async () => {
+  const aviso = $('#missoes-import-aviso');
+  aviso.style.display = 'none';
+  let dados;
+  try{ dados = JSON.parse($('#missoes-json').value); }
+  catch(e){ aviso.className='aviso-form erro'; aviso.textContent = 'JSON inválido: ' + e.message; aviso.style.display='block'; return; }
+  if(!confirm(`Isso cria/sobrescreve ${dados.missoes?.length ?? 0} missão(ões). Continuar?`)) return;
+  try{
+    const r = await api('missoes_importar', {method:'POST', corpo:dados});
+    aviso.className='aviso-form ok'; aviso.textContent = `Importado: ${r.missoes} missão(ões).`; aviso.style.display='block';
+    carregarMissoes();
+  }catch(e){ aviso.className='aviso-form erro'; aviso.textContent = e.message; aviso.style.display='block'; }
+};
 
 /* ---------- mundos ---------- */
 let mundosCache = [];

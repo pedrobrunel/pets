@@ -36,6 +36,12 @@
      POST ?acao=npc_excluir           {id}
      POST ?acao=npc_duplicar          {id, novoId} -> clona um NPC (fica como rascunho)
      POST ?acao=npc_imagem            (multipart: arquivo) -> sobe imagem pra assets/npcs/
+     GET  ?acao=missoes_listar
+     GET  ?acao=missao_obter          ?id=xx
+     POST ?acao=missao_salvar         {id, titulo, descricao, tipo, objetivo:{...}, premio:{moedas,xp}, publicado, ordem}
+     POST ?acao=missao_excluir        {id}
+     POST ?acao=missao_duplicar       {id, novoId} -> clona uma missão (fica como rascunho)
+     POST ?acao=missoes_importar      {missoes:[...]} -> cria/atualiza várias de uma vez (mesmo formato do salvar)
    ========================================================= */
 
 declare(strict_types=1);
@@ -50,13 +56,21 @@ const CORES_VALIDAS = ['var(--manga)', 'var(--rosa)', 'var(--mata)', 'var(--ceu)
 /* catálogo de links do jogo: pra onde um ponto de uma cena pode levar.
    "tela" é limitado às abas que existem em app.html (RENDER.*) — nada de string livre,
    senão um ponto mal configurado leva a criança pra uma tela que não existe. */
-const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso', 'npc'];
+const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso', 'npc', 'gatilho'];
 const TELAS_VALIDAS = ['casa', 'trilhas', 'arcade', 'loja', 'mural', 'perfil'];
 // onde um NPC pode flutuar sozinho, sem precisar de ponto no mapa. Sem "trilhas": lá
 // quem posiciona um NPC é o ponto no mapa mesmo, senão teria dois jeitos de fazer a
 // mesma coisa competindo entre si.
 const TELAS_NPC = ['casa', 'arcade', 'loja', 'mural', 'perfil'];
 const EXTENSOES_IMAGEM = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg'];
+
+/* catálogo de objetivos de missão — três tipos hoje, mas fechado e validado igual a
+   TIPOS_BLOCO/TIPOS_PONTO, pra dar pra crescer sem virar bagunça de string livre. */
+const TIPOS_MISSAO = ['entregar_item', 'visitar_cena', 'gatilho'];
+// só os itens tipo "comida" da loja entram em missão de entrega: são os únicos que o
+// jogador guarda com quantidade (estado.inventario); acessório vai pra mochila sem
+// contador, não dá pra pedir "traga 3". Espelha o ITENS de app.html de propósito.
+const ITENS_COMIDA = ['melancia', 'racao', 'peixe', 'bolo'];
 
 function validarId(string $id): bool {
   return (bool)preg_match('/^[a-z0-9]{2,24}$/', $id);
@@ -104,6 +118,13 @@ function validarPonto(array $p, int $i): ?string {
     $st = bd()->prepare('SELECT COUNT(*) FROM ' . $tabelas[$tipo] . ' WHERE id = ?');
     $st->execute([$destino]);
     if (!$st->fetchColumn()) return "Ponto \"$rotulo\": não existe $tipo com id \"$destino\".";
+  }
+  // gatilho: destino é a "chave" que alguma missão tipo "gatilho" espera — confere contra
+  // o objetivo dela em vez de contra uma tabela, pra não ter typo entre missão e ponto
+  if ($tipo === 'gatilho') {
+    $st = bd()->prepare('SELECT COUNT(*) FROM missoes WHERE tipo = \'gatilho\' AND JSON_UNQUOTE(JSON_EXTRACT(objetivo, \'$.chave\')) = ?');
+    $st->execute([$destino]);
+    if (!$st->fetchColumn()) return "Ponto \"$rotulo\": nenhuma missão espera o gatilho \"$destino\". Crie a missão primeiro, na aba Missões.";
   }
   return null;
 }
@@ -157,10 +178,68 @@ function validarDialogo(array $d): ?string {
       if ($rotulo === '' || mb_strlen($rotulo) > 40) return "Nó \"$chave\", opção $j: o texto do botão precisa ter de 1 a 40 caracteres.";
       $proximo = $op['proximo'] ?? null;
       if ($proximo !== null && !isset($d['nos'][$proximo])) return "Nó \"$chave\", opção \"$rotulo\": aponta pra um nó que não existe.";
+
+      // ação do botão (oferecer/entregar missão) e a condição pra ele aparecer (mostrarSe)
+      // são opcionais e só referenciam uma missão do catálogo central — o NPC não guarda
+      // nada da missão em si, só o id dela
+      $acao = $op['acao'] ?? null;
+      if ($acao !== null) {
+        if (!is_array($acao) || !in_array($acao['tipo'] ?? null, ['oferecer', 'entregar'], true))
+          return "Nó \"$chave\", opção \"$rotulo\": ação inválida (use oferecer ou entregar).";
+        $missaoId = (string)($acao['missaoId'] ?? '');
+        if ($missaoId === '') return "Nó \"$chave\", opção \"$rotulo\": escolha a missão da ação.";
+        $st = bd()->prepare('SELECT COUNT(*) FROM missoes WHERE id = ?');
+        $st->execute([$missaoId]);
+        if (!$st->fetchColumn()) return "Nó \"$chave\", opção \"$rotulo\": a missão \"$missaoId\" não existe.";
+      }
+      $mostrarSe = $op['mostrarSe'] ?? null;
+      if ($mostrarSe !== null) {
+        $estadosValidos = ['sem_missao', 'missao_ativa', 'missao_pronta', 'missao_completa'];
+        if (!is_array($mostrarSe) || !in_array($mostrarSe['estado'] ?? null, $estadosValidos, true))
+          return "Nó \"$chave\", opção \"$rotulo\": condição \"mostrar se\" inválida.";
+        $missaoId2 = (string)($mostrarSe['missaoId'] ?? '');
+        if ($missaoId2 === '') return "Nó \"$chave\", opção \"$rotulo\": escolha a missão da condição \"mostrar se\".";
+        $st = bd()->prepare('SELECT COUNT(*) FROM missoes WHERE id = ?');
+        $st->execute([$missaoId2]);
+        if (!$st->fetchColumn()) return "Nó \"$chave\", opção \"$rotulo\": a missão \"$missaoId2\" (em \"mostrar se\") não existe.";
+      }
     }
   }
   $inicial = $d['inicial'] ?? null;
   if (!is_string($inicial) || !isset($d['nos'][$inicial])) return 'Escolha um nó inicial válido pro diálogo.';
+  return null;
+}
+
+/** valida uma missão. @return string|null mensagem de erro, ou null se ok */
+function validarMissao(array $m): ?string {
+  $titulo = trim((string)($m['titulo'] ?? ''));
+  if ($titulo === '' || mb_strlen($titulo) > 100) return '"titulo" precisa ter de 1 a 100 caracteres.';
+  $descricao = trim((string)($m['descricao'] ?? ''));
+  if ($descricao === '' || mb_strlen($descricao) > 300) return '"descricao" precisa ter de 1 a 300 caracteres — é o que o aluno vê no diário de missões.';
+  $tipo = $m['tipo'] ?? null;
+  if (!in_array($tipo, TIPOS_MISSAO, true)) return '"tipo" precisa ser um destes: ' . implode(', ', TIPOS_MISSAO) . '.';
+  $objetivo = $m['objetivo'] ?? null;
+  if (!is_array($objetivo)) return '"objetivo" inválido.';
+  if ($tipo === 'entregar_item') {
+    $itemId = (string)($objetivo['itemId'] ?? '');
+    if (!in_array($itemId, ITENS_COMIDA, true)) return 'Escolha um item válido da loja pra entregar (' . implode(', ', ITENS_COMIDA) . ').';
+    $quantidade = $objetivo['quantidade'] ?? null;
+    if (!is_int($quantidade) || $quantidade < 1 || $quantidade > 99) return '"quantidade" precisa ser um número inteiro de 1 a 99.';
+  } elseif ($tipo === 'visitar_cena') {
+    $cenaId = (string)($objetivo['cenaId'] ?? '');
+    $st = bd()->prepare('SELECT COUNT(*) FROM cenas WHERE id = ?');
+    $st->execute([$cenaId]);
+    if (!$st->fetchColumn()) return "Escolha um mapa que exista (\"$cenaId\" não encontrado).";
+  } elseif ($tipo === 'gatilho') {
+    $chave = (string)($objetivo['chave'] ?? '');
+    if (!validarChaveNo($chave)) return '"chave" do gatilho inválida (use letras minúsculas, números e _, até 24 caracteres).';
+  }
+  $premio = $m['premio'] ?? null;
+  if (!is_array($premio)) return '"premio" inválido.';
+  $moedas = $premio['moedas'] ?? 0;
+  $xp = $premio['xp'] ?? 0;
+  if (!is_int($moedas) || $moedas < 0 || $moedas > 500) return '"premio.moedas" precisa ser um número inteiro de 0 a 500.';
+  if (!is_int($xp) || $xp < 0 || $xp > 500) return '"premio.xp" precisa ser um número inteiro de 0 a 500.';
   return null;
 }
 
@@ -834,6 +913,105 @@ try {
     responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => 'assets/npcs/' . $nome]);
   }
 
+  /* ---------- Missões (catálogo central, fora da página do NPC) ---------- */
+
+  if ($acao === 'missoes_listar') {
+    $linhas = bd()->query('SELECT id, titulo, descricao, tipo, objetivo, premio, publicado, ordem FROM missoes ORDER BY ordem, titulo')->fetchAll(PDO::FETCH_ASSOC);
+    responder(['missoes' => array_map(fn($m) => [
+      'id' => $m['id'], 'titulo' => $m['titulo'], 'descricao' => $m['descricao'], 'tipo' => $m['tipo'],
+      'objetivo' => json_decode($m['objetivo'], true), 'premio' => json_decode($m['premio'], true),
+      'publicado' => (bool)$m['publicado'], 'ordem' => (int)$m['ordem'],
+    ], $linhas)]);
+  }
+
+  if ($acao === 'missao_obter') {
+    $st = bd()->prepare('SELECT id, titulo, descricao, tipo, objetivo, premio, publicado, ordem FROM missoes WHERE id = ?');
+    $st->execute([(string)($_GET['id'] ?? '')]);
+    $m = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$m) responder(['erro' => 'Missão não encontrada.'], 404);
+    responder([
+      'id' => $m['id'], 'titulo' => $m['titulo'], 'descricao' => $m['descricao'], 'tipo' => $m['tipo'],
+      'objetivo' => json_decode($m['objetivo'], true), 'premio' => json_decode($m['premio'], true),
+      'publicado' => (bool)$m['publicado'], 'ordem' => (int)$m['ordem'],
+    ]);
+  }
+
+  if ($acao === 'missao_salvar') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    if (!validarId($id)) responder(['erro' => '"id" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
+    $erro = validarMissao($d);
+    if ($erro) responder(['erro' => $erro], 422);
+    bd()->prepare('INSERT INTO missoes (id, titulo, descricao, tipo, objetivo, premio, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE titulo=VALUES(titulo), descricao=VALUES(descricao), tipo=VALUES(tipo),
+        objetivo=VALUES(objetivo), premio=VALUES(premio), publicado=VALUES(publicado), ordem=VALUES(ordem)')
+      ->execute([
+        $id, trim((string)$d['titulo']), trim((string)$d['descricao']), (string)$d['tipo'],
+        json_encode($d['objetivo'], JSON_UNESCAPED_UNICODE), json_encode($d['premio'], JSON_UNESCAPED_UNICODE),
+        !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0),
+      ]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'missao_excluir') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    // botões de diálogo que referenciam essa missão ficariam quebrados — avisa em vez de silenciar
+    $refs = 0;
+    foreach (bd()->query('SELECT dialogo FROM npcs') as $linha) {
+      if (str_contains((string)$linha['dialogo'], '"' . $id . '"')) $refs++;
+    }
+    bd()->prepare('DELETE FROM missoes WHERE id = ?')->execute([$id]);
+    responder(['ok' => true, 'npcsAfetados' => $refs]);
+  }
+
+  if ($acao === 'missao_duplicar') {
+    $d = corpo();
+    $novoId = (string)($d['novoId'] ?? '');
+    if (!validarId($novoId)) responder(['erro' => '"novoId" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
+    $st = bd()->prepare('SELECT COUNT(*) FROM missoes WHERE id = ?');
+    $st->execute([$novoId]);
+    if ($st->fetchColumn()) responder(['erro' => "Já existe uma missão com id \"$novoId\"."], 422);
+    $st = bd()->prepare('SELECT titulo, descricao, tipo, objetivo, premio, ordem FROM missoes WHERE id = ?');
+    $st->execute([(string)($d['id'] ?? '')]);
+    $m = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$m) responder(['erro' => 'Missão original não encontrada.'], 404);
+    bd()->prepare('INSERT INTO missoes (id, titulo, descricao, tipo, objetivo, premio, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?, 0, ?)')
+      ->execute([$novoId, $m['titulo'] . ' (cópia)', $m['descricao'], $m['tipo'], $m['objetivo'], $m['premio'], (int)$m['ordem']]);
+    responder(['ok' => true, 'id' => $novoId]);
+  }
+
+  if ($acao === 'missoes_importar') {
+    // pensado pra criar em massa: cola/sobe um array de missões (mesmo formato do
+    // missao_salvar) e grava tudo de uma vez — ou tudo entra, ou nada muda
+    $d = corpo();
+    $missoes = $d['missoes'] ?? null;
+    if (!is_array($missoes) || !$missoes) responder(['erro' => 'Formato inválido: esperado {"missoes": [...]} com ao menos 1 item.'], 422);
+    if (count($missoes) > 200) responder(['erro' => 'No máximo 200 missões por importação.'], 422);
+    foreach ($missoes as $i => $m) {
+      if (!is_array($m)) responder(['erro' => "Missão $i: precisa ser um objeto."], 422);
+      if (!validarId((string)($m['id'] ?? ''))) responder(['erro' => "Missão $i: \"id\" inválido."], 422);
+      $erro = validarMissao($m);
+      if ($erro) responder(['erro' => "Missão \"" . ($m['id'] ?? '?') . "\": " . $erro], 422);
+    }
+    $bdc = bd();
+    $bdc->beginTransaction();
+    try {
+      $ins = $bdc->prepare('INSERT INTO missoes (id, titulo, descricao, tipo, objetivo, premio, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE titulo=VALUES(titulo), descricao=VALUES(descricao), tipo=VALUES(tipo),
+          objetivo=VALUES(objetivo), premio=VALUES(premio), publicado=VALUES(publicado), ordem=VALUES(ordem)');
+      foreach ($missoes as $m) {
+        $ins->execute([
+          (string)$m['id'], trim((string)$m['titulo']), trim((string)$m['descricao']), (string)$m['tipo'],
+          json_encode($m['objetivo'], JSON_UNESCAPED_UNICODE), json_encode($m['premio'], JSON_UNESCAPED_UNICODE),
+          !empty($m['publicado']) ? 1 : 0, (int)($m['ordem'] ?? 0),
+        ]);
+      }
+      $bdc->commit();
+    } catch (Throwable $e) { $bdc->rollBack(); throw $e; }
+    responder(['ok' => true, 'missoes' => count($missoes)]);
+  }
+
   if ($acao === 'destinos') {
     // "rascunho" vai junto: um ponto que aponta pra mundo/cena/lição não publicada é
     // escondido do aluno por conteudo.php, então o painel precisa poder avisar disso
@@ -841,6 +1019,10 @@ try {
     $cenas = bd()->query('SELECT id, nome, publicado FROM cenas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     $licoes = bd()->query('SELECT id, titulo, emoji, publicado FROM licoes ORDER BY mundo_id, ordem')->fetchAll(PDO::FETCH_ASSOC);
     $npcs = bd()->query('SELECT id, nome, emoji, publicado FROM npcs ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    // gatilhos não são linhas próprias — são a "chave" que missões tipo "gatilho" pedem;
+    // a lista vem das missões pra evitar typo entre o ponto e a missão que ele ativa
+    $gatilhos = bd()->query('SELECT id, titulo, publicado, JSON_UNQUOTE(JSON_EXTRACT(objetivo, \'$.chave\')) AS chave
+      FROM missoes WHERE tipo = \'gatilho\' ORDER BY ordem, titulo')->fetchAll(PDO::FETCH_ASSOC);
     $marca = fn($rotulo, $pub) => $rotulo . ($pub ? '' : ' — rascunho, não aparece pro aluno');
     responder([
       'mundo' => array_map(fn($m) => ['id' => $m['id'], 'rotulo' => $marca($m['emoji'] . ' ' . $m['nome'], $m['publicado']), 'publicado' => (bool)$m['publicado']], $mundos),
@@ -848,6 +1030,7 @@ try {
       'licao' => array_map(fn($l) => ['id' => $l['id'], 'rotulo' => $marca($l['emoji'] . ' ' . $l['titulo'], $l['publicado']), 'publicado' => (bool)$l['publicado']], $licoes),
       'tela'  => array_map(fn($t) => ['id' => $t, 'rotulo' => ucfirst($t), 'publicado' => true], TELAS_VALIDAS),
       'npc'   => array_map(fn($n) => ['id' => $n['id'], 'rotulo' => $marca($n['emoji'] . ' ' . $n['nome'], $n['publicado']), 'publicado' => (bool)$n['publicado']], $npcs),
+      'gatilho' => array_map(fn($g) => ['id' => $g['chave'], 'rotulo' => $marca('🎯 ' . $g['chave'] . ' (missão "' . $g['titulo'] . '")', $g['publicado']), 'publicado' => (bool)$g['publicado']], $gatilhos),
     ]);
   }
 
