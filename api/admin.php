@@ -47,6 +47,16 @@
      POST ?acao=item_salvar           {id, nome, emoji, imagem, descricao, publicado, ordem}
      POST ?acao=item_excluir          {id}
      POST ?acao=item_imagem           (multipart: arquivo) -> sobe imagem pra assets/itens/
+     GET  ?acao=moveis_listar
+     GET  ?acao=movel_obter           ?id=xx
+     POST ?acao=movel_salvar          {id, nome, preco, rotativel, imagemFrente, imagemDireita,
+                                        imagemVerso, imagemEsquerda, publicado, ordem}
+     POST ?acao=movel_excluir         {id}
+     POST ?acao=movel_duplicar        {id, novoId} -> clona um móvel (fica como rascunho)
+     POST ?acao=movel_imagem          (multipart: arquivo, slot=frente|direita|verso|esquerda) -> sobe imagem pra assets/moveis/
+     GET  ?acao=casa_config_obter     -> fundo atual da Casa
+     POST ?acao=casa_fundo_imagem     (multipart: arquivo) -> sobe e já grava o fundo da Casa
+     POST ?acao=casa_fundo_remover    -> volta a Casa pro visual padrão (sem fundo)
    ========================================================= */
 
 declare(strict_types=1);
@@ -62,11 +72,12 @@ const CORES_VALIDAS = ['var(--manga)', 'var(--rosa)', 'var(--mata)', 'var(--ceu)
    "tela" é limitado às abas que existem em app.html (RENDER.*) — nada de string livre,
    senão um ponto mal configurado leva a criança pra uma tela que não existe. */
 const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso', 'npc', 'gatilho', 'item'];
-const TELAS_VALIDAS = ['casa', 'trilhas', 'arcade', 'loja', 'mural', 'perfil'];
+const TELAS_VALIDAS = ['casa', 'trilhas', 'arcade', 'loja', 'mural', 'perfil', 'lojamoveis'];
 // onde um NPC pode flutuar sozinho, sem precisar de ponto no mapa. Sem "trilhas": lá
 // quem posiciona um NPC é o ponto no mapa mesmo, senão teria dois jeitos de fazer a
 // mesma coisa competindo entre si.
-const TELAS_NPC = ['casa', 'arcade', 'loja', 'mural', 'perfil'];
+const TELAS_NPC = ['casa', 'arcade', 'loja', 'mural', 'perfil', 'lojamoveis'];
+const ROTULOS_TELA = ['lojamoveis' => 'Loja de Móveis'];
 const EXTENSOES_IMAGEM = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg'];
 
 /* catálogo de objetivos de missão — três tipos hoje, mas fechado e validado igual a
@@ -92,8 +103,10 @@ function validarNomeImagem(string $nome): bool {
 function pastaCenas(): string { return dirname(__DIR__) . '/assets/cenas'; }
 function pastaNpcs(): string { return dirname(__DIR__) . '/assets/npcs'; }
 function pastaItens(): string { return dirname(__DIR__) . '/assets/itens'; }
+function pastaMoveis(): string { return dirname(__DIR__) . '/assets/moveis'; }
 function caminhoPublicoNpc(string $nome): string { return $nome === '' ? '' : 'assets/npcs/' . $nome; }
 function caminhoPublicoItem(string $nome): string { return $nome === '' ? '' : 'assets/itens/' . $nome; }
+function caminhoPublicoMovel(string $nome): string { return $nome === '' ? '' : 'assets/moveis/' . $nome; }
 /* a imagem pode estar em assets/cenas/ (enviada pelo painel) ou em assets/ (veio no
    repositório, como o mapa-mundosv2.webp da ilha) — o front tenta nessa ordem */
 function caminhoPublicoImagem(string $nome): string {
@@ -153,6 +166,24 @@ function validarItem(array $it): ?string {
   if ($emoji === '' || mb_strlen($emoji) > 8) return '"emoji" é obrigatório.';
   $descricao = trim((string)($it['descricao'] ?? ''));
   if (mb_strlen($descricao) > 200) return '"descricao" passou de 200 caracteres.';
+  return null;
+}
+
+/* valida um móvel da Loja de Móveis. "rotativel" só liga o botão de girar no cliente —
+   não bloqueia salvar sem as 4 imagens: falta alguma rotação, o cliente cai pra
+   imagem_frente nela. Só a de frente é obrigatória mesmo (sem imagem não dá pra vender). */
+function validarMovel(array $m): ?string {
+  $nome = trim((string)($m['nome'] ?? ''));
+  if ($nome === '' || mb_strlen($nome) > 60) return '"nome" precisa ter de 1 a 60 caracteres.';
+  if (!is_numeric($m['preco'] ?? null) || (int)$m['preco'] < 0 || (int)$m['preco'] > 100000) {
+    return '"preco" precisa ser um número entre 0 e 100000.';
+  }
+  $frente = trim((string)($m['imagemFrente'] ?? ''));
+  if ($frente === '') return 'Envie ao menos a imagem de frente do móvel.';
+  foreach (['imagemFrente', 'imagemDireita', 'imagemVerso', 'imagemEsquerda'] as $campo) {
+    $nomeImg = trim((string)($m[$campo] ?? ''));
+    if ($nomeImg !== '' && !validarNomeImagem($nomeImg)) return "\"$campo\" tem um nome de arquivo inválido.";
+  }
   return null;
 }
 
@@ -1121,6 +1152,153 @@ try {
     responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => 'assets/itens/' . $nome]);
   }
 
+  /* ---------- Móveis (Loja de Móveis + decoração da Casa) ---------- */
+
+  function linhaMovel(array $m): array {
+    return [
+      'id' => $m['id'], 'nome' => $m['nome'], 'preco' => (int)$m['preco'], 'rotativel' => (bool)$m['rotativel'],
+      'imagemFrente' => $m['imagem_frente'], 'imagemFrenteUrl' => caminhoPublicoMovel($m['imagem_frente']),
+      'imagemDireita' => $m['imagem_direita'], 'imagemDireitaUrl' => caminhoPublicoMovel($m['imagem_direita']),
+      'imagemVerso' => $m['imagem_verso'], 'imagemVersoUrl' => caminhoPublicoMovel($m['imagem_verso']),
+      'imagemEsquerda' => $m['imagem_esquerda'], 'imagemEsquerdaUrl' => caminhoPublicoMovel($m['imagem_esquerda']),
+      'publicado' => (bool)$m['publicado'], 'ordem' => (int)$m['ordem'],
+    ];
+  }
+
+  if ($acao === 'moveis_listar') {
+    $linhas = bd()->query('SELECT id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda, publicado, ordem
+      FROM moveis ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    responder(['moveis' => array_map('linhaMovel', $linhas)]);
+  }
+
+  if ($acao === 'movel_obter') {
+    $st = bd()->prepare('SELECT id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda, publicado, ordem
+      FROM moveis WHERE id = ?');
+    $st->execute([(string)($_GET['id'] ?? '')]);
+    $m = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$m) responder(['erro' => 'Móvel não encontrado.'], 404);
+    responder(linhaMovel($m));
+  }
+
+  if ($acao === 'movel_salvar') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    if (!validarId($id)) responder(['erro' => '"id" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
+    $erro = validarMovel($d);
+    if ($erro) responder(['erro' => $erro], 422);
+    bd()->prepare('INSERT INTO moveis (id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE nome=VALUES(nome), preco=VALUES(preco), rotativel=VALUES(rotativel),
+        imagem_frente=VALUES(imagem_frente), imagem_direita=VALUES(imagem_direita),
+        imagem_verso=VALUES(imagem_verso), imagem_esquerda=VALUES(imagem_esquerda),
+        publicado=VALUES(publicado), ordem=VALUES(ordem)')
+      ->execute([
+        $id, trim((string)$d['nome']), (int)$d['preco'], !empty($d['rotativel']) ? 1 : 0,
+        trim((string)($d['imagemFrente'] ?? '')), trim((string)($d['imagemDireita'] ?? '')),
+        trim((string)($d['imagemVerso'] ?? '')), trim((string)($d['imagemEsquerda'] ?? '')),
+        !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0),
+      ]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'movel_excluir') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    bd()->prepare('DELETE FROM moveis WHERE id = ?')->execute([$id]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'movel_duplicar') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    $novoId = (string)($d['novoId'] ?? '');
+    if (!validarId($novoId)) responder(['erro' => '"novoId" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
+    $st = bd()->prepare('SELECT * FROM moveis WHERE id = ?');
+    $st->execute([$id]);
+    $m = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$m) responder(['erro' => 'Móvel não encontrado.'], 404);
+    bd()->prepare('INSERT INTO moveis (id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)')
+      ->execute([
+        $novoId, $m['nome'] . ' (cópia)', $m['preco'], $m['rotativel'],
+        $m['imagem_frente'], $m['imagem_direita'], $m['imagem_verso'], $m['imagem_esquerda'], $m['ordem'],
+      ]);
+    responder(['ok' => true, 'id' => $novoId]);
+  }
+
+  if ($acao === 'movel_imagem') {
+    $slots = ['frente' => 'imagem_frente', 'direita' => 'imagem_direita', 'verso' => 'imagem_verso', 'esquerda' => 'imagem_esquerda'];
+    $slot = (string)($_POST['slot'] ?? '');
+    if (!isset($slots[$slot])) responder(['erro' => 'Rotação inválida (use frente, direita, verso ou esquerda).'], 422);
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || ($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+      $limite = ini_get('upload_max_filesize');
+      $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+        ? "A imagem passou do limite do servidor ($limite)."
+        : 'Nenhum arquivo recebido.';
+      responder(['erro' => $motivo], 422);
+    }
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_IMAGEM[$ext])) {
+      responder(['erro' => 'Formato não aceito. Use webp, png ou jpg (webp é o mais leve).'], 422);
+    }
+    $info = @getimagesize($arq['tmp_name']);
+    if (!$info || !in_array($info['mime'], EXTENSOES_IMAGEM, true)) {
+      responder(['erro' => 'O arquivo não é uma imagem válida.'], 422);
+    }
+    $base = strtolower(pathinfo((string)$arq['name'], PATHINFO_FILENAME));
+    $base = preg_replace('/[^a-z0-9_-]+/', '-', $base) ?: 'movel';
+    $base = trim($base, '-') ?: 'movel';
+    $nome = substr($base, 0, 60) . '-' . bin2hex(random_bytes(3)) . '.' . $ext;
+    if (!is_dir(pastaMoveis()) && !@mkdir(pastaMoveis(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta assets/moveis no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaMoveis() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo em assets/moveis (confira a permissão da pasta).'], 500);
+    }
+    responder(['ok' => true, 'slot' => $slot, 'imagem' => $nome, 'imagemUrl' => 'assets/moveis/' . $nome]);
+  }
+
+  /* ---------- Configurações gerais (por ora só o fundo da Casa) ---------- */
+
+  if ($acao === 'casa_config_obter') {
+    $fundo = (string)(bd()->query('SELECT casa_fundo FROM configuracoes WHERE id = 1')->fetchColumn() ?: '');
+    responder(['fundo' => $fundo, 'fundoUrl' => caminhoPublicoMovel($fundo)]);
+  }
+
+  if ($acao === 'casa_fundo_imagem') {
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || ($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+      $limite = ini_get('upload_max_filesize');
+      $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+        ? "A imagem passou do limite do servidor ($limite)."
+        : 'Nenhum arquivo recebido.';
+      responder(['erro' => $motivo], 422);
+    }
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_IMAGEM[$ext])) {
+      responder(['erro' => 'Formato não aceito. Use webp, png ou jpg (webp é o mais leve).'], 422);
+    }
+    $info = @getimagesize($arq['tmp_name']);
+    if (!$info || !in_array($info['mime'], EXTENSOES_IMAGEM, true)) {
+      responder(['erro' => 'O arquivo não é uma imagem válida.'], 422);
+    }
+    $nome = 'casa-fundo-' . bin2hex(random_bytes(3)) . '.' . $ext;
+    if (!is_dir(pastaMoveis()) && !@mkdir(pastaMoveis(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta assets/moveis no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaMoveis() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo em assets/moveis (confira a permissão da pasta).'], 500);
+    }
+    bd()->prepare('UPDATE configuracoes SET casa_fundo = ? WHERE id = 1')->execute([$nome]);
+    responder(['ok' => true, 'fundo' => $nome, 'fundoUrl' => 'assets/moveis/' . $nome]);
+  }
+
+  if ($acao === 'casa_fundo_remover') {
+    bd()->prepare('UPDATE configuracoes SET casa_fundo = \'\' WHERE id = 1')->execute();
+    responder(['ok' => true]);
+  }
+
   if ($acao === 'destinos') {
     // "rascunho" vai junto: um ponto que aponta pra mundo/cena/lição não publicada é
     // escondido do aluno por conteudo.php, então o painel precisa poder avisar disso
@@ -1138,7 +1316,7 @@ try {
       'mundo' => array_map(fn($m) => ['id' => $m['id'], 'rotulo' => $marca($m['emoji'] . ' ' . $m['nome'], $m['publicado']), 'publicado' => (bool)$m['publicado']], $mundos),
       'cena'  => array_map(fn($c) => ['id' => $c['id'], 'rotulo' => $marca('🗺️ ' . $c['nome'], $c['publicado']), 'publicado' => (bool)$c['publicado']], $cenas),
       'licao' => array_map(fn($l) => ['id' => $l['id'], 'rotulo' => $marca($l['emoji'] . ' ' . $l['titulo'], $l['publicado']), 'publicado' => (bool)$l['publicado']], $licoes),
-      'tela'  => array_map(fn($t) => ['id' => $t, 'rotulo' => ucfirst($t), 'publicado' => true], TELAS_VALIDAS),
+      'tela'  => array_map(fn($t) => ['id' => $t, 'rotulo' => ROTULOS_TELA[$t] ?? ucfirst($t), 'publicado' => true], TELAS_VALIDAS),
       'npc'   => array_map(fn($n) => ['id' => $n['id'], 'rotulo' => $marca($n['emoji'] . ' ' . $n['nome'], $n['publicado']), 'publicado' => (bool)$n['publicado']], $npcs),
       'gatilho' => array_map(fn($g) => ['id' => $g['chave'], 'rotulo' => $marca('🎯 ' . $g['chave'] . ' (missão "' . $g['titulo'] . '")', $g['publicado']), 'publicado' => (bool)$g['publicado']], $gatilhos),
       'item' => array_map(fn($it) => ['id' => $it['id'], 'rotulo' => $marca($it['emoji'] . ' ' . $it['nome'], $it['publicado']), 'publicado' => (bool)$it['publicado']], $itens),

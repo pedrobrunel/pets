@@ -165,6 +165,8 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
 .opcao-linha button{flex:none}
 .opcao-missao{font-size:11px;color:#7F8C8D;font-weight:800;white-space:nowrap}
 .npc-thumb{width:34px;height:34px;border-radius:8px;object-fit:cover;vertical-align:-10px;margin-right:6px;background:#F4F6F7}
+.movel-thumb{width:96px;max-height:96px;object-fit:contain;border-radius:8px;background:#F4F6F7;border:1px solid var(--contorno);padding:6px;display:block;margin-bottom:8px}
+.casa-fundo-thumb{max-width:100%;max-height:180px;border-radius:10px;border:1px solid var(--contorno);display:block}
 
 /* --- editor de diálogo em fluxograma (canvas de nós + linhas) --- */
 #btn-modo-lista.ativo, #btn-modo-fluxo.ativo{background:var(--tinta);color:#fff;border-color:var(--tinta)}
@@ -243,6 +245,7 @@ body.conectando-fluxo{cursor:crosshair}
       <button data-aba="npcs">🗨️ NPCs</button>
       <button data-aba="missoes">🎯 Missões</button>
       <button data-aba="itens">🔭 Itens</button>
+      <button data-aba="moveis">🛋️ Móveis</button>
       <button data-aba="mundos">🎒 Mundos</button>
       <button data-aba="licoes">📚 Lições</button>
       <button data-aba="jogadores">🧒 Jogadores</button>
@@ -569,6 +572,70 @@ body.conectando-fluxo{cursor:crosshair}
       <div class="painel"><table id="tabela-itens"></table></div>
     </section>
 
+    <section id="aba-moveis" class="oculto">
+      <h2>Móveis</h2>
+      <p class="sub">catálogo da Loja de Móveis — coloque um ponto tipo "tela" apontando pra "Loja de Móveis" num mapa (aba Mapas) pra dar acesso a ela. O aluno compra com as moedas do jogo e decora a Casa, estilo Club Penguin.</p>
+
+      <div class="painel" style="padding:16px;margin-bottom:20px">
+        <h3 style="font-size:16px;margin-top:0">Fundo da Casa</h3>
+        <p class="sub" style="margin-top:0">a imagem do quarto onde o aluno decora com os móveis comprados. Vale pra todo mundo (não é por jogador).</p>
+        <div id="preview-casa-fundo" style="margin-bottom:10px"></div>
+        <div class="upload" id="zona-upload-casa-fundo">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+        <input type="file" id="input-casa-fundo" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
+        <div id="casa-fundo-aviso" class="aviso-form"></div>
+        <button type="button" class="btn linha erro" id="btn-remover-casa-fundo" style="margin-top:10px">Remover fundo</button>
+      </div>
+
+      <button class="btn" id="btn-novo-movel" style="margin-bottom:14px">+ Novo móvel</button>
+
+      <form id="form-movel" class="oculto">
+        <h3 id="titulo-form-movel" style="font-size:16px">Novo móvel</h3>
+        <div class="linha3">
+          <div><label>id (fixo, não dá pra editar depois)</label><input type="text" id="movel-id" placeholder="ex.: mesa-redonda"></div>
+          <div><label>preço (moedas)</label><input type="number" id="movel-preco" value="50" min="0"></div>
+          <div><label>ordem</label><input type="number" id="movel-ordem" value="0"></div>
+        </div>
+        <label>nome</label>
+        <input type="text" id="movel-nome" placeholder="ex.: Mesa redonda">
+
+        <div class="check"><input type="checkbox" id="movel-rotativel"><label style="margin:0" for="movel-rotativel">rotacionável (o aluno pode girar — ex.: uma poltrona com 4 lados)</label></div>
+
+        <label style="margin-top:10px">imagem de frente (obrigatória)</label>
+        <div class="upload" id="zona-upload-movel-frente">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+        <input type="file" id="input-movel-frente" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
+        <div id="preview-movel-frente"></div>
+
+        <div id="bloco-rotacoes-movel" class="oculto">
+          <label style="margin-top:10px">imagem de frente virada pra direita</label>
+          <div class="upload" id="zona-upload-movel-direita">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+          <input type="file" id="input-movel-direita" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
+          <div id="preview-movel-direita"></div>
+
+          <label style="margin-top:10px">imagem de costas (verso)</label>
+          <div class="upload" id="zona-upload-movel-verso">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+          <input type="file" id="input-movel-verso" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
+          <div id="preview-movel-verso"></div>
+
+          <label style="margin-top:10px">imagem de frente virada pra esquerda</label>
+          <div class="upload" id="zona-upload-movel-esquerda">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+          <input type="file" id="input-movel-esquerda" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
+          <div id="preview-movel-esquerda"></div>
+          <p class="dica-editor">Faltou alguma rotação? Sem problema — o jogo usa a imagem de frente nela.</p>
+        </div>
+
+        <div class="check"><input type="checkbox" id="movel-publicado" checked><label style="margin:0" for="movel-publicado">publicado (aparece pro aluno)</label></div>
+
+        <div id="movel-aviso" class="aviso-form"></div>
+        <div class="rodape-form">
+          <button type="submit" class="btn mata">Salvar móvel</button>
+          <button type="button" class="btn branco" id="btn-cancelar-movel">Cancelar</button>
+          <button type="button" class="btn erro" id="btn-excluir-movel" style="margin-left:auto">Excluir móvel</button>
+        </div>
+      </form>
+
+      <div class="painel"><table id="tabela-moveis"></table></div>
+    </section>
+
     <section id="aba-mundos" class="oculto">
       <h2>Mundos</h2>
       <p class="sub">cada mundo é uma matéria (a trilha de lições). Pra ele aparecer no mapa, crie um ponto na aba Mapas.</p>
@@ -752,6 +819,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   if(b.dataset.aba === 'npcs') carregarNpcs();
   if(b.dataset.aba === 'missoes') carregarMissoes();
   if(b.dataset.aba === 'itens') carregarItens();
+  if(b.dataset.aba === 'moveis') { carregarMoveis(); carregarCasaFundo(); }
 });
 
 /* ---------- painel (métricas) ---------- */
@@ -1533,6 +1601,7 @@ const TELAS_NPC = [
   {v:'loja',   rotulo:'Loja'},
   {v:'mural',  rotulo:'Mural'},
   {v:'perfil', rotulo:'Perfil'},
+  {v:'lojamoveis', rotulo:'Loja de Móveis'},
 ];
 $('#npc-tela').innerHTML = TELAS_NPC.map(t => `<option value="${t.v}">${t.rotulo}</option>`).join('');
 
@@ -1885,6 +1954,169 @@ async function enviarImagemItem(arquivo){
     aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
   }finally{ zona.textContent = textoOriginal; }
 }
+
+/* ---------- Móveis (Loja de Móveis + fundo da Casa) ---------- */
+let moveisCache = [];
+const SLOTS_MOVEL = ['frente', 'direita', 'verso', 'esquerda'];
+let movelImg = {frente:'', direita:'', verso:'', esquerda:''};
+
+async function carregarMoveis(){
+  const d = await api('moveis_listar').catch(() => ({moveis:[]}));
+  moveisCache = d.moveis;
+  $('#tabela-moveis').innerHTML = `
+    <tr><th>Ordem</th><th>Móvel</th><th>Preço</th><th>Rotacionável</th><th>Status</th><th></th></tr>
+    ${moveisCache.map(m => `<tr>
+      <td>${m.ordem}</td>
+      <td>${m.imagemFrenteUrl ? `<img class="npc-thumb" src="${esc(m.imagemFrenteUrl)}">` : ''}${esc(m.nome)} <code style="opacity:.5">${m.id}</code></td>
+      <td>🪙 ${m.preco}</td>
+      <td>${m.rotativel ? '🔄 sim' : '—'}</td>
+      <td><span class="selo ${m.publicado?'on':'off'}">${m.publicado?'publicado':'rascunho'}</span></td>
+      <td class="acoes">
+        <button class="btn linha branco" onclick="editarMovel('${m.id}')">Editar</button>
+        <button class="btn linha branco" onclick="duplicarMovel('${m.id}','${esc(m.nome)}')">Duplicar</button>
+        <button class="btn linha erro" onclick="excluirMovel('${m.id}','${esc(m.nome)}')">Excluir</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="6">Nenhum móvel ainda.</td></tr>'}`;
+}
+function previewsMovel(){
+  SLOTS_MOVEL.forEach(slot => {
+    const cont = $(`#preview-movel-${slot}`);
+    const url = movelImg[slot] ? `assets/moveis/${movelImg[slot]}` : '';
+    cont.innerHTML = url ? `<img class="movel-thumb" src="${esc(url)}">` : '';
+  });
+}
+function limparFormMovel(){
+  $('#form-movel').reset();
+  $('#movel-id').disabled = false;
+  $('#movel-aviso').style.display = 'none';
+  $('#btn-excluir-movel').classList.add('oculto');
+  movelImg = {frente:'', direita:'', verso:'', esquerda:''};
+  previewsMovel();
+  $('#bloco-rotacoes-movel').classList.add('oculto');
+}
+$('#movel-rotativel').onchange = () => $('#bloco-rotacoes-movel').classList.toggle('oculto', !$('#movel-rotativel').checked);
+$('#btn-novo-movel').onclick = () => {
+  limparFormMovel();
+  $('#titulo-form-movel').textContent = 'Novo móvel';
+  $('#form-movel').classList.remove('oculto');
+  $('#form-movel').scrollIntoView({behavior:'smooth'});
+};
+$('#btn-cancelar-movel').onclick = () => $('#form-movel').classList.add('oculto');
+window.editarMovel = async (id) => {
+  const m = await api('movel_obter', {query:`&id=${encodeURIComponent(id)}`}).catch(e => { alert(e.message); return null; });
+  if(!m) return;
+  limparFormMovel();
+  $('#movel-id').value = m.id; $('#movel-id').disabled = true;
+  $('#movel-nome').value = m.nome; $('#movel-preco').value = m.preco;
+  $('#movel-ordem').value = m.ordem; $('#movel-publicado').checked = m.publicado;
+  $('#movel-rotativel').checked = m.rotativel;
+  $('#bloco-rotacoes-movel').classList.toggle('oculto', !m.rotativel);
+  movelImg = {frente:m.imagemFrente, direita:m.imagemDireita, verso:m.imagemVerso, esquerda:m.imagemEsquerda};
+  previewsMovel();
+  $('#btn-excluir-movel').classList.remove('oculto');
+  $('#titulo-form-movel').textContent = 'Editar móvel';
+  $('#form-movel').classList.remove('oculto');
+  $('#form-movel').scrollIntoView({behavior:'smooth'});
+};
+window.excluirMovel = async (id, nome) => {
+  if(!confirm(`Excluir o móvel "${nome}"? Quem já tinha comprado perde ele da casa.`)) return;
+  await api('movel_excluir', {method:'POST', corpo:{id}});
+  $('#form-movel').classList.add('oculto');
+  carregarMoveis();
+};
+window.duplicarMovel = async (id, nome) => {
+  const novoId = prompt(`Duplicar "${nome}" — id do móvel novo (2 a 24 letras minúsculas ou números):`, id + '2');
+  if(!novoId) return;
+  try{
+    const r = await api('movel_duplicar', {method:'POST', corpo:{id, novoId: novoId.trim()}});
+    await carregarMoveis();
+    editarMovel(r.id); // já abre pra editar — a cópia entra como rascunho de propósito
+  }catch(e){ alert(e.message); }
+};
+$('#btn-excluir-movel').onclick = () => {
+  const id = $('#movel-id').value;
+  const m = moveisCache.find(x => x.id === id);
+  if(m) excluirMovel(id, m.nome);
+};
+$('#form-movel').addEventListener('submit', async e => {
+  e.preventDefault();
+  const aviso = $('#movel-aviso');
+  aviso.style.display = 'none';
+  try{
+    const id = $('#movel-id').value.trim();
+    await api('movel_salvar', {method:'POST', corpo:{
+      id, nome: $('#movel-nome').value.trim(), preco: Number($('#movel-preco').value) || 0,
+      rotativel: $('#movel-rotativel').checked,
+      imagemFrente: movelImg.frente, imagemDireita: movelImg.direita,
+      imagemVerso: movelImg.verso, imagemEsquerda: movelImg.esquerda,
+      publicado: $('#movel-publicado').checked, ordem: Number($('#movel-ordem').value) || 0,
+    }});
+    $('#form-movel').classList.add('oculto');
+    carregarMoveis();
+  }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
+});
+
+SLOTS_MOVEL.forEach(slot => {
+  $(`#zona-upload-movel-${slot}`).onclick = () => $(`#input-movel-${slot}`).click();
+  $(`#input-movel-${slot}`).onchange = e => { if(e.target.files[0]) enviarImagemMovel(slot, e.target.files[0]); };
+  ['dragover','drop'].forEach(ev => $(`#zona-upload-movel-${slot}`).addEventListener(ev, e => e.preventDefault()));
+  $(`#zona-upload-movel-${slot}`).addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemMovel(slot, e.dataTransfer.files[0]); });
+});
+async function enviarImagemMovel(slot, arquivo){
+  const aviso = $('#movel-aviso');
+  const zona = $(`#zona-upload-movel-${slot}`);
+  const textoOriginal = zona.textContent;
+  zona.textContent = '⏳ Enviando…';
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    fd.append('slot', slot);
+    const r = await fetch('api/admin.php?acao=movel_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    movelImg[slot] = d.imagem;
+    previewsMovel();
+    aviso.className = 'aviso-form ok';
+    aviso.textContent = 'Imagem enviada. Agora salve o móvel.';
+    aviso.style.display = 'block';
+  }catch(e){
+    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
+  }finally{ zona.textContent = textoOriginal; }
+}
+
+/* fundo da Casa: configuração única (não é por móvel) */
+async function carregarCasaFundo(){
+  const d = await api('casa_config_obter').catch(() => ({fundoUrl:''}));
+  $('#preview-casa-fundo').innerHTML = d.fundoUrl ? `<img class="casa-fundo-thumb" src="${esc(d.fundoUrl)}">` : '<p class="sub" style="margin:0">Nenhum fundo configurado ainda — a Casa usa o visual padrão.</p>';
+}
+$('#zona-upload-casa-fundo').onclick = () => $('#input-casa-fundo').click();
+$('#input-casa-fundo').onchange = e => { if(e.target.files[0]) enviarCasaFundo(e.target.files[0]); };
+['dragover','drop'].forEach(ev => $('#zona-upload-casa-fundo').addEventListener(ev, e => e.preventDefault()));
+$('#zona-upload-casa-fundo').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarCasaFundo(e.dataTransfer.files[0]); });
+async function enviarCasaFundo(arquivo){
+  const aviso = $('#casa-fundo-aviso');
+  const zona = $('#zona-upload-casa-fundo');
+  const textoOriginal = zona.textContent;
+  zona.textContent = '⏳ Enviando…';
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    const r = await fetch('api/admin.php?acao=casa_fundo_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    aviso.className = 'aviso-form ok';
+    aviso.textContent = 'Fundo atualizado!';
+    aviso.style.display = 'block';
+    carregarCasaFundo();
+  }catch(e){
+    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
+  }finally{ zona.textContent = textoOriginal; }
+}
+$('#btn-remover-casa-fundo').onclick = async () => {
+  if(!confirm('Remover o fundo da Casa? Ela volta pro visual padrão.')) return;
+  await api('casa_fundo_remover', {method:'POST', corpo:{}});
+  carregarCasaFundo();
+};
 
 /* ---------- mundos ---------- */
 let mundosCache = [];

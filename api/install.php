@@ -199,6 +199,35 @@ try {
     $pdo->exec("ALTER TABLE pontos ADD COLUMN requisito_item VARCHAR(24) NOT NULL DEFAULT ''");
   }
 
+  /* móveis: catálogo pra decorar a Casa, estilo Club Penguin. Comprados na "Loja de
+     Móveis" (uma tela só alcançada por ponto no mapa, tipo "tela") com as mesmas moedas
+     do resto do jogo, e depois colocados no quarto — isso fica no estado do jogador
+     (client-trusted, igual mochila/equipado), não numa tabela à parte. Um móvel pode ter
+     até 4 imagens (uma por rotação); "rotativel" só liga o botão de girar no cliente —
+     se faltar alguma imagem de rotação, o cliente cai pra imagem_frente. */
+  $pdo->exec('CREATE TABLE IF NOT EXISTS moveis (
+    id              VARCHAR(24) PRIMARY KEY,
+    nome            VARCHAR(60) NOT NULL,
+    preco           INT NOT NULL DEFAULT 0,
+    rotativel       TINYINT(1) NOT NULL DEFAULT 0,
+    imagem_frente   VARCHAR(160) NOT NULL DEFAULT \'\',
+    imagem_direita  VARCHAR(160) NOT NULL DEFAULT \'\',
+    imagem_verso    VARCHAR(160) NOT NULL DEFAULT \'\',
+    imagem_esquerda VARCHAR(160) NOT NULL DEFAULT \'\',
+    publicado       TINYINT(1) NOT NULL DEFAULT 1,
+    ordem           INT NOT NULL DEFAULT 0,
+    criado_em       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+  // configurações gerais do jogo: por ora só o fundo da Casa (uma imagem só, vale pra
+  // todo mundo — não é por jogador). Linha única (id sempre 1), criada abaixo se faltar.
+  $pdo->exec('CREATE TABLE IF NOT EXISTS configuracoes (
+    id        TINYINT PRIMARY KEY DEFAULT 1,
+    casa_fundo VARCHAR(160) NOT NULL DEFAULT \'\'
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  $pdo->exec('INSERT IGNORE INTO configuracoes (id, casa_fundo) VALUES (1, \'\')');
+
   // pasta das imagens enviadas pelo painel (as do repositório continuam em assets/)
   $pastaCenas = dirname(__DIR__) . '/assets/cenas';
   if (!is_dir($pastaCenas)) @mkdir($pastaCenas, 0755, true);
@@ -206,6 +235,8 @@ try {
   if (!is_dir($pastaNpcs)) @mkdir($pastaNpcs, 0755, true);
   $pastaItens = dirname(__DIR__) . '/assets/itens';
   if (!is_dir($pastaItens)) @mkdir($pastaItens, 0755, true);
+  $pastaMoveis = dirname(__DIR__) . '/assets/moveis';
+  if (!is_dir($pastaMoveis)) @mkdir($pastaMoveis, 0755, true);
 
   // conta do painel — roda de novo pra trocar a senha (edite config.php e recarregue esta página)
   $st = $pdo->prepare('INSERT INTO admins (usuario, senha_hash) VALUES (?, ?)
@@ -299,6 +330,29 @@ try {
     $npcSemeado = true;
   }
 
+  /* semeia os móveis de exemplo (mesa + poltrona) e o fundo padrão da Casa — as imagens
+     já vêm no repositório (assets/moveis/), não precisam de upload pelo painel. Só na
+     primeira vez (tabela vazia), igual aos outros catálogos de exemplo acima. O fundo da
+     Casa só é setado se ainda estiver vazio, pra não sobrescrever se o Hostmaster já
+     tiver trocado por outro antes de rodar o install.php de novo. */
+  $moveisExistentes = (int)$pdo->query('SELECT COUNT(*) FROM moveis')->fetchColumn();
+  $moveisSemeados = 0;
+  if ($moveisExistentes === 0) {
+    $pdo->prepare('INSERT INTO moveis (id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda, publicado, ordem)
+      VALUES (?, ?, ?, 0, ?, \'\', \'\', \'\', 1, ?)')
+      ->execute(['mesaredonda', 'Mesa redonda', 40, 'mesa.webp', 0]);
+    $pdo->prepare('INSERT INTO moveis (id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda, publicado, ordem)
+      VALUES (?, ?, ?, 1, ?, ?, ?, ?, 1, ?)')
+      ->execute(['poltronaazul', 'Poltrona azul', 90, 'poltrona-frente.webp', 'poltrona-direita.webp', 'poltrona-verso.webp', 'poltrona-esquerda.webp', 1]);
+    $moveisSemeados = 2;
+  }
+  $fundoAtual = (string)($pdo->query('SELECT casa_fundo FROM configuracoes WHERE id = 1')->fetchColumn() ?: '');
+  $fundoSemeado = false;
+  if ($fundoAtual === '') {
+    $pdo->prepare('UPDATE configuracoes SET casa_fundo = ? WHERE id = 1')->execute(['casa-fundo-limoeiro.webp']);
+    $fundoSemeado = true;
+  }
+
   echo '<p>✅ Banco pronto! Tabelas criadas (ou já existiam — rodar de novo não faz mal).</p>'
      . ($pontosSemeados
         ? '<p>🗺️ Cena "Ilha do saber" criada com ' . $pontosSemeados . ' pontos clicáveis — edite em <code>/admin.html</code>, aba Mapas.</p>'
@@ -310,6 +364,12 @@ try {
      . ($npcSemeado
         ? '<p>🦦 NPC de exemplo "Seu Lontra" criado na Loja — edite ou apague em <code>/admin.html</code>, aba NPCs.</p>'
         : '<p>🦦 Já havia NPC cadastrado — nada foi semeado.</p>')
+     . ($moveisSemeados
+        ? '<p>🛋️ ' . $moveisSemeados . ' móveis de exemplo (mesa + poltrona) criados — edite em <code>/admin.html</code>, aba Móveis. Falta só colocar um ponto tipo "tela" → "Loja de Móveis" num mapa pra dar acesso.</p>'
+        : '<p>🛋️ Já havia móvel cadastrado — nada foi semeado.</p>')
+     . ($fundoSemeado
+        ? '<p>🏠 Fundo padrão da Casa configurado (o quarto de pedra azul).</p>'
+        : '<p>🏠 A Casa já tinha um fundo configurado — nada foi trocado.</p>')
      . '<p>Acesse <code>/admin.html</code> para entrar no painel. Depois é só apagar este arquivo (api/install.php) do servidor, ou deixá-lo — ele nunca sobrescreve conteúdo já existente.</p>';
 } catch (Throwable $e) {
   http_response_code(500);
