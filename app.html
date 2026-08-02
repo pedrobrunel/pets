@@ -502,6 +502,20 @@ body.tela-cheia #app{padding:0;max-width:none}
 canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--contorno);
   border-bottom-width:8px;border-radius:var(--r);background:#D6EAF8;touch-action:none}
 
+/* --- minigame 4: sequência (Simon Says) --- */
+.grade-simon{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-width:340px;margin:0 auto}
+.pad-simon{aspect-ratio:1;border:var(--borda) solid var(--contorno);border-bottom-width:8px;border-radius:20px;
+  font-size:38px;display:grid;place-items:center;filter:brightness(.85);
+  transition:filter .1s ease, transform .1s ease, border-bottom-width .1s ease}
+.pad-simon:disabled{cursor:default}
+.pad-simon:active:not(:disabled){transform:translateY(6px);border-bottom-width:2px}
+.pad-simon.aceso{filter:brightness(1.15);transform:scale(1.04)}
+.pad-simon.p0{background:var(--manga);border-color:var(--manga-rim)}
+.pad-simon.p1{background:var(--rosa);border-color:var(--rosa-rim)}
+.pad-simon.p2{background:var(--mata);border-color:var(--mata-rim)}
+.pad-simon.p3{background:var(--ceu);border-color:var(--ceu-rim)}
+.placar-simon{text-align:center;font-weight:900;font-size:15px;margin:2px 0 14px}
+
 /* ---------- perfil ---------- */
 .perfil-retrato{text-align:center;padding:14px 0 4px}
 .avatar-nivel{position:relative;display:inline-block}
@@ -780,9 +794,9 @@ const estado = {
   moedas:60, xp:0,
   fome:72, felicidade:80, energia:90,
   equipado:[], mochila:[], inventario:{},
-  licoesFeitas:[], recordes:{memoria:null, chuva:0, toca:0},
+  licoesFeitas:[], recordes:{memoria:null, chuva:0, toca:0, sequencia:0},
   missoes:{}, cenasVisitadas:[], gatilhosAtivos:[], itensColetados:[],
-  moveisComprados:[], casaMoveis:[],
+  moveisComprados:[], casaMoveis:[], casaDesbloqueada:false,
   streak:{atual:0, melhor:0, ultimoDia:null},
   recados:[
     {av:'🦔', aut:'Nina_Ouriço', txt:'Terminei a trilha de Biologia! 🎉'},
@@ -1014,16 +1028,23 @@ RENDER.casa = () => {
   const pendentes = TRILHAS.flatMap(t=>t.licoes).filter(l=>!estado.licoesFeitas.includes(l.id));
   const proxima = pendentes[0];
   const temFundo = !!CASA_CONFIG.fundoUrl;
+  const casaAtiva = temFundo && estado.casaDesbloqueada;
   $('#tela-casa').innerHTML = `
-    <div class="palco ${temFundo?'quarto':''}" style="${temFundo?`background-image:url('${esc(CASA_CONFIG.fundoUrl)}')`:''}">
-      ${temFundo ? '' : '<div class="sol"></div><div class="nuvem"></div>'}
+    <div class="palco ${casaAtiva?'quarto':''}" style="${casaAtiva?`background-image:url('${esc(CASA_CONFIG.fundoUrl)}')`:''}">
+      ${casaAtiva ? '' : '<div class="sol"></div><div class="nuvem"></div>'}
       <div id="camada-moveis"></div>
       ${svgBicho(estado.tipo,{equipado:estado.equipado, classe: h.min>=70?'feliz':''})}
     </div>
-    ${temFundo ? `<div style="text-align:center;margin-top:8px">
+    ${casaAtiva ? `<div style="text-align:center;margin-top:8px">
       <button class="btn ${modoDecorar?'roxo':'branco'} pequeno" onclick="alternarDecorar()">${modoDecorar ? '✅ Pronto' : '🛋️ Decorar'}</button>
     </div>
     ${modoDecorar ? '<div class="faixa-decorar" id="faixa-decorar"></div>' : ''}` : ''}
+    ${temFundo && !estado.casaDesbloqueada ? `<div class="sticker" style="margin-top:14px;text-align:center">
+      <span style="font-size:34px;display:block">🏠</span>
+      <b style="font-family:'Baloo 2';font-size:18px;display:block;margin-top:2px">Tenha sua própria casa!</b>
+      <p style="font-size:13px;margin:4px 0 10px">Desbloqueie pra decorar o quarto com os móveis que comprar.</p>
+      <button class="btn amarelo" onclick="desbloquearCasa()">Desbloquear por 🪙 ${CASA_CONFIG.precoCasa}</button>
+    </div>` : ''}
     <div style="text-align:center"><span class="placa-nome">${h.emoji} ${esc(estado.apelido)}</span></div>
     ${estado.streak.atual >= 1 ? `<div style="text-align:center;margin-top:6px">
       <span class="chip"><svg viewBox="0 0 24 24" style="width:14px;height:14px;vertical-align:-2px"><path d="M12 2c1 4-3 5-3 8.5a3.5 3.5 0 007 0c0-1.5-1-2-1-3.2 1.5 1 2.5 3 2.5 5.2 0 3.6-2.7 6.5-7 6.5s-7-2.9-7-6.5C3.5 8 6.5 4.5 12 2z" fill="var(--manga)" stroke="var(--manga-rim)" stroke-width=".8"/></svg> ${estado.streak.atual} dia${estado.streak.atual===1?'':'s'} seguido${estado.streak.atual===1?'':'s'}</span></div>` : ''}
@@ -1052,8 +1073,18 @@ RENDER.casa = () => {
       <button class="btn roxo grande" onclick="ir('loja')">🍉 Alimentar</button>
     </div>
     <div style="margin-top:12px"><button class="btn branco grande" onclick="ir('perfil')">🪪 Ver minha carteirinha</button></div>`;
-  if(temFundo){ renderCamadaMoveis(); if(modoDecorar) renderFaixaDecorar(); }
+  if(casaAtiva){ renderCamadaMoveis(); if(modoDecorar) renderFaixaDecorar(); }
 };
+function desbloquearCasa(){
+  if(estado.casaDesbloqueada) return;
+  if(estado.moedas < CASA_CONFIG.precoCasa) return brinde('Faltam 🪙 ' + (CASA_CONFIG.precoCasa-estado.moedas) + '. Bora jogar um minigame!');
+  estado.moedas -= CASA_CONFIG.precoCasa;
+  estado.casaDesbloqueada = true;
+  atualizarHud();
+  brinde('🏠 Casa desbloqueada! Agora é só decorar.');
+  RENDER.casa();
+  agendarSalvar();
+}
 
 /* desgaste suave: o bicho nunca "morre", só fica com saudade */
 // não chama agendarSalvar() aqui de propósito: é desgaste passivo, não ação do
@@ -1327,7 +1358,7 @@ const acharItemMapa = id => ITENS_MAPA.find(it => it.id === id);
 // diferente dos itens de mapa acima que são achados de graça
 let MOVEIS = [];
 const acharMovel = id => MOVEIS.find(m => m.id === id);
-let CASA_CONFIG = {fundoUrl:''};
+let CASA_CONFIG = {fundoUrl:'', precoCasa:5000};
 /* agenda de um NPC: dias da semana, horário e período de datas, todos opcionais
    (vazio = sem restrição). Decidido com a hora do aparelho de quem está jogando —
    não tem por que ir no servidor só pra saber se "agora" está dentro da janela. */
@@ -2014,8 +2045,10 @@ RENDER.arcade = () => {
         <span class="emoji">🃏</span><h3>Memória do Bicho</h3><p>Ache os pares. Recorde: ${estado.recordes.memoria ?? '—'} jogadas</p></button>
       <button class="cartao-trilha" onclick="jogoChuva()">
         <span class="emoji">🍉</span><h3>Chuva de Frutas</h3><p>Recorde: ${estado.recordes.chuva} pontos</p></button>
-      <button class="cartao-trilha" style="grid-column:1 / -1" onclick="jogoToca()">
+      <button class="cartao-trilha" onclick="jogoToca()">
         <span class="emoji">🕳️</span><h3>Toca do Bicho</h3><p>Toque rápido, evite o raio. Recorde: ${estado.recordes.toca} pontos</p></button>
+      <button class="cartao-trilha" onclick="jogoSequencia()">
+        <span class="emoji">🎵</span><h3>Sequência do Bicho</h3><p>Repita a ordem certinha. Recorde: ${estado.recordes.sequencia} rodada(s)</p></button>
     </div>
     <p class="aviso" style="margin-top:16px">Minigame gasta energia do bicho — mas ela volta sozinha com o tempo.</p>`;
 };
@@ -2215,6 +2248,78 @@ function jogoToca(){
   spawnUm();
 }
 
+/* --- minigame 4: sequência do bicho (Simon Says) --- */
+function jogoSequencia(){
+  const EMOJIS = ['🍉','🌸','🍀','⭐'];
+  const NOTAS = [523, 659, 784, 1047]; // dó-mi-sol-dó, mesmo acorde do tocarNivel
+  let sequencia = [], passo = 0, rodando = true, aceitaToque = false;
+
+  const pinta = () => {
+    $('#placar-sequencia').textContent = sequencia.length ? sequencia.length - 1 : 0;
+  };
+  function acenderPad(i, duracao=420){
+    const pad = $(`.pad-simon[data-i="${i}"]`);
+    if(!pad) return;
+    tocarNota(NOTAS[i], 0, duracao/1000, 'sine', .2);
+    pad.classList.add('aceso');
+    setTimeout(() => pad.classList.remove('aceso'), duracao);
+  }
+  async function mostrarSequencia(){
+    aceitaToque = false;
+    await new Promise(r => setTimeout(r, 500));
+    for(const i of sequencia){
+      if(!rodando) return;
+      acenderPad(i, 380);
+      await new Promise(r => setTimeout(r, 520));
+    }
+    if(!rodando) return;
+    passo = 0;
+    aceitaToque = true;
+  }
+  function proximaRodada(){
+    sequencia.push(Math.floor(Math.random()*4));
+    pinta();
+    mostrarSequencia();
+  }
+  window._padSimon = i => {
+    if(!aceitaToque || !rodando) return;
+    acenderPad(i, 200);
+    if(i !== sequencia[passo]) return encerra(false);
+    passo++;
+    if(passo === sequencia.length){
+      aceitaToque = false;
+      tocarAcerto();
+      setTimeout(proximaRodada, 700);
+    }
+  };
+  function encerra(chegouAoFim){
+    rodando = false; aceitaToque = false;
+    const pontos = sequencia.length - 1; // rodadas completadas antes de errar
+    tocarErro();
+    const premio = pontos * 8;
+    if(pontos > estado.recordes.sequencia) estado.recordes.sequencia = pontos;
+    estado.energia = lim(estado.energia - 10);
+    estado.felicidade = lim(estado.felicidade + 10);
+    ganhar(premio, 15);
+    modal(`<h2 style="font-size:24px">Ops, errou a ordem! 🎵</h2>
+      <p style="margin:6px 0 12px">Você completou ${pontos} rodada(s).</p>
+      <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
+      <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoSequencia()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+  }
+  pararLoops = () => { rodando = false; aceitaToque = false; };
+
+  $('#tela-arcade').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <div class="titulo-secao"><h2>🎵 Sequência do Bicho</h2></div>
+    <div class="placar-simon">Rodadas: <span id="placar-sequencia">0</span></div>
+    <div class="grade-simon">
+      ${EMOJIS.map((e,i) => `<button class="pad-simon p${i}" data-i="${i}" onclick="window._padSimon(${i})">${e}</button>`).join('')}
+    </div>
+    <p class="aviso" style="margin-top:14px">Observe a ordem que acende e repita tocando nos mesmos quadrados.</p>`;
+  proximaRodada();
+}
+
 /* ---------- 9. TELA: LOJA ---------- */
 const ITENS = [
   {id:'melancia', emoji:'🍉', nome:'Melancia', preco:15, tipo:'comida', fome:22, alegria:6},
@@ -2396,6 +2501,7 @@ const MEDALHAS = [
   {id:'nivel3',   emoji:'⭐', nome:'Nível 3', ok:()=>nivel()>=3},
   {id:'memoria',  emoji:'🃏', nome:'Memória em 12 jogadas', ok:()=>estado.recordes.memoria!==null && estado.recordes.memoria<=12},
   {id:'reflexo',  emoji:'⚡', nome:'10 pontos na Toca', ok:()=>estado.recordes.toca>=10},
+  {id:'ouvido',   emoji:'🎵', nome:'8 rodadas na Sequência', ok:()=>estado.recordes.sequencia>=8},
   {id:'chama',    emoji:'🔥', nome:'7 dias seguidos', ok:()=>estado.streak.melhor>=7},
   {id:'estiloso', emoji:'😎', nome:'Bicho estiloso', ok:()=>estado.equipado.length>=1}
 ];

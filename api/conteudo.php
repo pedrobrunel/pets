@@ -98,9 +98,10 @@ try {
     'imagemVersoUrl' => $urlMovel($m['imagem_verso']), 'imagemEsquerdaUrl' => $urlMovel($m['imagem_esquerda']),
   ], $moveisLinhas);
 
-  // fundo da Casa: uma imagem só, configurada no painel (aba Móveis) — vale pra todo mundo
-  $casaFundo = (string)(bd()->query('SELECT casa_fundo FROM configuracoes WHERE id = 1')->fetchColumn() ?: '');
-  $casaConfig = ['fundoUrl' => $urlMovel($casaFundo)];
+  // fundo e preço de desbloqueio da Casa: um valor só, configurado no painel (aba Móveis)
+  // — vale pra todo mundo. Desbloqueado (ou não) é que fica no estado de cada jogador.
+  $configCasa = bd()->query('SELECT casa_fundo, preco_casa FROM configuracoes WHERE id = 1')->fetch(PDO::FETCH_ASSOC) ?: ['casa_fundo' => '', 'preco_casa' => 5000];
+  $casaConfig = ['fundoUrl' => $urlMovel($configCasa['casa_fundo']), 'precoCasa' => (int)$configCasa['preco_casa']];
 
   $existe = [
     'cena'  => array_column(bd()->query('SELECT id FROM cenas')->fetchAll(PDO::FETCH_ASSOC), 'id'),
