@@ -115,12 +115,16 @@ try {
   // a coluna imagem_tipo já existe pra não precisar migrar de novo depois) e um diálogo em
   // árvore (JSON): nó inicial + nós com texto (balão de fala) e opções (botões) que levam a
   // outro nó ou encerram a conversa. Sem campo de texto livre em lugar nenhum — só botões.
+  // "tela" é opcional: se preenchida (casa/arcade/loja/mural/perfil), o NPC aparece sozinho
+  // naquela tela, sem precisar de ponto no mapa — pro Hostmaster poder colocar um NPC em
+  // qualquer página do jogo, não só nos mapas.
   $pdo->exec('CREATE TABLE IF NOT EXISTS npcs (
     id            VARCHAR(24) PRIMARY KEY,
     nome          VARCHAR(60) NOT NULL,
     emoji         VARCHAR(8)  NOT NULL DEFAULT \'🧑\',
     imagem        VARCHAR(160) NOT NULL DEFAULT \'\',
     imagem_tipo   VARCHAR(10) NOT NULL DEFAULT \'png\',
+    tela          VARCHAR(12) NOT NULL DEFAULT \'\',
     dialogo       JSON NOT NULL,
     publicado     TINYINT(1) NOT NULL DEFAULT 1,
     ordem         INT NOT NULL DEFAULT 0,
@@ -197,6 +201,35 @@ try {
     }
   }
 
+  /* semeia um NPC de exemplo na Loja — só se ainda não houver nenhum NPC cadastrado,
+     igual à cena "Ilha do saber": mostra o recurso funcionando de cara, mas nunca pisa
+     em cima do que o Hostmaster já tiver criado ou editado no painel. */
+  $npcsExistentes = (int)$pdo->query('SELECT COUNT(*) FROM npcs')->fetchColumn();
+  $npcSemeado = false;
+  if ($npcsExistentes === 0) {
+    $dialogoLojista = [
+      'inicial' => 'oi',
+      'nos' => [
+        'oi' => [
+          'texto' => 'Ô da loja! Precisando de alguma coisa pro seu bicho?',
+          'opcoes' => [
+            ['rotulo' => 'O que você vende?', 'proximo' => 'vende'],
+            ['rotulo' => 'Só passando, valeu!', 'proximo' => null],
+          ],
+        ],
+        'vende' => [
+          'texto' => 'Tenho comida pra matar a fome e acessórios pra deixar seu bicho estiloso. Dá uma olhada aqui embaixo!',
+          'opcoes' => [
+            ['rotulo' => 'Show, obrigado!', 'proximo' => null],
+          ],
+        ],
+      ],
+    ];
+    $pdo->prepare('INSERT INTO npcs (id, nome, emoji, imagem, imagem_tipo, tela, dialogo, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0)')
+      ->execute(['lojista', 'Seu Lontra', '🦦', '', 'png', 'loja', json_encode($dialogoLojista, JSON_UNESCAPED_UNICODE)]);
+    $npcSemeado = true;
+  }
+
   echo '<p>✅ Banco pronto! Tabelas criadas (ou já existiam — rodar de novo não faz mal).</p>'
      . ($pontosSemeados
         ? '<p>🗺️ Cena "Ilha do saber" criada com ' . $pontosSemeados . ' pontos clicáveis — edite em <code>/admin.html</code>, aba Mapas.</p>'
@@ -205,6 +238,9 @@ try {
      . ($semeados
         ? '<p>📚 ' . $semeados . ' lições de exemplo semeadas em ' . count($mundos) . ' mundos.</p>'
         : '<p>📚 Conteúdo já existia — nada foi semeado (o painel administrativo é quem manda a partir de agora).</p>')
+     . ($npcSemeado
+        ? '<p>🦦 NPC de exemplo "Seu Lontra" criado na Loja — edite ou apague em <code>/admin.html</code>, aba NPCs.</p>'
+        : '<p>🦦 Já havia NPC cadastrado — nada foi semeado.</p>')
      . '<p>Acesse <code>/admin.html</code> para entrar no painel. Depois é só apagar este arquivo (api/install.php) do servidor, ou deixá-lo — ele nunca sobrescreve conteúdo já existente.</p>';
 } catch (Throwable $e) {
   http_response_code(500);

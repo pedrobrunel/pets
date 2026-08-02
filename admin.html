@@ -306,6 +306,13 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
         <input type="text" id="npc-imagem" placeholder="nome do arquivo (preenchido pelo upload)" style="margin-top:8px">
         <p class="dica-editor">A imagem enviada fica em <code>assets/npcs/</code> no servidor.</p>
 
+        <label>onde ele aparece</label>
+        <select id="npc-tela"></select>
+        <p class="dica-editor">
+          Escolhendo uma tela, o NPC aparece sozinho lá (sem precisar de ponto no mapa). Deixando em
+          "só via ponto no mapa", ele só aparece onde você criar um ponto tipo "Conversar com um NPC", na aba Mapas.
+        </p>
+
         <div class="check"><input type="checkbox" id="npc-publicado" checked><label style="margin:0" for="npc-publicado">publicado (aparece pro aluno)</label></div>
 
         <div class="editor-blocos">
@@ -882,16 +889,17 @@ async function carregarNpcs(){
   const d = await api('npcs_listar').catch(() => ({npcs:[]}));
   npcsCache = d.npcs;
   $('#tabela-npcs').innerHTML = `
-    <tr><th>Ordem</th><th>NPC</th><th>Status</th><th></th></tr>
+    <tr><th>Ordem</th><th>NPC</th><th>Aparece em</th><th>Status</th><th></th></tr>
     ${npcsCache.map(n => `<tr>
       <td>${n.ordem}</td>
       <td>${n.imagemUrl ? `<img class="npc-thumb" src="${esc(n.imagemUrl)}">` : ''}${n.emoji} ${esc(n.nome)} <code style="opacity:.5">${n.id}</code></td>
+      <td>${n.tela ? (TELAS_NPC.find(t=>t.v===n.tela)?.rotulo || n.tela) : '<span style="opacity:.6">só via ponto no mapa</span>'}</td>
       <td><span class="selo ${n.publicado?'on':'off'}">${n.publicado?'publicado':'rascunho'}</span></td>
       <td class="acoes">
         <button class="btn linha branco" onclick="editarNpc('${n.id}')">Editar</button>
         <button class="btn linha erro" onclick="excluirNpc('${n.id}','${esc(n.nome)}')">Excluir</button>
       </td>
-    </tr>`).join('') || '<tr><td colspan="4">Nenhum NPC ainda.</td></tr>'}`;
+    </tr>`).join('') || '<tr><td colspan="5">Nenhum NPC ainda.</td></tr>'}`;
 }
 
 function chaveNoLivre(base){
@@ -978,6 +986,16 @@ $('#npc-imagem-tipo').addEventListener('change', () => {
   $('#npc-aviso-lottie').style.display = $('#npc-imagem-tipo').value === 'lottie' ? 'block' : 'none';
 });
 
+const TELAS_NPC = [
+  {v:'',       rotulo:'— só via ponto no mapa —'},
+  {v:'casa',   rotulo:'Casa'},
+  {v:'arcade', rotulo:'Arcade'},
+  {v:'loja',   rotulo:'Loja'},
+  {v:'mural',  rotulo:'Mural'},
+  {v:'perfil', rotulo:'Perfil'},
+];
+$('#npc-tela').innerHTML = TELAS_NPC.map(t => `<option value="${t.v}">${t.rotulo}</option>`).join('');
+
 function limparFormNpc(){
   $('#form-npc').reset();
   $('#npc-id').disabled = false;
@@ -1008,6 +1026,7 @@ window.editarNpc = async (id) => {
   $('#npc-imagem-tipo').value = n.imagemTipo;
   $('#npc-aviso-lottie').style.display = n.imagemTipo === 'lottie' ? 'block' : 'none';
   $('#npc-imagem').value = n.imagem;
+  $('#npc-tela').value = n.tela || '';
   dialogoEdit = n.dialogo && n.dialogo.nos && Object.keys(n.dialogo.nos).length ? n.dialogo : {inicial:'', nos:{}};
   nosOrdem = Object.keys(dialogoEdit.nos);
   if(!nosOrdem.length) novoNo();
@@ -1032,7 +1051,7 @@ $('#form-npc').addEventListener('submit', async e => {
     const id = $('#npc-id').value.trim();
     await api('npc_salvar', {method:'POST', corpo:{
       id, nome: $('#npc-nome').value.trim(), emoji: $('#npc-emoji').value.trim() || '🧑',
-      imagem: $('#npc-imagem').value.trim(), imagemTipo: $('#npc-imagem-tipo').value,
+      imagem: $('#npc-imagem').value.trim(), imagemTipo: $('#npc-imagem-tipo').value, tela: $('#npc-tela').value,
       publicado: $('#npc-publicado').checked, ordem: Number($('#npc-ordem').value) || 0,
       dialogo: dialogoEdit,
     }});
