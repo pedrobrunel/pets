@@ -224,12 +224,15 @@ body.tela-cheia #app{padding:0;max-width:none}
    Só brilha ao passar o mouse, pra não denunciar o item de longe. Some pra sempre ao tocar. */
 .predio.item-mapa{align-items:center;justify-content:center}
 .item-figura{
-  max-width:100%;max-height:100%;pointer-events:none;
-  filter:drop-shadow(0 2px 3px rgba(0,0,0,.3));transition:filter .15s ease;
+  max-width:100%;max-height:100%;pointer-events:none;border-radius:4px;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.3));
+  box-shadow:0 0 0 0 rgba(255,255,255,0);transition:box-shadow .15s ease;
 }
 .item-figura.item-emoji{font-size:min(8vw, 40px);line-height:1}
+/* só uma bordinha fina coladinha na imagem — sem drop-shadow aqui, que "vaza" quadrado
+   quando o png não tem fundo transparente */
 .item-mapa:hover .item-figura, .item-mapa:focus-visible .item-figura, .item-mapa:active .item-figura{
-  filter:drop-shadow(0 0 6px #fff) drop-shadow(0 0 12px rgba(255,255,255,.85));
+  box-shadow:0 0 0 2px rgba(255,255,255,.95);
 }
 .btn.amarelo{--bg:var(--moeda);--edge:var(--moeda-rim);color:var(--tinta);text-shadow:none}
 .btn-voltar-cena{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:41}
