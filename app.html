@@ -1174,6 +1174,26 @@ const acharCena = id => CENAS.find(c => c.id === id);
 // existem quando cadastrados no painel (aba NPCs), igual às cenas vindas do banco.
 let NPCS = [];
 const acharNpc = id => NPCS.find(n => n.id === id);
+/* agenda de um NPC: dias da semana, horário e período de datas, todos opcionais
+   (vazio = sem restrição). Decidido com a hora do aparelho de quem está jogando —
+   não tem por que ir no servidor só pra saber se "agora" está dentro da janela. */
+function npcAtivoAgora(n){
+  const agora = new Date();
+  if(n.dataInicio && hojeStr() < n.dataInicio) return false;
+  if(n.dataFim && hojeStr() > n.dataFim) return false;
+  if(n.diasSemana && n.diasSemana.length){
+    const dia = agora.getDay() === 0 ? 7 : agora.getDay(); // 1=segunda...7=domingo
+    if(!n.diasSemana.includes(dia)) return false;
+  }
+  if(n.horaInicio && n.horaFim){
+    const minutosAgora = agora.getHours()*60 + agora.getMinutes();
+    const [hi, mi] = n.horaInicio.split(':').map(Number), [hf, mf] = n.horaFim.split(':').map(Number);
+    const ini = hi*60+mi, fim = hf*60+mf;
+    const dentro = ini <= fim ? (minutosAgora >= ini && minutosAgora <= fim) : (minutosAgora >= ini || minutosAgora <= fim);
+    if(!dentro) return false;
+  }
+  return true;
+}
 let cenaAtual = null;
 let pilhaCenas = []; // caminho percorrido entre mapas, pro "Voltar" desfazer um passo por vez
 // arrasta com o mouse pra rolar a cena (toque já rola nativo); um clique-arrastado
@@ -1247,6 +1267,7 @@ let npcAberto = null, noNpcAtual = null;
 function abrirNpc(id){
   const n = acharNpc(id);
   if(!n || !n.dialogo || !n.dialogo.nos || !n.dialogo.nos[n.dialogo.inicial]) return brinde('Esse personagem ainda não está pronto. 🚧');
+  if(!npcAtivoAgora(n)) return brinde(`${n.nome} não está por aqui agora. Volte mais tarde! 🕐`);
   npcAberto = n;
   noNpcAtual = n.dialogo.inicial;
   renderNpc();
@@ -1278,7 +1299,7 @@ function renderNpc(){
 // NPCs que aparecem soltos numa tela (casa/arcade/loja/mural/perfil), sem precisar de
 // ponto no mapa — cadastrados no painel com "aparece em" preenchido pra essa tela.
 function blocoNpcsDaTela(tela){
-  const npcs = NPCS.filter(n => n.tela === tela);
+  const npcs = NPCS.filter(n => n.tela === tela && npcAtivoAgora(n));
   if(!npcs.length) return '';
   return npcs.map(n => `<div class="sticker npc-tela" onclick="abrirNpc('${esc(n.id)}')">
     <div class="npc-figura pequena">${n.imagemUrl ? `<img src="${esc(n.imagemUrl)}" alt="${esc(n.nome)}">` : (n.emoji || '🧑')}</div>
@@ -1389,6 +1410,12 @@ RENDER.trilhas = (idCena) => {
           const mundo = p.tipo === 'mundo' ? TRILHAS.find(t => t.id === p.destino) : null;
           // ponto de mundo que não existe mais (rascunho, apagado) não vira botão morto
           if(p.tipo === 'mundo' && !mundo) return '';
+          // NPC fora da agenda (dia/horário/data) não aparece no mapa — sem prédio com
+          // ninguém dentro, e sem estragar a surpresa de tocar e não dar em nada
+          if(p.tipo === 'npc'){
+            const npc = acharNpc(p.destino);
+            if(!npc || !npcAtivoAgora(npc)) return '';
+          }
           let selo = '';
           if(mundo && p.mostrarSelo){
             const {feitas, total, completo} = progressoMundo(mundo);

@@ -43,14 +43,19 @@ try {
 
   // NPCs: cada um tem uma imagem (png por enquanto) e um diálogo em árvore, só botões —
   // nunca campo de texto livre pro aluno digitar, isso é regra do projeto (ver README).
-  $npcsLinhas = bd()->query('SELECT id, nome, emoji, imagem, imagem_tipo, tela, dialogo FROM npcs WHERE publicado = 1 ORDER BY ordem, nome')
+  $npcsLinhas = bd()->query('SELECT id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo FROM npcs WHERE publicado = 1 ORDER BY ordem, nome')
     ->fetchAll(PDO::FETCH_ASSOC);
   $pastaNpcs = dirname(__DIR__) . '/assets/npcs';
   $npcsPublicados = array_column($npcsLinhas, 'id');
+  // a agenda (dias/horário/data) é filtrada no app.html com a hora do aparelho de quem
+  // está jogando — o servidor só entrega os critérios, não decide se "agora" está dentro
   $saidaNpcs = array_map(fn($n) => [
     'id' => $n['id'], 'nome' => $n['nome'], 'emoji' => $n['emoji'],
     'imagemUrl' => $n['imagem'] !== '' && is_file($pastaNpcs . '/' . $n['imagem']) ? 'assets/npcs/' . $n['imagem'] : '',
     'imagemTipo' => $n['imagem_tipo'], 'tela' => $n['tela'],
+    'diasSemana' => $n['dias_semana'] === '' ? [] : array_map('intval', explode(',', $n['dias_semana'])),
+    'horaInicio' => $n['hora_inicio'], 'horaFim' => $n['hora_fim'],
+    'dataInicio' => $n['data_inicio'], 'dataFim' => $n['data_fim'],
     'dialogo' => json_decode($n['dialogo'], true),
   ], $npcsLinhas);
 

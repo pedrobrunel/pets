@@ -31,8 +31,10 @@
      GET  ?acao=destinos              -> catálogo de links possíveis pra um ponto
      GET  ?acao=npcs_listar
      GET  ?acao=npc_obter             ?id=xx
-     POST ?acao=npc_salvar            {id, nome, emoji, imagem, imagemTipo, tela, publicado, ordem, dialogo:{inicial, nos:{...}}}
+     POST ?acao=npc_salvar            {id, nome, emoji, imagem, imagemTipo, tela, diasSemana, horaInicio, horaFim,
+                                        dataInicio, dataFim, publicado, ordem, dialogo:{inicial, nos:{...}}}
      POST ?acao=npc_excluir           {id}
+     POST ?acao=npc_duplicar          {id, novoId} -> clona um NPC (fica como rascunho)
      POST ?acao=npc_imagem            (multipart: arquivo) -> sobe imagem pra assets/npcs/
    ========================================================= */
 
@@ -110,6 +112,32 @@ function validarPonto(array $p, int $i): ?string {
    quem nomeia nós tipo "boas_vindas", mas continua fechada — nada de string livre indo pro banco */
 function validarChaveNo(string $c): bool {
   return (bool)preg_match('/^[a-z0-9_]{1,24}$/', $c);
+}
+
+/* agenda de exibição de um NPC: dias da semana (1=segunda...7=domingo), horário e
+   período de datas — todos opcionais; vazio = sem restrição naquele critério. Quem
+   decide se "agora" cai dentro é o app.html (hora do aparelho de quem está jogando,
+   não do servidor), então aqui só valida o formato. */
+function validarHorario(string $h): bool {
+  return $h === '' || (bool)preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $h);
+}
+function validarData(string $d): bool {
+  if ($d === '') return true;
+  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) return false;
+  [$ano, $mes, $dia] = array_map('intval', explode('-', $d));
+  return checkdate($mes, $dia, $ano);
+}
+function validarDiasSemana(string $s): bool {
+  if ($s === '') return true;
+  foreach (explode(',', $s) as $d) if (!preg_match('/^[1-7]$/', $d)) return false;
+  return true;
+}
+/** normaliza "3,1,1,2" -> "1,2,3": ordenado e sem repetição, pra gravar sempre igual */
+function normalizarDiasSemana(string $s): string {
+  if ($s === '') return '';
+  $dias = array_unique(array_map('intval', explode(',', $s)));
+  sort($dias);
+  return implode(',', $dias);
 }
 
 /** valida a árvore de diálogo de um NPC. @return string|null mensagem de erro, ou null se ok */
@@ -673,23 +701,27 @@ try {
   /* ---------- NPCs e seus diálogos ---------- */
 
   if ($acao === 'npcs_listar') {
-    $linhas = bd()->query('SELECT id, nome, emoji, imagem, imagem_tipo, tela, publicado, ordem FROM npcs ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    $linhas = bd()->query('SELECT id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, publicado, ordem FROM npcs ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     responder(['npcs' => array_map(fn($n) => [
       'id' => $n['id'], 'nome' => $n['nome'], 'emoji' => $n['emoji'],
       'imagem' => $n['imagem'], 'imagemUrl' => caminhoPublicoNpc($n['imagem']), 'imagemTipo' => $n['imagem_tipo'],
-      'tela' => $n['tela'], 'publicado' => (bool)$n['publicado'], 'ordem' => (int)$n['ordem'],
+      'tela' => $n['tela'], 'diasSemana' => $n['dias_semana'], 'horaInicio' => $n['hora_inicio'], 'horaFim' => $n['hora_fim'],
+      'dataInicio' => $n['data_inicio'], 'dataFim' => $n['data_fim'],
+      'publicado' => (bool)$n['publicado'], 'ordem' => (int)$n['ordem'],
     ], $linhas)]);
   }
 
   if ($acao === 'npc_obter') {
-    $st = bd()->prepare('SELECT id, nome, emoji, imagem, imagem_tipo, tela, dialogo, publicado, ordem FROM npcs WHERE id = ?');
+    $st = bd()->prepare('SELECT id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, publicado, ordem FROM npcs WHERE id = ?');
     $st->execute([(string)($_GET['id'] ?? '')]);
     $n = $st->fetch(PDO::FETCH_ASSOC);
     if (!$n) responder(['erro' => 'NPC não encontrado.'], 404);
     responder([
       'id' => $n['id'], 'nome' => $n['nome'], 'emoji' => $n['emoji'],
       'imagem' => $n['imagem'], 'imagemUrl' => caminhoPublicoNpc($n['imagem']), 'imagemTipo' => $n['imagem_tipo'],
-      'tela' => $n['tela'], 'publicado' => (bool)$n['publicado'], 'ordem' => (int)$n['ordem'],
+      'tela' => $n['tela'], 'diasSemana' => $n['dias_semana'], 'horaInicio' => $n['hora_inicio'], 'horaFim' => $n['hora_fim'],
+      'dataInicio' => $n['data_inicio'], 'dataFim' => $n['data_fim'],
+      'publicado' => (bool)$n['publicado'], 'ordem' => (int)$n['ordem'],
       'dialogo' => json_decode($n['dialogo'], true),
     ]);
   }
@@ -707,14 +739,33 @@ try {
     if (!in_array($imagemTipo, ['png', 'lottie'], true)) responder(['erro' => '"imagemTipo" precisa ser "png" ou "lottie".'], 422);
     $tela = trim((string)($d['tela'] ?? ''));
     if ($tela !== '' && !in_array($tela, TELAS_NPC, true)) responder(['erro' => '"tela" precisa ser uma destas: ' . implode(', ', TELAS_NPC) . ', ou vazio (só via ponto no mapa).'], 422);
+
+    $diasSemana = normalizarDiasSemana(trim((string)($d['diasSemana'] ?? '')));
+    if (!validarDiasSemana($diasSemana)) responder(['erro' => '"diasSemana" precisa ser uma lista de números de 1 (segunda) a 7 (domingo), separados por vírgula.'], 422);
+    $horaInicio = trim((string)($d['horaInicio'] ?? ''));
+    $horaFim = trim((string)($d['horaFim'] ?? ''));
+    if (!validarHorario($horaInicio) || !validarHorario($horaFim)) responder(['erro' => 'Horário inválido: use o formato HH:MM.'], 422);
+    if (($horaInicio === '') !== ($horaFim === '')) responder(['erro' => 'Preencha o horário de início e fim, ou deixe os dois vazios.'], 422);
+    $dataInicio = trim((string)($d['dataInicio'] ?? ''));
+    $dataFim = trim((string)($d['dataFim'] ?? ''));
+    if (!validarData($dataInicio) || !validarData($dataFim)) responder(['erro' => 'Data inválida: use o formato AAAA-MM-DD.'], 422);
+    if (($dataInicio === '') !== ($dataFim === '')) responder(['erro' => 'Preencha a data de início e fim, ou deixe as duas vazias.'], 422);
+    if ($dataInicio !== '' && $dataFim !== '' && $dataInicio > $dataFim) responder(['erro' => 'A data de início precisa vir antes (ou no mesmo dia) da data de fim.'], 422);
+
     $dialogo = $d['dialogo'] ?? null;
     if (!is_array($dialogo)) responder(['erro' => 'Formato de diálogo inválido.'], 422);
     $erro = validarDialogo($dialogo);
     if ($erro) responder(['erro' => $erro], 422);
-    bd()->prepare('INSERT INTO npcs (id, nome, emoji, imagem, imagem_tipo, tela, dialogo, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    bd()->prepare('INSERT INTO npcs (id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), imagem=VALUES(imagem), imagem_tipo=VALUES(imagem_tipo),
-        tela=VALUES(tela), dialogo=VALUES(dialogo), publicado=VALUES(publicado), ordem=VALUES(ordem)')
-      ->execute([$id, $nome, $emoji, $imagem, $imagemTipo, $tela, json_encode($dialogo, JSON_UNESCAPED_UNICODE), !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0)]);
+        tela=VALUES(tela), dias_semana=VALUES(dias_semana), hora_inicio=VALUES(hora_inicio), hora_fim=VALUES(hora_fim),
+        data_inicio=VALUES(data_inicio), data_fim=VALUES(data_fim),
+        dialogo=VALUES(dialogo), publicado=VALUES(publicado), ordem=VALUES(ordem)')
+      ->execute([
+        $id, $nome, $emoji, $imagem, $imagemTipo, $tela, $diasSemana, $horaInicio, $horaFim, $dataInicio, $dataFim,
+        json_encode($dialogo, JSON_UNESCAPED_UNICODE), !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0),
+      ]);
     responder(['ok' => true]);
   }
 
@@ -727,6 +778,29 @@ try {
     $apontam = (int)$st->fetchColumn();
     bd()->prepare('DELETE FROM npcs WHERE id = ?')->execute([$id]);
     responder(['ok' => true, 'pontosOrfaos' => $apontam]);
+  }
+
+  if ($acao === 'npc_duplicar') {
+    // clona um NPC pra um id novo: nome, imagem, agenda e diálogo inteiro vêm junto —
+    // é o jeito rápido de criar vários parecidos sem montar o diálogo do zero toda vez
+    $d = corpo();
+    $novoId = (string)($d['novoId'] ?? '');
+    if (!validarId($novoId)) responder(['erro' => '"novoId" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
+    $st = bd()->prepare('SELECT COUNT(*) FROM npcs WHERE id = ?');
+    $st->execute([$novoId]);
+    if ($st->fetchColumn()) responder(['erro' => "Já existe um NPC com id \"$novoId\"."], 422);
+    $st = bd()->prepare('SELECT nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, ordem FROM npcs WHERE id = ?');
+    $st->execute([(string)($d['id'] ?? '')]);
+    $n = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$n) responder(['erro' => 'NPC original não encontrado.'], 404);
+    bd()->prepare('INSERT INTO npcs (id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)')
+      ->execute([
+        $novoId, $n['nome'] . ' (cópia)', $n['emoji'], $n['imagem'], $n['imagem_tipo'], $n['tela'],
+        $n['dias_semana'], $n['hora_inicio'], $n['hora_fim'], $n['data_inicio'], $n['data_fim'],
+        $n['dialogo'], (int)$n['ordem'],
+      ]);
+    responder(['ok' => true, 'id' => $novoId]);
   }
 
   if ($acao === 'npc_imagem') {

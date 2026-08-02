@@ -125,12 +125,35 @@ try {
     imagem        VARCHAR(160) NOT NULL DEFAULT \'\',
     imagem_tipo   VARCHAR(10) NOT NULL DEFAULT \'png\',
     tela          VARCHAR(12) NOT NULL DEFAULT \'\',
+    dias_semana   VARCHAR(20) NOT NULL DEFAULT \'\',
+    hora_inicio   VARCHAR(5)  NOT NULL DEFAULT \'\',
+    hora_fim      VARCHAR(5)  NOT NULL DEFAULT \'\',
+    data_inicio   VARCHAR(10) NOT NULL DEFAULT \'\',
+    data_fim      VARCHAR(10) NOT NULL DEFAULT \'\',
     dialogo       JSON NOT NULL,
     publicado     TINYINT(1) NOT NULL DEFAULT 1,
     ordem         INT NOT NULL DEFAULT 0,
     criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+  /* colunas de agenda (dias_semana, hora_inicio/fim, data_inicio/fim) chegaram depois:
+     quem já rodou o install.php antes só ganha a tabela nova via CREATE TABLE acima,
+     não as colunas extra. Confere no INFORMATION_SCHEMA em vez de usar "ADD COLUMN IF
+     NOT EXISTS" (nem todo MySQL/MariaDB de hospedagem compartilhada aceita essa
+     sintaxe) — assim funciona tanto na primeira instalação quanto rodando de novo. */
+  $colunasExistentes = array_column($pdo->query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'npcs'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+  foreach ([
+    'dias_semana' => "VARCHAR(20) NOT NULL DEFAULT ''",
+    'hora_inicio' => "VARCHAR(5) NOT NULL DEFAULT ''",
+    'hora_fim'    => "VARCHAR(5) NOT NULL DEFAULT ''",
+    'data_inicio' => "VARCHAR(10) NOT NULL DEFAULT ''",
+    'data_fim'    => "VARCHAR(10) NOT NULL DEFAULT ''",
+  ] as $coluna => $definicao) {
+    if (!in_array($coluna, $colunasExistentes, true)) $pdo->exec("ALTER TABLE npcs ADD COLUMN $coluna $definicao");
+  }
 
   // pasta das imagens enviadas pelo painel (as do repositório continuam em assets/)
   $pastaCenas = dirname(__DIR__) . '/assets/cenas';
