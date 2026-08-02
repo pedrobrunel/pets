@@ -538,6 +538,10 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
   border:7px solid transparent;border-right-color:#fff;border-left:0;
 }
 .npc-nome{font-family:'Baloo 2';font-size:13px;color:#7F8C8D;margin:0 0 2px 88px}
+/* NPC solto numa tela (casa/loja/mural/...), sem ponto no mapa: cartão tocável */
+.npc-tela{display:flex;align-items:center;gap:12px;cursor:pointer;margin-bottom:14px}
+.npc-tela:active{transform:translateY(3px)}
+.npc-figura.pequena{width:52px;height:52px;font-size:26px;border-bottom-width:4px}
 .opcoes-npc{display:flex;flex-direction:column;gap:8px;margin-top:14px}
 .opcoes-npc .btn{width:100%;text-align:left;justify-content:flex-start;font-size:15px}
 .btn-fechar-npc{
@@ -900,6 +904,7 @@ RENDER.casa = () => {
       </div>
       <button class="btn pequeno laranja" onclick="${proxima ? `ir('licao','${proxima.id}')` : `ir('arcade')`}">Ir</button>
     </div>
+    ${blocoNpcsDaTela('casa')}
 
     <div class="grade" style="margin-top:14px">
       <button class="btn azul grande" onclick="ir('arcade')">🎮 Jogar</button>
@@ -1269,6 +1274,20 @@ function renderNpc(){
       ${no.opcoes.map(op => `<button class="btn azul pequeno" onclick="avancarNpc(${op.proximo ? `'${esc(op.proximo)}'` : 'null'})">${esc(op.rotulo)}</button>`).join('')}
     </div>
     <button type="button" class="btn-fechar-npc" onclick="fecharNpc()">Encerrar conversa</button>`;
+}
+// NPCs que aparecem soltos numa tela (casa/arcade/loja/mural/perfil), sem precisar de
+// ponto no mapa — cadastrados no painel com "aparece em" preenchido pra essa tela.
+function blocoNpcsDaTela(tela){
+  const npcs = NPCS.filter(n => n.tela === tela);
+  if(!npcs.length) return '';
+  return npcs.map(n => `<div class="sticker npc-tela" onclick="abrirNpc('${esc(n.id)}')">
+    <div class="npc-figura pequena">${n.imagemUrl ? `<img src="${esc(n.imagemUrl)}" alt="${esc(n.nome)}">` : (n.emoji || '🧑')}</div>
+    <div style="flex:1">
+      <b style="font-family:'Baloo 2';font-size:16px;display:block">${esc(n.nome)}</b>
+      <span style="font-size:12px;color:#7F8C8D">Toque pra conversar</span>
+    </div>
+    <span class="chip">💬</span>
+  </div>`).join('');
 }
 // "Voltar" desfaz um passo do caminho entre mapas; na cena inicial, sai pra casa
 function voltarDaCena(){
@@ -1690,6 +1709,7 @@ RENDER.arcade = () => {
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
     <div class="titulo-secao"><h2>Arcade</h2><small>ganhe moedas pro seu bicho</small></div>
+    ${blocoNpcsDaTela('arcade')}
     <div class="grade">
       <button class="cartao-trilha" onclick="jogoMemoria()">
         <span class="emoji">🃏</span><h3>Memória do Bicho</h3><p>Ache os pares. Recorde: ${estado.recordes.memoria ?? '—'} jogadas</p></button>
@@ -1914,6 +1934,7 @@ RENDER.loja = () => {
   const mochilaVazia = !comidasNaMochila.length && !acessoriosNaMochila.length;
   $('#tela-loja').innerHTML = `
     <div class="titulo-secao"><h2>Loja da vila</h2><small>você tem 🪙 ${estado.moedas}</small></div>
+    ${blocoNpcsDaTela('loja')}
     <div class="sticker" style="text-align:center;padding-bottom:8px">
       ${svgBicho(estado.tipo,{equipado:estado.equipado, estilo:'width:130px;height:130px'})}
       <div style="display:flex;gap:8px;justify-content:center;margin-top:-6px">
@@ -1999,6 +2020,7 @@ RENDER.mural = () => {
     `<button class="bloco" aria-pressed="${recadoNovo[chave]===t}" onclick="escolherBloco('${chave}',this.textContent)">${t}</button>`).join('');
   $('#tela-mural').innerHTML = `
     <div class="titulo-secao"><h2>Mural da vila</h2><small>só frases prontas</small></div>
+    ${blocoNpcsDaTela('mural')}
     <div class="sticker">
       <p style="margin:0 0 4px;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.5px">1. Comece assim</p>
       <div class="blocos">${blocos('inicio')}</div>
@@ -2052,6 +2074,7 @@ RENDER.perfil = () => {
       <h2>${esc(estado.apelido)}</h2>
       <p class="sub-perfil">${BICHOS[estado.tipo].nome} da Bichoteca</p>
     </div>
+    ${blocoNpcsDaTela('perfil')}
 
     <div class="grade-stats">
       <div class="stat-card"><span class="stat-emoji">🪙</span><span class="stat-valor">${estado.moedas}</span><span class="stat-rotulo">moedas</span></div>

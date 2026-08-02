@@ -31,7 +31,7 @@
      GET  ?acao=destinos              -> catálogo de links possíveis pra um ponto
      GET  ?acao=npcs_listar
      GET  ?acao=npc_obter             ?id=xx
-     POST ?acao=npc_salvar            {id, nome, emoji, imagem, imagemTipo, publicado, ordem, dialogo:{inicial, nos:{...}}}
+     POST ?acao=npc_salvar            {id, nome, emoji, imagem, imagemTipo, tela, publicado, ordem, dialogo:{inicial, nos:{...}}}
      POST ?acao=npc_excluir           {id}
      POST ?acao=npc_imagem            (multipart: arquivo) -> sobe imagem pra assets/npcs/
    ========================================================= */
@@ -50,6 +50,10 @@ const CORES_VALIDAS = ['var(--manga)', 'var(--rosa)', 'var(--mata)', 'var(--ceu)
    senão um ponto mal configurado leva a criança pra uma tela que não existe. */
 const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso', 'npc'];
 const TELAS_VALIDAS = ['casa', 'trilhas', 'arcade', 'loja', 'mural', 'perfil'];
+// onde um NPC pode flutuar sozinho, sem precisar de ponto no mapa. Sem "trilhas": lá
+// quem posiciona um NPC é o ponto no mapa mesmo, senão teria dois jeitos de fazer a
+// mesma coisa competindo entre si.
+const TELAS_NPC = ['casa', 'arcade', 'loja', 'mural', 'perfil'];
 const EXTENSOES_IMAGEM = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg'];
 
 function validarId(string $id): bool {
@@ -669,23 +673,23 @@ try {
   /* ---------- NPCs e seus diálogos ---------- */
 
   if ($acao === 'npcs_listar') {
-    $linhas = bd()->query('SELECT id, nome, emoji, imagem, imagem_tipo, publicado, ordem FROM npcs ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    $linhas = bd()->query('SELECT id, nome, emoji, imagem, imagem_tipo, tela, publicado, ordem FROM npcs ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     responder(['npcs' => array_map(fn($n) => [
       'id' => $n['id'], 'nome' => $n['nome'], 'emoji' => $n['emoji'],
       'imagem' => $n['imagem'], 'imagemUrl' => caminhoPublicoNpc($n['imagem']), 'imagemTipo' => $n['imagem_tipo'],
-      'publicado' => (bool)$n['publicado'], 'ordem' => (int)$n['ordem'],
+      'tela' => $n['tela'], 'publicado' => (bool)$n['publicado'], 'ordem' => (int)$n['ordem'],
     ], $linhas)]);
   }
 
   if ($acao === 'npc_obter') {
-    $st = bd()->prepare('SELECT id, nome, emoji, imagem, imagem_tipo, dialogo, publicado, ordem FROM npcs WHERE id = ?');
+    $st = bd()->prepare('SELECT id, nome, emoji, imagem, imagem_tipo, tela, dialogo, publicado, ordem FROM npcs WHERE id = ?');
     $st->execute([(string)($_GET['id'] ?? '')]);
     $n = $st->fetch(PDO::FETCH_ASSOC);
     if (!$n) responder(['erro' => 'NPC não encontrado.'], 404);
     responder([
       'id' => $n['id'], 'nome' => $n['nome'], 'emoji' => $n['emoji'],
       'imagem' => $n['imagem'], 'imagemUrl' => caminhoPublicoNpc($n['imagem']), 'imagemTipo' => $n['imagem_tipo'],
-      'publicado' => (bool)$n['publicado'], 'ordem' => (int)$n['ordem'],
+      'tela' => $n['tela'], 'publicado' => (bool)$n['publicado'], 'ordem' => (int)$n['ordem'],
       'dialogo' => json_decode($n['dialogo'], true),
     ]);
   }
@@ -701,14 +705,16 @@ try {
     $imagem = trim((string)($d['imagem'] ?? ''));
     $imagemTipo = (string)($d['imagemTipo'] ?? 'png');
     if (!in_array($imagemTipo, ['png', 'lottie'], true)) responder(['erro' => '"imagemTipo" precisa ser "png" ou "lottie".'], 422);
+    $tela = trim((string)($d['tela'] ?? ''));
+    if ($tela !== '' && !in_array($tela, TELAS_NPC, true)) responder(['erro' => '"tela" precisa ser uma destas: ' . implode(', ', TELAS_NPC) . ', ou vazio (só via ponto no mapa).'], 422);
     $dialogo = $d['dialogo'] ?? null;
     if (!is_array($dialogo)) responder(['erro' => 'Formato de diálogo inválido.'], 422);
     $erro = validarDialogo($dialogo);
     if ($erro) responder(['erro' => $erro], 422);
-    bd()->prepare('INSERT INTO npcs (id, nome, emoji, imagem, imagem_tipo, dialogo, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    bd()->prepare('INSERT INTO npcs (id, nome, emoji, imagem, imagem_tipo, tela, dialogo, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), imagem=VALUES(imagem), imagem_tipo=VALUES(imagem_tipo),
-        dialogo=VALUES(dialogo), publicado=VALUES(publicado), ordem=VALUES(ordem)')
-      ->execute([$id, $nome, $emoji, $imagem, $imagemTipo, json_encode($dialogo, JSON_UNESCAPED_UNICODE), !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0)]);
+        tela=VALUES(tela), dialogo=VALUES(dialogo), publicado=VALUES(publicado), ordem=VALUES(ordem)')
+      ->execute([$id, $nome, $emoji, $imagem, $imagemTipo, $tela, json_encode($dialogo, JSON_UNESCAPED_UNICODE), !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0)]);
     responder(['ok' => true]);
   }
 
