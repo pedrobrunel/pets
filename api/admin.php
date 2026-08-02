@@ -42,6 +42,11 @@
      POST ?acao=missao_excluir        {id}
      POST ?acao=missao_duplicar       {id, novoId} -> clona uma missão (fica como rascunho)
      POST ?acao=missoes_importar      {missoes:[...]} -> cria/atualiza várias de uma vez (mesmo formato do salvar)
+     GET  ?acao=itens_listar
+     GET  ?acao=item_obter            ?id=xx
+     POST ?acao=item_salvar           {id, nome, emoji, imagem, descricao, publicado, ordem}
+     POST ?acao=item_excluir          {id}
+     POST ?acao=item_imagem           (multipart: arquivo) -> sobe imagem pra assets/itens/
    ========================================================= */
 
 declare(strict_types=1);
@@ -56,7 +61,7 @@ const CORES_VALIDAS = ['var(--manga)', 'var(--rosa)', 'var(--mata)', 'var(--ceu)
 /* catálogo de links do jogo: pra onde um ponto de uma cena pode levar.
    "tela" é limitado às abas que existem em app.html (RENDER.*) — nada de string livre,
    senão um ponto mal configurado leva a criança pra uma tela que não existe. */
-const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso', 'npc', 'gatilho'];
+const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso', 'npc', 'gatilho', 'item'];
 const TELAS_VALIDAS = ['casa', 'trilhas', 'arcade', 'loja', 'mural', 'perfil'];
 // onde um NPC pode flutuar sozinho, sem precisar de ponto no mapa. Sem "trilhas": lá
 // quem posiciona um NPC é o ponto no mapa mesmo, senão teria dois jeitos de fazer a
@@ -86,7 +91,9 @@ function validarNomeImagem(string $nome): bool {
 }
 function pastaCenas(): string { return dirname(__DIR__) . '/assets/cenas'; }
 function pastaNpcs(): string { return dirname(__DIR__) . '/assets/npcs'; }
+function pastaItens(): string { return dirname(__DIR__) . '/assets/itens'; }
 function caminhoPublicoNpc(string $nome): string { return $nome === '' ? '' : 'assets/npcs/' . $nome; }
+function caminhoPublicoItem(string $nome): string { return $nome === '' ? '' : 'assets/itens/' . $nome; }
 /* a imagem pode estar em assets/cenas/ (enviada pelo painel) ou em assets/ (veio no
    repositório, como o mapa-mundosv2.webp da ilha) — o front tenta nessa ordem */
 function caminhoPublicoImagem(string $nome): string {
@@ -112,8 +119,8 @@ function validarPonto(array $p, int $i): ?string {
     return "Ponto \"$rotulo\": tela \"$destino\" não existe (use: " . implode(', ', TELAS_VALIDAS) . ').';
   }
   if ($tipo === 'aviso' && mb_strlen($destino) > 160) return "Ponto \"$rotulo\": o aviso passou de 160 caracteres.";
-  // mundo/cena/licao/npc: confere se o alvo existe de verdade, pra não gerar link quebrado
-  $tabelas = ['mundo' => 'mundos', 'cena' => 'cenas', 'licao' => 'licoes', 'npc' => 'npcs'];
+  // mundo/cena/licao/npc/item: confere se o alvo existe de verdade, pra não gerar link quebrado
+  $tabelas = ['mundo' => 'mundos', 'cena' => 'cenas', 'licao' => 'licoes', 'npc' => 'npcs', 'item' => 'itens'];
   if (isset($tabelas[$tipo])) {
     $st = bd()->prepare('SELECT COUNT(*) FROM ' . $tabelas[$tipo] . ' WHERE id = ?');
     $st->execute([$destino]);
@@ -126,6 +133,26 @@ function validarPonto(array $p, int $i): ?string {
     $st->execute([$destino]);
     if (!$st->fetchColumn()) return "Ponto \"$rotulo\": nenhuma missão espera o gatilho \"$destino\". Crie a missão primeiro, na aba Missões.";
   }
+
+  // requisito: opcional, em QUALQUER tipo de ponto — só aparece pro aluno se ele já tiver
+  // esse item no inventário (o "binóculo destrava a janela"). Confere que o item existe.
+  $requisitoItem = trim((string)($p['requisitoItem'] ?? ''));
+  if ($requisitoItem !== '') {
+    $st = bd()->prepare('SELECT COUNT(*) FROM itens WHERE id = ?');
+    $st->execute([$requisitoItem]);
+    if (!$st->fetchColumn()) return "Ponto \"$rotulo\": o item exigido \"$requisitoItem\" não existe.";
+  }
+  return null;
+}
+
+/** valida um item colecionável. @return string|null mensagem de erro, ou null se ok */
+function validarItem(array $it): ?string {
+  $nome = trim((string)($it['nome'] ?? ''));
+  if ($nome === '' || mb_strlen($nome) > 60) return '"nome" precisa ter de 1 a 60 caracteres.';
+  $emoji = (string)($it['emoji'] ?? '🔹');
+  if ($emoji === '' || mb_strlen($emoji) > 8) return '"emoji" é obrigatório.';
+  $descricao = trim((string)($it['descricao'] ?? ''));
+  if (mb_strlen($descricao) > 200) return '"descricao" passou de 200 caracteres.';
   return null;
 }
 
@@ -528,13 +555,13 @@ try {
     // cenas entram no backup junto: é o desenho dos mapas. O arquivo de imagem em si
     // não cabe aqui (é binário) — ele vive em assets/cenas/ no servidor.
     $porCena = [];
-    foreach (bd()->query('SELECT cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, publicado FROM pontos ORDER BY id') as $p) {
+    foreach (bd()->query('SELECT cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item, publicado FROM pontos ORDER BY id') as $p) {
       $porCena[$p['cena_id']][] = [
         'rotulo' => $p['rotulo'], 'x' => (float)$p['x'], 'y' => (float)$p['y'],
         'largura' => (float)$p['largura'], 'altura' => (float)$p['altura'],
         'tipo' => $p['tipo'], 'destino' => $p['destino'],
         'mostrarSelo' => (bool)$p['mostrar_selo'], 'mostrarDica' => (bool)$p['mostrar_dica'],
-        'publicado' => (bool)$p['publicado'],
+        'requisitoItem' => $p['requisito_item'], 'publicado' => (bool)$p['publicado'],
       ];
     }
     $cenas = bd()->query('SELECT id, nome, imagem, inicial, publicado, ordem FROM cenas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
@@ -604,8 +631,8 @@ try {
             !empty($c['inicial']) ? 1 : 0, !empty($c['publicado']) ? 1 : 0, (int)($c['ordem'] ?? 0)]);
         }
         $delPontos = $bdc->prepare('DELETE FROM pontos WHERE cena_id = ?');
-        $insPonto = $bdc->prepare('INSERT INTO pontos (cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, publicado)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $insPonto = $bdc->prepare('INSERT INTO pontos (cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item, publicado)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         foreach ($cenasImp as $c) {
           $delPontos->execute([$c['id']]);
           foreach (($c['pontos'] ?? []) as $i => $p) {
@@ -616,6 +643,7 @@ try {
               $c['id'], trim((string)$p['rotulo']), (float)$p['x'], (float)$p['y'], (float)$p['largura'], (float)$p['altura'],
               $p['tipo'], trim((string)$p['destino']),
               !empty($p['mostrarSelo']) ? 1 : 0, !empty($p['mostrarDica']) ? 1 : 0,
+              trim((string)($p['requisitoItem'] ?? '')),
               array_key_exists('publicado', $p) ? (!empty($p['publicado']) ? 1 : 0) : 1,
             ]);
           }
@@ -651,7 +679,7 @@ try {
     $st->execute([(string)($_GET['id'] ?? '')]);
     $c = $st->fetch(PDO::FETCH_ASSOC);
     if (!$c) responder(['erro' => 'Cena não encontrada.'], 404);
-    $st = bd()->prepare('SELECT id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, publicado
+    $st = bd()->prepare('SELECT id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item, publicado
       FROM pontos WHERE cena_id = ? ORDER BY id');
     $st->execute([$c['id']]);
     responder([
@@ -663,7 +691,7 @@ try {
         'largura' => (float)$p['largura'], 'altura' => (float)$p['altura'],
         'tipo' => $p['tipo'], 'destino' => $p['destino'],
         'mostrarSelo' => (bool)$p['mostrar_selo'], 'mostrarDica' => (bool)$p['mostrar_dica'],
-        'publicado' => (bool)$p['publicado'],
+        'requisitoItem' => $p['requisito_item'], 'publicado' => (bool)$p['publicado'],
       ], $st->fetchAll(PDO::FETCH_ASSOC)),
     ]);
   }
@@ -730,13 +758,14 @@ try {
     $bdc->beginTransaction();
     try {
       $bdc->prepare('DELETE FROM pontos WHERE cena_id = ?')->execute([$cenaId]);
-      $ins = $bdc->prepare('INSERT INTO pontos (cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, publicado)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+      $ins = $bdc->prepare('INSERT INTO pontos (cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item, publicado)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
       foreach ($pontos as $p) {
         $ins->execute([
           $cenaId, trim((string)$p['rotulo']), (float)$p['x'], (float)$p['y'], (float)$p['largura'], (float)$p['altura'],
           $p['tipo'], trim((string)$p['destino']),
           !empty($p['mostrarSelo']) ? 1 : 0, !empty($p['mostrarDica']) ? 1 : 0,
+          trim((string)($p['requisitoItem'] ?? '')),
           array_key_exists('publicado', $p) ? (!empty($p['publicado']) ? 1 : 0) : 1,
         ]);
       }
@@ -1012,6 +1041,86 @@ try {
     responder(['ok' => true, 'missoes' => count($missoes)]);
   }
 
+  /* ---------- Itens colecionáveis (objetos soltos no mapa) ---------- */
+
+  if ($acao === 'itens_listar') {
+    $linhas = bd()->query('SELECT id, nome, emoji, imagem, descricao, publicado, ordem FROM itens ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    responder(['itens' => array_map(fn($it) => [
+      'id' => $it['id'], 'nome' => $it['nome'], 'emoji' => $it['emoji'],
+      'imagem' => $it['imagem'], 'imagemUrl' => caminhoPublicoItem($it['imagem']), 'descricao' => $it['descricao'],
+      'publicado' => (bool)$it['publicado'], 'ordem' => (int)$it['ordem'],
+    ], $linhas)]);
+  }
+
+  if ($acao === 'item_obter') {
+    $st = bd()->prepare('SELECT id, nome, emoji, imagem, descricao, publicado, ordem FROM itens WHERE id = ?');
+    $st->execute([(string)($_GET['id'] ?? '')]);
+    $it = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$it) responder(['erro' => 'Item não encontrado.'], 404);
+    responder([
+      'id' => $it['id'], 'nome' => $it['nome'], 'emoji' => $it['emoji'],
+      'imagem' => $it['imagem'], 'imagemUrl' => caminhoPublicoItem($it['imagem']), 'descricao' => $it['descricao'],
+      'publicado' => (bool)$it['publicado'], 'ordem' => (int)$it['ordem'],
+    ]);
+  }
+
+  if ($acao === 'item_salvar') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    if (!validarId($id)) responder(['erro' => '"id" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
+    $erro = validarItem($d);
+    if ($erro) responder(['erro' => $erro], 422);
+    bd()->prepare('INSERT INTO itens (id, nome, emoji, imagem, descricao, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), imagem=VALUES(imagem),
+        descricao=VALUES(descricao), publicado=VALUES(publicado), ordem=VALUES(ordem)')
+      ->execute([
+        $id, trim((string)$d['nome']), (string)($d['emoji'] ?? '🔹'), trim((string)($d['imagem'] ?? '')),
+        trim((string)($d['descricao'] ?? '')), !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0),
+      ]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'item_excluir') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    // pontos (tipo item OU com requisito nesse item) que dependiam dele ficariam quebrados
+    $st = bd()->prepare('SELECT COUNT(*) FROM pontos WHERE (tipo = "item" AND destino = ?) OR requisito_item = ?');
+    $st->execute([$id, $id]);
+    $afetados = (int)$st->fetchColumn();
+    bd()->prepare('DELETE FROM itens WHERE id = ?')->execute([$id]);
+    responder(['ok' => true, 'pontosAfetados' => $afetados]);
+  }
+
+  if ($acao === 'item_imagem') {
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || ($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+      $limite = ini_get('upload_max_filesize');
+      $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+        ? "A imagem passou do limite do servidor ($limite)."
+        : 'Nenhum arquivo recebido.';
+      responder(['erro' => $motivo], 422);
+    }
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_IMAGEM[$ext])) {
+      responder(['erro' => 'Formato não aceito. Use webp, png ou jpg (webp é o mais leve).'], 422);
+    }
+    $info = @getimagesize($arq['tmp_name']);
+    if (!$info || !in_array($info['mime'], EXTENSOES_IMAGEM, true)) {
+      responder(['erro' => 'O arquivo não é uma imagem válida.'], 422);
+    }
+    $base = strtolower(pathinfo((string)$arq['name'], PATHINFO_FILENAME));
+    $base = preg_replace('/[^a-z0-9_-]+/', '-', $base) ?: 'item';
+    $base = trim($base, '-') ?: 'item';
+    $nome = substr($base, 0, 60) . '-' . bin2hex(random_bytes(3)) . '.' . $ext;
+    if (!is_dir(pastaItens()) && !@mkdir(pastaItens(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta assets/itens no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaItens() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo em assets/itens (confira a permissão da pasta).'], 500);
+    }
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => 'assets/itens/' . $nome]);
+  }
+
   if ($acao === 'destinos') {
     // "rascunho" vai junto: um ponto que aponta pra mundo/cena/lição não publicada é
     // escondido do aluno por conteudo.php, então o painel precisa poder avisar disso
@@ -1019,6 +1128,7 @@ try {
     $cenas = bd()->query('SELECT id, nome, publicado FROM cenas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     $licoes = bd()->query('SELECT id, titulo, emoji, publicado FROM licoes ORDER BY mundo_id, ordem')->fetchAll(PDO::FETCH_ASSOC);
     $npcs = bd()->query('SELECT id, nome, emoji, publicado FROM npcs ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    $itens = bd()->query('SELECT id, nome, emoji, publicado FROM itens ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     // gatilhos não são linhas próprias — são a "chave" que missões tipo "gatilho" pedem;
     // a lista vem das missões pra evitar typo entre o ponto e a missão que ele ativa
     $gatilhos = bd()->query('SELECT id, titulo, publicado, JSON_UNQUOTE(JSON_EXTRACT(objetivo, \'$.chave\')) AS chave
@@ -1031,6 +1141,7 @@ try {
       'tela'  => array_map(fn($t) => ['id' => $t, 'rotulo' => ucfirst($t), 'publicado' => true], TELAS_VALIDAS),
       'npc'   => array_map(fn($n) => ['id' => $n['id'], 'rotulo' => $marca($n['emoji'] . ' ' . $n['nome'], $n['publicado']), 'publicado' => (bool)$n['publicado']], $npcs),
       'gatilho' => array_map(fn($g) => ['id' => $g['chave'], 'rotulo' => $marca('🎯 ' . $g['chave'] . ' (missão "' . $g['titulo'] . '")', $g['publicado']), 'publicado' => (bool)$g['publicado']], $gatilhos),
+      'item' => array_map(fn($it) => ['id' => $it['id'], 'rotulo' => $marca($it['emoji'] . ' ' . $it['nome'], $it['publicado']), 'publicado' => (bool)$it['publicado']], $itens),
     ]);
   }
 

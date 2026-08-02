@@ -72,15 +72,29 @@ try {
     $missoesLinhas
   )));
 
+  // itens colecionáveis: objetos soltos no mapa (tipo "item" nos pontos). Requisito
+  // (requisito_item) é opcional em QUALQUER ponto — vai puro, quem decide se o jogador
+  // já tem o item é o app.html, com o inventário dele, não o servidor
+  $itensLinhas = bd()->query('SELECT id, nome, emoji, imagem, descricao FROM itens WHERE publicado = 1 ORDER BY ordem, nome')
+    ->fetchAll(PDO::FETCH_ASSOC);
+  $pastaItens = dirname(__DIR__) . '/assets/itens';
+  $itensPublicados = array_column($itensLinhas, 'id');
+  $saidaItens = array_map(fn($it) => [
+    'id' => $it['id'], 'nome' => $it['nome'], 'emoji' => $it['emoji'],
+    'imagemUrl' => $it['imagem'] !== '' && is_file($pastaItens . '/' . $it['imagem']) ? 'assets/itens/' . $it['imagem'] : '',
+    'descricao' => $it['descricao'],
+  ], $itensLinhas);
+
   $existe = [
     'cena'  => array_column(bd()->query('SELECT id FROM cenas')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'mundo' => array_column(bd()->query('SELECT id FROM mundos')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'licao' => array_column(bd()->query('SELECT id FROM licoes')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'npc'   => array_column(bd()->query('SELECT id FROM npcs')->fetchAll(PDO::FETCH_ASSOC), 'id'),
+    'item'  => array_column(bd()->query('SELECT id FROM itens')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'gatilho' => array_map(fn($m) => json_decode($m['objetivo'], true)['chave'] ?? '',
       array_filter(bd()->query("SELECT objetivo FROM missoes WHERE tipo = 'gatilho'")->fetchAll(PDO::FETCH_ASSOC))),
   ];
-  $stPontos = bd()->prepare('SELECT rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica
+  $stPontos = bd()->prepare('SELECT rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item
     FROM pontos WHERE cena_id = ? AND publicado = 1 ORDER BY id');
 
   $pastaCenas = dirname(__DIR__) . '/assets/cenas';
@@ -98,6 +112,7 @@ try {
           'cena'  => in_array($destino, $cenasPublicadas, true),
           'licao' => isset($licoesPublicadas[$destino]),
           'npc'   => in_array($destino, $npcsPublicados, true),
+          'item'  => in_array($destino, $itensPublicados, true),
           'gatilho' => in_array($destino, $gatilhosPublicados, true),
         };
         if (!$publicado) {
@@ -114,6 +129,7 @@ try {
         'largura' => (float)$p['largura'], 'altura' => (float)$p['altura'],
         'tipo' => $tipo, 'destino' => $destino,
         'mostrarSelo' => $mostrarSelo, 'mostrarDica' => (bool)$p['mostrar_dica'],
+        'requisitoItem' => $p['requisito_item'],
       ];
     }
     $saidaCenas[] = [
@@ -124,9 +140,9 @@ try {
     ];
   }
 
-  echo json_encode(['mundos' => $saidaMundos, 'cenas' => $saidaCenas, 'npcs' => $saidaNpcs, 'missoes' => $saidaMissoes], JSON_UNESCAPED_UNICODE);
+  echo json_encode(['mundos' => $saidaMundos, 'cenas' => $saidaCenas, 'npcs' => $saidaNpcs, 'missoes' => $saidaMissoes, 'itens' => $saidaItens], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
   error_log('[bichoteca-conteudo] ' . $e->getMessage());
   http_response_code(500);
-  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => []]);
+  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => []]);
 }
