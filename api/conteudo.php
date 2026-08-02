@@ -87,15 +87,21 @@ try {
 
   // móveis: catálogo da Loja de Móveis. imagemFrente é obrigatória; as outras 3 rotações
   // são opcionais — o app.html cai pra frente quando faltar uma (ver README do painel)
-  $moveisLinhas = bd()->query('SELECT id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda FROM moveis WHERE publicado = 1 ORDER BY ordem, nome')
+  $moveisLinhas = bd()->query('SELECT id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda,
+    dias_semana, hora_inicio, hora_fim, data_inicio, data_fim FROM moveis WHERE publicado = 1 ORDER BY ordem, nome')
     ->fetchAll(PDO::FETCH_ASSOC);
   $pastaMoveis = dirname(__DIR__) . '/assets/moveis';
   $moveisPublicados = array_column($moveisLinhas, 'id');
   $urlMovel = fn($nome) => $nome !== '' && is_file($pastaMoveis . '/' . $nome) ? 'assets/moveis/' . $nome : '';
+  // agenda (estoque por tempo limitado) filtrada no app.html com a hora do aparelho de
+  // quem está jogando — mesmo padrão dos NPCs (ver bloco acima)
   $saidaMoveis = array_map(fn($m) => [
     'id' => $m['id'], 'nome' => $m['nome'], 'preco' => (int)$m['preco'], 'rotativel' => (bool)$m['rotativel'],
     'imagemFrenteUrl' => $urlMovel($m['imagem_frente']), 'imagemDireitaUrl' => $urlMovel($m['imagem_direita']),
     'imagemVersoUrl' => $urlMovel($m['imagem_verso']), 'imagemEsquerdaUrl' => $urlMovel($m['imagem_esquerda']),
+    'diasSemana' => $m['dias_semana'] === '' ? [] : array_map('intval', explode(',', $m['dias_semana'])),
+    'horaInicio' => $m['hora_inicio'], 'horaFim' => $m['hora_fim'],
+    'dataInicio' => $m['data_inicio'], 'dataFim' => $m['data_fim'],
   ], $moveisLinhas);
 
   // fundo e preço de desbloqueio da Casa: um valor só, configurado no painel (aba Móveis)

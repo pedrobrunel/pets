@@ -8,6 +8,7 @@
      POST ?acao=entrar          {apelido, senha}       -> cria ou autentica
      GET  ?acao=carregar                               -> devolve o estado salvo
      POST ?acao=salvar          {...estado}            -> grava o estado
+     GET  ?acao=ver_casa        ?apelido=xx            -> casa (só isso) de outro jogador, pra visitar
      POST ?acao=completar_licao {licaoId, respostas}   -> confere gabarito e credita moedas/XP
      GET  ?acao=resumo_responsavel                     -> painel de acompanhamento (mesmo login do jogador)
    ========================================================= */
@@ -61,6 +62,26 @@ try {
     $st = bd()->prepare('SELECT estado FROM jogadores WHERE id = ?');
     $st->execute([$id]);
     responder(json_decode((string)$st->fetchColumn(), true) ?: []);
+  }
+
+  /* visitar a casa de outro jogador: só o necessário pra desenhar o quarto dele — nunca
+     moedas, XP, e-mail ou qualquer outra coisa. Sem chat, sem contato: é só olhar,
+     igual ao mural (recados), que já mostra apelido de quem publicou pra todo mundo. */
+  if ($acao === 'ver_casa') {
+    $apelido = trim((string)($_GET['apelido'] ?? ''));
+    if (!preg_match('/^[\p{L}0-9_]{3,14}$/u', $apelido)) responder(['erro' => 'Apelido inválido.'], 422);
+    $st = bd()->prepare('SELECT estado FROM jogadores WHERE apelido = ?');
+    $st->execute([$apelido]);
+    $linha = $st->fetchColumn();
+    if ($linha === false) responder(['erro' => 'Não achamos ninguém com esse apelido.'], 404);
+    $estadoAlheio = json_decode((string)$linha, true) ?: [];
+    responder([
+      'apelido' => $apelido,
+      'tipo' => (string)($estadoAlheio['tipo'] ?? 'capivara'),
+      'equipado' => $estadoAlheio['equipado'] ?? [],
+      'casaDesbloqueada' => (bool)($estadoAlheio['casaDesbloqueada'] ?? false),
+      'casaMoveis' => $estadoAlheio['casaMoveis'] ?? [],
+    ]);
   }
 
   if ($acao === 'salvar') {

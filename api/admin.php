@@ -50,7 +50,8 @@
      GET  ?acao=moveis_listar
      GET  ?acao=movel_obter           ?id=xx
      POST ?acao=movel_salvar          {id, nome, preco, rotativel, imagemFrente, imagemDireita,
-                                        imagemVerso, imagemEsquerda, publicado, ordem}
+                                        imagemVerso, imagemEsquerda, diasSemana, horaInicio, horaFim,
+                                        dataInicio, dataFim, publicado, ordem}
      POST ?acao=movel_excluir         {id}
      POST ?acao=movel_duplicar        {id, novoId} -> clona um móvel (fica como rascunho)
      POST ?acao=movel_imagem          (multipart: arquivo, slot=frente|direita|verso|esquerda) -> sobe imagem pra assets/moveis/
@@ -188,7 +189,7 @@ function validarMovel(array $m): ?string {
     $nomeImg = trim((string)($m[$campo] ?? ''));
     if ($nomeImg !== '' && !validarNomeImagem($nomeImg)) return "\"$campo\" tem um nome de arquivo inválido.";
   }
-  return null;
+  return validarAgenda($m);
 }
 
 /* chave de nó do diálogo: mais permissiva que validarId (aceita "_") pra não atrapalhar
@@ -221,6 +222,23 @@ function normalizarDiasSemana(string $s): string {
   $dias = array_unique(array_map('intval', explode(',', $s)));
   sort($dias);
   return implode(',', $dias);
+}
+/** valida o formato dos 5 campos de agenda vindos do formulário (diasSemana, horaInicio,
+    horaFim, dataInicio, dataFim) — mesma checagem usada pelos NPCs e pelos móveis
+    (estoque por tempo limitado na Loja de Móveis). @return string|null erro, ou null se ok */
+function validarAgenda(array $d): ?string {
+  $diasSemana = normalizarDiasSemana(trim((string)($d['diasSemana'] ?? '')));
+  if (!validarDiasSemana($diasSemana)) return '"diasSemana" precisa ser uma lista de números de 1 (segunda) a 7 (domingo), separados por vírgula.';
+  $horaInicio = trim((string)($d['horaInicio'] ?? ''));
+  $horaFim = trim((string)($d['horaFim'] ?? ''));
+  if (!validarHorario($horaInicio) || !validarHorario($horaFim)) return 'Horário inválido: use o formato HH:MM.';
+  if (($horaInicio === '') !== ($horaFim === '')) return 'Preencha o horário de início e fim, ou deixe os dois vazios.';
+  $dataInicio = trim((string)($d['dataInicio'] ?? ''));
+  $dataFim = trim((string)($d['dataFim'] ?? ''));
+  if (!validarData($dataInicio) || !validarData($dataFim)) return 'Data inválida: use o formato AAAA-MM-DD.';
+  if (($dataInicio === '') !== ($dataFim === '')) return 'Preencha a data de início e fim, ou deixe as duas vazias.';
+  if ($dataInicio !== '' && $dataFim !== '' && $dataInicio > $dataFim) return 'A data de início precisa vir antes (ou no mesmo dia) da data de fim.';
+  return null;
 }
 
 /** valida a árvore de diálogo de um NPC. @return string|null mensagem de erro, ou null se ok */
@@ -883,17 +901,13 @@ try {
     $tela = trim((string)($d['tela'] ?? ''));
     if ($tela !== '' && !in_array($tela, TELAS_NPC, true)) responder(['erro' => '"tela" precisa ser uma destas: ' . implode(', ', TELAS_NPC) . ', ou vazio (só via ponto no mapa).'], 422);
 
+    $erroAgenda = validarAgenda($d);
+    if ($erroAgenda) responder(['erro' => $erroAgenda], 422);
     $diasSemana = normalizarDiasSemana(trim((string)($d['diasSemana'] ?? '')));
-    if (!validarDiasSemana($diasSemana)) responder(['erro' => '"diasSemana" precisa ser uma lista de números de 1 (segunda) a 7 (domingo), separados por vírgula.'], 422);
     $horaInicio = trim((string)($d['horaInicio'] ?? ''));
     $horaFim = trim((string)($d['horaFim'] ?? ''));
-    if (!validarHorario($horaInicio) || !validarHorario($horaFim)) responder(['erro' => 'Horário inválido: use o formato HH:MM.'], 422);
-    if (($horaInicio === '') !== ($horaFim === '')) responder(['erro' => 'Preencha o horário de início e fim, ou deixe os dois vazios.'], 422);
     $dataInicio = trim((string)($d['dataInicio'] ?? ''));
     $dataFim = trim((string)($d['dataFim'] ?? ''));
-    if (!validarData($dataInicio) || !validarData($dataFim)) responder(['erro' => 'Data inválida: use o formato AAAA-MM-DD.'], 422);
-    if (($dataInicio === '') !== ($dataFim === '')) responder(['erro' => 'Preencha a data de início e fim, ou deixe as duas vazias.'], 422);
-    if ($dataInicio !== '' && $dataFim !== '' && $dataInicio > $dataFim) responder(['erro' => 'A data de início precisa vir antes (ou no mesmo dia) da data de fim.'], 422);
 
     $dialogo = $d['dialogo'] ?? null;
     if (!is_array($dialogo)) responder(['erro' => 'Formato de diálogo inválido.'], 422);
@@ -1165,18 +1179,22 @@ try {
       'imagemDireita' => $m['imagem_direita'], 'imagemDireitaUrl' => caminhoPublicoMovel($m['imagem_direita']),
       'imagemVerso' => $m['imagem_verso'], 'imagemVersoUrl' => caminhoPublicoMovel($m['imagem_verso']),
       'imagemEsquerda' => $m['imagem_esquerda'], 'imagemEsquerdaUrl' => caminhoPublicoMovel($m['imagem_esquerda']),
+      'diasSemana' => $m['dias_semana'], 'horaInicio' => $m['hora_inicio'], 'horaFim' => $m['hora_fim'],
+      'dataInicio' => $m['data_inicio'], 'dataFim' => $m['data_fim'],
       'publicado' => (bool)$m['publicado'], 'ordem' => (int)$m['ordem'],
     ];
   }
 
   if ($acao === 'moveis_listar') {
-    $linhas = bd()->query('SELECT id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda, publicado, ordem
+    $linhas = bd()->query('SELECT id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda,
+      dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, publicado, ordem
       FROM moveis ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     responder(['moveis' => array_map('linhaMovel', $linhas)]);
   }
 
   if ($acao === 'movel_obter') {
-    $st = bd()->prepare('SELECT id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda, publicado, ordem
+    $st = bd()->prepare('SELECT id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda,
+      dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, publicado, ordem
       FROM moveis WHERE id = ?');
     $st->execute([(string)($_GET['id'] ?? '')]);
     $m = $st->fetch(PDO::FETCH_ASSOC);
@@ -1190,16 +1208,21 @@ try {
     if (!validarId($id)) responder(['erro' => '"id" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
     $erro = validarMovel($d);
     if ($erro) responder(['erro' => $erro], 422);
-    bd()->prepare('INSERT INTO moveis (id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda, publicado, ordem)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    bd()->prepare('INSERT INTO moveis (id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda,
+        dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE nome=VALUES(nome), preco=VALUES(preco), rotativel=VALUES(rotativel),
         imagem_frente=VALUES(imagem_frente), imagem_direita=VALUES(imagem_direita),
         imagem_verso=VALUES(imagem_verso), imagem_esquerda=VALUES(imagem_esquerda),
+        dias_semana=VALUES(dias_semana), hora_inicio=VALUES(hora_inicio), hora_fim=VALUES(hora_fim),
+        data_inicio=VALUES(data_inicio), data_fim=VALUES(data_fim),
         publicado=VALUES(publicado), ordem=VALUES(ordem)')
       ->execute([
         $id, trim((string)$d['nome']), (int)$d['preco'], !empty($d['rotativel']) ? 1 : 0,
         trim((string)($d['imagemFrente'] ?? '')), trim((string)($d['imagemDireita'] ?? '')),
         trim((string)($d['imagemVerso'] ?? '')), trim((string)($d['imagemEsquerda'] ?? '')),
+        normalizarDiasSemana(trim((string)($d['diasSemana'] ?? ''))), trim((string)($d['horaInicio'] ?? '')), trim((string)($d['horaFim'] ?? '')),
+        trim((string)($d['dataInicio'] ?? '')), trim((string)($d['dataFim'] ?? '')),
         !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0),
       ]);
     responder(['ok' => true]);
@@ -1221,11 +1244,13 @@ try {
     $st->execute([$id]);
     $m = $st->fetch(PDO::FETCH_ASSOC);
     if (!$m) responder(['erro' => 'Móvel não encontrado.'], 404);
-    bd()->prepare('INSERT INTO moveis (id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda, publicado, ordem)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)')
+    bd()->prepare('INSERT INTO moveis (id, nome, preco, rotativel, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda,
+        dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)')
       ->execute([
         $novoId, $m['nome'] . ' (cópia)', $m['preco'], $m['rotativel'],
-        $m['imagem_frente'], $m['imagem_direita'], $m['imagem_verso'], $m['imagem_esquerda'], $m['ordem'],
+        $m['imagem_frente'], $m['imagem_direita'], $m['imagem_verso'], $m['imagem_esquerda'],
+        $m['dias_semana'], $m['hora_inicio'], $m['hora_fim'], $m['data_inicio'], $m['data_fim'], $m['ordem'],
       ]);
     responder(['ok' => true, 'id' => $novoId]);
   }

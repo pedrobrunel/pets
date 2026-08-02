@@ -631,6 +631,18 @@ body.conectando-fluxo{cursor:crosshair}
           <p class="dica-editor">Faltou alguma rotação? Sem problema — o jogo usa a imagem de frente nela.</p>
         </div>
 
+        <label style="margin-top:10px">estoque por tempo limitado <span style="font-weight:700;color:#7F8C8D">(tudo opcional — vazio = sempre à venda)</span></label>
+        <div class="dias-semana" id="movel-dias-semana"></div>
+        <div class="linha2" style="margin-top:8px">
+          <div><label style="margin-top:6px">horário — de</label><input type="text" id="movel-hora-inicio" placeholder="08:00" maxlength="5"></div>
+          <div><label style="margin-top:6px">até</label><input type="text" id="movel-hora-fim" placeholder="18:00" maxlength="5"></div>
+        </div>
+        <div class="linha2">
+          <div><label style="margin-top:6px">só a partir de</label><input type="text" id="movel-data-inicio" placeholder="AAAA-MM-DD" maxlength="10"></div>
+          <div><label style="margin-top:6px">até</label><input type="text" id="movel-data-fim" placeholder="AAAA-MM-DD" maxlength="10"></div>
+        </div>
+        <p class="dica-editor">Fora da janela escolhida, o móvel some da Loja de Móveis — quem já comprou continua com ele.</p>
+
         <div class="check"><input type="checkbox" id="movel-publicado" checked><label style="margin:0" for="movel-publicado">publicado (aparece pro aluno)</label></div>
 
         <div id="movel-aviso" class="aviso-form"></div>
@@ -1625,6 +1637,18 @@ function pintarDiasSemana(){
   $$('#npc-dias-semana button').forEach(b => b.classList.toggle('ativo', diasSemanaSel.includes(Number(b.dataset.dia))));
 }
 
+// mesmo seletor de dias, agora pro estoque por tempo limitado dos móveis
+let movelDiasSemanaSel = [];
+$('#movel-dias-semana').innerHTML = DIAS_SEMANA.map(d => `<button type="button" data-dia="${d.v}">${d.rotulo}</button>`).join('');
+$$('#movel-dias-semana button').forEach(b => b.onclick = () => {
+  const dia = Number(b.dataset.dia);
+  movelDiasSemanaSel = movelDiasSemanaSel.includes(dia) ? movelDiasSemanaSel.filter(d => d !== dia) : [...movelDiasSemanaSel, dia];
+  pintarMovelDiasSemana();
+});
+function pintarMovelDiasSemana(){
+  $$('#movel-dias-semana button').forEach(b => b.classList.toggle('ativo', movelDiasSemanaSel.includes(Number(b.dataset.dia))));
+}
+
 function limparFormNpc(){
   $('#form-npc').reset();
   $('#npc-id').disabled = false;
@@ -2001,6 +2025,8 @@ function limparFormMovel(){
   movelImg = {frente:'', direita:'', verso:'', esquerda:''};
   previewsMovel();
   $('#bloco-rotacoes-movel').classList.add('oculto');
+  movelDiasSemanaSel = [];
+  pintarMovelDiasSemana();
 }
 $('#movel-rotativel').onchange = () => $('#bloco-rotacoes-movel').classList.toggle('oculto', !$('#movel-rotativel').checked);
 $('#btn-novo-movel').onclick = () => {
@@ -2021,6 +2047,12 @@ window.editarMovel = async (id) => {
   $('#bloco-rotacoes-movel').classList.toggle('oculto', !m.rotativel);
   movelImg = {frente:m.imagemFrente, direita:m.imagemDireita, verso:m.imagemVerso, esquerda:m.imagemEsquerda};
   previewsMovel();
+  movelDiasSemanaSel = m.diasSemana ? m.diasSemana.split(',').map(Number) : [];
+  pintarMovelDiasSemana();
+  $('#movel-hora-inicio').value = m.horaInicio || '';
+  $('#movel-hora-fim').value = m.horaFim || '';
+  $('#movel-data-inicio').value = m.dataInicio || '';
+  $('#movel-data-fim').value = m.dataFim || '';
   $('#btn-excluir-movel').classList.remove('oculto');
   $('#titulo-form-movel').textContent = 'Editar móvel';
   $('#form-movel').classList.remove('oculto');
@@ -2057,6 +2089,8 @@ $('#form-movel').addEventListener('submit', async e => {
       rotativel: $('#movel-rotativel').checked,
       imagemFrente: movelImg.frente, imagemDireita: movelImg.direita,
       imagemVerso: movelImg.verso, imagemEsquerda: movelImg.esquerda,
+      diasSemana: movelDiasSemanaSel.join(','), horaInicio: $('#movel-hora-inicio').value.trim(), horaFim: $('#movel-hora-fim').value.trim(),
+      dataInicio: $('#movel-data-inicio').value.trim(), dataFim: $('#movel-data-fim').value.trim(),
       publicado: $('#movel-publicado').checked, ordem: Number($('#movel-ordem').value) || 0,
     }});
     $('#form-movel').classList.add('oculto');
