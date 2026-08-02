@@ -73,10 +73,9 @@ const CORES_VALIDAS = ['var(--manga)', 'var(--rosa)', 'var(--mata)', 'var(--ceu)
    "tela" é limitado às abas que existem em app.html (RENDER.*) — nada de string livre,
    senão um ponto mal configurado leva a criança pra uma tela que não existe. */
 const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso', 'npc', 'gatilho', 'item'];
-// "editarcasa" não é uma tela de verdade (não tem RENDER.editarcasa nem <section> própria)
-// — é só um atalho que o app.html reconhece e traduz pra "abrir a Casa já no modo
-// Decorar". Fica em TELAS_VALIDAS (pra validar o ponto no mapa), mas fora de TELAS_NPC
-// (não faz sentido um NPC flutuar sozinho "no modo decorar").
+// "editarcasa" é a tela de decorar o quarto (arrastar/girar/remover móvel), separada
+// da Casa de propósito — lá é só o perfil do bicho (cuidar, ver progresso). Fica fora
+// de TELAS_NPC (não faz sentido um NPC flutuar sozinho na tela de decoração).
 const TELAS_VALIDAS = ['casa', 'trilhas', 'arcade', 'loja', 'mural', 'perfil', 'lojamoveis', 'editarcasa'];
 // onde um NPC pode flutuar sozinho, sem precisar de ponto no mapa. Sem "trilhas": lá
 // quem posiciona um NPC é o ponto no mapa mesmo, senão teria dois jeitos de fazer a

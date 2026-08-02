@@ -663,6 +663,8 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
 
   <!-- ====== CASA ====== -->
   <section id="tela-casa" class="tela"></section>
+  <!-- ====== EDITAR CASA (decoração de verdade) ====== -->
+  <section id="tela-editarcasa" class="tela"></section>
   <!-- ====== TRILHAS (mapa de mundos) ====== -->
   <section id="tela-trilhas" class="tela"></section>
   <!-- ====== MUNDO (uma trilha por dentro) ====== -->
@@ -938,34 +940,39 @@ function barra(rotulo, valor, cor){
    Só aparece quando o Hostmaster configura um fundo (aba Móveis do painel) — sem
    fundo, a Casa segue com o visual padrão de sempre. Posição em % (igual aos pontos
    de mapa), então funciona em qualquer tamanho de tela. Tudo client-trusted, mesmo
-   nível de confiança de mochila/equipado (ver estado.php). */
-let modoDecorar = false;
+   nível de confiança de mochila/equipado (ver estado.php).
+   A Casa (tela normal, perfil do bicho) mostra o quarto só pra ver — quem edita de
+   verdade (arrastar, girar, remover) é a tela "editarcasa", separada de propósito
+   pra não misturar cuidar do bicho com decorar a casa. */
 const movelImagemPorRotacao = (m, rotacao) => {
   const porSlot = [m.imagemFrenteUrl, m.imagemDireitaUrl, m.imagemVersoUrl, m.imagemEsquerdaUrl];
   return porSlot[rotacao] || m.imagemFrenteUrl;
 };
-function alternarDecorar(){ modoDecorar = !modoDecorar; RENDER.casa(); }
-function renderCamadaMoveis(){
-  const palco = $('#tela-casa .palco');
-  const camada = $('#camada-moveis');
+function renderCamadaMoveis(editavel, telaId='editarcasa'){
+  // não usa ".tela.ativa": ir() só marca a tela nova como ativa DEPOIS de chamar
+  // RENDER[tela](), então durante o primeiro render essa busca ainda pegaria a tela
+  // anterior — por isso o id explícito, em vez de adivinhar qual tela está visível
+  const raiz = $('#tela-' + telaId);
+  const palco = raiz?.querySelector('.palco');
+  const camada = raiz?.querySelector('.camada-moveis');
   if(!palco || !camada) return;
-  palco.classList.toggle('editando', modoDecorar);
+  palco.classList.toggle('editando', editavel);
   camada.innerHTML = estado.casaMoveis.map(inst => {
     const m = acharMovel(inst.tipoId);
     if(!m) return '';
     const url = movelImagemPorRotacao(m, inst.rotacao || 0);
     return `<div class="movel-colocado" data-uid="${esc(inst.uid)}" style="left:${inst.x}%;top:${inst.y}%">
-      ${modoDecorar ? `<div class="controles-movel">
+      ${editavel ? `<div class="controles-movel">
         ${m.rotativel ? `<button type="button" onclick="girarMovel('${esc(inst.uid)}')" title="Girar">🔄</button>` : ''}
         <button type="button" onclick="removerMovelDaCasa('${esc(inst.uid)}')" title="Guardar">✕</button>
       </div>` : ''}
       ${url ? `<img src="${esc(url)}" alt="${esc(m.nome)}">` : ''}
     </div>`;
   }).join('');
-  if(modoDecorar) camada.querySelectorAll('.movel-colocado').forEach(ativarDragMovel);
+  if(editavel) camada.querySelectorAll('.movel-colocado').forEach(ativarDragMovel);
 }
 function renderFaixaDecorar(){
-  const faixa = $('#faixa-decorar');
+  const faixa = $('#tela-editarcasa .faixa-decorar');
   if(!faixa) return;
   const colocados = estado.casaMoveis.map(i => i.tipoId);
   const disponiveis = estado.moveisComprados.filter(id => !colocados.includes(id)).map(acharMovel).filter(Boolean);
@@ -982,19 +989,19 @@ const POSICOES_INICIAIS_MOVEL = [{x:22,y:85},{x:78,y:85},{x:50,y:90},{x:12,y:70}
 window.colocarMovelNaCasa = (tipoId) => {
   const pos = POSICOES_INICIAIS_MOVEL[estado.casaMoveis.length % POSICOES_INICIAIS_MOVEL.length];
   estado.casaMoveis.push({uid: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2,6), tipoId, x:pos.x, y:pos.y, rotacao:0});
-  renderCamadaMoveis(); renderFaixaDecorar();
+  renderCamadaMoveis(true); renderFaixaDecorar();
   agendarSalvar();
 };
 window.removerMovelDaCasa = (uid) => {
   estado.casaMoveis = estado.casaMoveis.filter(i => i.uid !== uid);
-  renderCamadaMoveis(); renderFaixaDecorar();
+  renderCamadaMoveis(true); renderFaixaDecorar();
   agendarSalvar();
 };
 window.girarMovel = (uid) => {
   const inst = estado.casaMoveis.find(i => i.uid === uid);
   if(!inst) return;
   inst.rotacao = ((inst.rotacao || 0) + 1) % 4;
-  renderCamadaMoveis();
+  renderCamadaMoveis(true);
   agendarSalvar();
 };
 function ativarDragMovel(el){
@@ -1032,13 +1039,12 @@ RENDER.casa = () => {
   $('#tela-casa').innerHTML = `
     <div class="palco ${casaAtiva?'quarto':''}" style="${casaAtiva?`background-image:url('${esc(CASA_CONFIG.fundoUrl)}')`:''}">
       ${casaAtiva ? '' : '<div class="sol"></div><div class="nuvem"></div>'}
-      <div id="camada-moveis"></div>
+      <div class="camada-moveis"></div>
       ${svgBicho(estado.tipo,{equipado:estado.equipado, classe: h.min>=70?'feliz':''})}
     </div>
     ${casaAtiva ? `<div style="text-align:center;margin-top:8px">
-      <button class="btn ${modoDecorar?'roxo':'branco'} pequeno" onclick="alternarDecorar()">${modoDecorar ? '✅ Pronto' : '🛋️ Decorar'}</button>
-    </div>
-    ${modoDecorar ? '<div class="faixa-decorar" id="faixa-decorar"></div>' : ''}` : ''}
+      <button class="btn branco pequeno" onclick="ir('editarcasa')">🎨 Editar minha casa</button>
+    </div>` : ''}
     ${temFundo && !estado.casaDesbloqueada ? `<div class="sticker" style="margin-top:14px;text-align:center">
       <span style="font-size:34px;display:block">🏠</span>
       <b style="font-family:'Baloo 2';font-size:18px;display:block;margin-top:2px">Tenha sua própria casa!</b>
@@ -1073,7 +1079,7 @@ RENDER.casa = () => {
       <button class="btn roxo grande" onclick="ir('loja')">🍉 Alimentar</button>
     </div>
     <div style="margin-top:12px"><button class="btn branco grande" onclick="ir('perfil')">🪪 Ver minha carteirinha</button></div>`;
-  if(casaAtiva){ renderCamadaMoveis(); if(modoDecorar) renderFaixaDecorar(); }
+  if(casaAtiva) renderCamadaMoveis(false, 'casa'); // só pra ver — quem edita é a tela "Editar minha casa"
 };
 function desbloquearCasa(){
   if(estado.casaDesbloqueada) return;
@@ -1082,9 +1088,34 @@ function desbloquearCasa(){
   estado.casaDesbloqueada = true;
   atualizarHud();
   brinde('🏠 Casa desbloqueada! Agora é só decorar.');
-  RENDER.casa();
+  ir(telaAtual === 'editarcasa' ? 'editarcasa' : 'casa');
   agendarSalvar();
 }
+
+/* ---------- 4b. TELA: EDITAR CASA (decoração de verdade — arrastar, girar, remover) ----------
+   Separada da Casa de propósito: lá é o "perfil" do bicho (cuidar, ver progresso); aqui
+   é só o quarto, sempre em modo de edição, sem misturar as duas coisas. */
+RENDER.editarcasa = () => {
+  const temFundo = !!CASA_CONFIG.fundoUrl;
+  const casaAtiva = temFundo && estado.casaDesbloqueada;
+  $('#tela-editarcasa').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
+    <div class="titulo-secao"><h2>🎨 Editar minha casa</h2></div>
+    ${casaAtiva ? `
+      <div class="palco quarto" style="background-image:url('${esc(CASA_CONFIG.fundoUrl)}')">
+        <div class="camada-moveis"></div>
+        ${svgBicho(estado.tipo,{equipado:estado.equipado})}
+      </div>
+      <p class="aviso" style="margin-top:12px">Arraste um móvel pra mover. 🔄 gira (só os que têm 4 lados). ✕ guarda de volta na bandeja.</p>
+      <div class="faixa-decorar"></div>
+    ` : `<div class="sticker" style="margin-top:14px;text-align:center">
+      <span style="font-size:34px;display:block">🏠</span>
+      <b style="font-family:'Baloo 2';font-size:18px;display:block;margin-top:2px">Você ainda não tem uma casa!</b>
+      <p style="font-size:13px;margin:4px 0 10px">Desbloqueie por 🪙 ${CASA_CONFIG.precoCasa} pra poder decorar.</p>
+      <button class="btn amarelo" onclick="desbloquearCasa()">Desbloquear por 🪙 ${CASA_CONFIG.precoCasa}</button>
+    </div>`}`;
+  if(casaAtiva){ renderCamadaMoveis(true); renderFaixaDecorar(); }
+};
 
 /* desgaste suave: o bicho nunca "morre", só fica com saudade */
 // não chama agendarSalvar() aqui de propósito: é desgaste passivo, não ação do
@@ -1511,9 +1542,6 @@ function abrirPonto(i, el){
   if(!p) return;
   if(p.tipo === 'mundo') return ir('mundo', p.destino);
   if(p.tipo === 'licao') return ir('licao', p.destino);
-  // "editarcasa" é um atalho pro ponto do mapa: leva pra Casa já no modo Decorar, sem
-  // precisar tocar no botão de novo — não é uma tela de verdade, então não passa por ir()
-  if(p.tipo === 'tela' && p.destino === 'editarcasa'){ modoDecorar = true; return ir('casa'); }
   if(p.tipo === 'tela')  return ir(p.destino);
   if(p.tipo === 'aviso') return brinde(p.destino);
   if(p.tipo === 'npc')   return abrirNpc(p.destino);
