@@ -347,6 +347,36 @@ body.tela-cheia #app{padding:0;max-width:none}
   background:var(--tc);border:3px solid var(--contorno);margin-bottom:2px;
 }
 
+/* ---------- cabeçalho de capa (imagem opcional, matérias/lojas) ----------
+   Proporção pensada pra caber numa faixa baixa (~350×150), com o nome à esquerda e o
+   ícone do NPC associado à direita, os dois por cima da imagem. O leve deslocamento do
+   background-position em atualizarParallaxCapas() (seção de scroll) dá o efeito parallax. */
+.capa-cabecalho{
+  position:relative;width:100%;aspect-ratio:7/3;
+  border:var(--borda) solid var(--contorno);border-bottom-width:9px;border-radius:var(--r);
+  overflow:hidden;margin-bottom:14px;
+  background-size:cover;background-position:center 50%;background-color:var(--papel);
+}
+.capa-cabecalho::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(to top, rgba(0,0,0,.6), rgba(0,0,0,0) 65%);
+}
+.capa-cabecalho-conteudo{
+  position:absolute;inset:0;z-index:1;
+  display:flex;align-items:flex-end;justify-content:space-between;gap:10px;
+  padding:10px 12px;
+}
+.capa-titulo{
+  color:#fff;font-family:'Baloo 2','Nunito',sans-serif;font-size:20px;line-height:1.1;
+  text-shadow:0 2px 6px rgba(0,0,0,.55);
+}
+.capa-npc{
+  flex:none;width:50px;height:50px;border-radius:50%;
+  background:#fff;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35);
+  display:grid;place-items:center;font-size:24px;overflow:hidden;padding:0;
+}
+.capa-npc img{width:100%;height:100%;object-fit:cover}
+
 .mundo-banner{
   background:var(--tc);color:#fff;
   border:var(--borda) solid var(--contorno);border-bottom-width:9px;border-radius:var(--r);
@@ -1706,6 +1736,36 @@ function blocoNpcsDaTela(tela){
     <span class="chip">💬</span>
   </div>`).join('');
 }
+// cabeçalho de capa opcional (matéria ou loja) — imagem enviada no painel, com o nome à
+// esquerda e o ícone do NPC associado à direita (o mesmo NPC que blocoNpcsDaTela mostraria
+// como card de conversa logo abaixo, se algum tiver "aparece em" apontando pra essa tela)
+function renderCapaCabecalho(titulo, imagemUrl, tela){
+  if(!imagemUrl) return '';
+  const npc = NPCS.find(n => n.tela === tela && npcAtivoAgora(n));
+  return `<div class="capa-cabecalho" style="background-image:url('${esc(imagemUrl)}')">
+    <div class="capa-cabecalho-conteudo">
+      <span class="capa-titulo">${esc(titulo)}</span>
+      ${npc ? `<button class="capa-npc" onclick="abrirNpc('${esc(npc.id)}')" aria-label="Conversar com ${esc(npc.nome)}">${npc.imagemUrl ? `<img src="${esc(npc.imagemUrl)}" alt="">` : (npc.emoji || '🧑')}</button>` : '<span></span>'}
+    </div>
+  </div>`;
+}
+// parallax bem sutil: desloca o background-position vertical da capa visível conforme ela
+// sobe/desce na tela. Um listener global só, sem precisar registrar/desligar por navegação
+// — a cada scroll, procura a capa da tela ativa (só uma por vez) e ajusta.
+const semParallax = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let parallaxTicking = false;
+function atualizarParallaxCapa(){
+  parallaxTicking = false;
+  if(semParallax) return;
+  const el = document.querySelector('.tela.ativa .capa-cabecalho');
+  if(!el) return;
+  const r = el.getBoundingClientRect();
+  const deslocamento = Math.max(-1, Math.min(1, -r.top / Math.max(r.height, 1)));
+  el.style.backgroundPositionY = (50 + deslocamento * 18) + '%';
+}
+addEventListener('scroll', () => {
+  if(!parallaxTicking){ requestAnimationFrame(atualizarParallaxCapa); parallaxTicking = true; }
+}, {passive:true});
 // "Voltar" desfaz um passo do caminho entre mapas; na cena inicial, sai pra casa
 function voltarDaCena(){
   if(viajando) return; // idem: sem isso o passo era removido da pilha e a viagem recusada
@@ -1858,6 +1918,7 @@ function desenharMundo(t){
   const licoesVisiveis = t.licoes.filter(l => filtroSerie==='todos' || l.serie===filtroSerie);
   const outrosMundos = TRILHAS.filter(x => x.id !== t.id);
   $('#tela-mundo').innerHTML = `
+    ${t.capaAtiva ? renderCapaCabecalho(t.nome, t.capaImagemUrl, 'mundo:' + t.id) : ''}
     <div class="mundo-banner" style="--tc:${t.cor}">
       <button class="btn pequeno branco" onclick="ir('trilhas')">← Mapa</button>
       <div class="mundo-banner-corpo">
@@ -2565,6 +2626,7 @@ RENDER.lojagenerica = (lojaId) => {
   }
   const disponiveis = itensDaLoja(lojaId).filter(dentroDaAgenda);
   $('#tela-lojagenerica').innerHTML = `
+    ${loja.capaAtiva ? renderCapaCabecalho(loja.nome, loja.capaImagemUrl, 'loja:' + lojaId) : ''}
     <div class="titulo-secao"><h2>${esc(loja.emoji)} ${esc(loja.nome)}</h2><small>você tem 🪙 ${estado.moedas}</small></div>
     ${blocoNpcsDaTela('loja:' + lojaId)}
     <div class="grade-3">${disponiveis.map(cartaoItemLoja).join('') || '<p class="vazio">Nada à venda no momento — volte mais tarde!</p>'}</div>`;

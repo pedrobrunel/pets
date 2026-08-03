@@ -45,9 +45,25 @@ try {
     cor           VARCHAR(30) NOT NULL,
     ordem         INT NOT NULL DEFAULT 0,
     publicado     TINYINT(1)  NOT NULL DEFAULT 1,
+    capa_imagem   VARCHAR(160) NOT NULL DEFAULT \'\',
+    capa_ativa    TINYINT(1)  NOT NULL DEFAULT 0,
     criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  // capa_imagem/capa_ativa chegaram depois de mundos já existir em produção — cabeçalho
+  // opcional com imagem (upload no painel), nome da matéria e ícone do NPC associado
+  // (ver telaNpcValida em admin.php, prefixo "mundo:") por cima, com efeito de parallax.
+  $colunasMundos = array_column($pdo->query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mundos'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+  foreach ([
+    'capa_imagem' => "VARCHAR(160) NOT NULL DEFAULT ''",
+    'capa_ativa'  => "TINYINT(1) NOT NULL DEFAULT 0",
+  ] as $coluna => $definicao) {
+    if (!in_array($coluna, $colunasMundos, true)) $pdo->exec("ALTER TABLE mundos ADD COLUMN $coluna $definicao");
+  }
+  $pastaMundos = dirname(__DIR__) . '/assets/mundos';
+  if (!is_dir($pastaMundos)) @mkdir($pastaMundos, 0755, true);
 
   $pdo->exec('CREATE TABLE IF NOT EXISTS licoes (
     id            VARCHAR(24) PRIMARY KEY,
@@ -253,9 +269,21 @@ try {
     emoji         VARCHAR(8)  NOT NULL DEFAULT \'🏪\',
     publicado     TINYINT(1) NOT NULL DEFAULT 1,
     ordem         INT NOT NULL DEFAULT 0,
+    capa_imagem   VARCHAR(160) NOT NULL DEFAULT \'\',
+    capa_ativa    TINYINT(1)  NOT NULL DEFAULT 0,
     criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  // mesmo cabeçalho de capa opcional das matérias, agora pras lojas
+  $colunasLojas = array_column($pdo->query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lojas'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+  foreach ([
+    'capa_imagem' => "VARCHAR(160) NOT NULL DEFAULT ''",
+    'capa_ativa'  => "TINYINT(1) NOT NULL DEFAULT 0",
+  ] as $coluna => $definicao) {
+    if (!in_array($coluna, $colunasLojas, true)) $pdo->exec("ALTER TABLE lojas ADD COLUMN $coluna $definicao");
+  }
   $pdo->exec('CREATE TABLE IF NOT EXISTS itens_loja (
     id            VARCHAR(24) PRIMARY KEY,
     loja_id       VARCHAR(24) NOT NULL,
