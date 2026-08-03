@@ -79,7 +79,11 @@ header('Content-Type: application/json; charset=utf-8');
 require __DIR__ . '/bd.php';
 
 const TIPOS_BLOCO = ['texto', 'flashcard', 'video', 'cloze', 'cacapalavras', 'pergunta'];
-const SERIES_VALIDAS = ['6º ano', '7º ano', '8º ano', '9º ano', '1º ano do médio', '2º ano do médio', '3º ano do médio'];
+const SERIES_VALIDAS = [
+  '1º ano', '2º ano', '3º ano', '4º ano', '5º ano', // Fundamental I
+  '6º ano', '7º ano', '8º ano', '9º ano', // Fundamental II
+  '1º ano do médio', '2º ano do médio', '3º ano do médio', // Ensino Médio
+];
 const CORES_VALIDAS = ['var(--manga)', 'var(--rosa)', 'var(--mata)', 'var(--ceu)', 'var(--jabuti)', 'var(--moeda)', 'var(--erro)'];
 
 /* catálogo de links do jogo: pra onde um ponto de uma cena pode levar.
