@@ -348,32 +348,37 @@ body.tela-cheia #app{padding:0;max-width:none}
 }
 
 /* ---------- cabeçalho de capa (imagem opcional, matérias/lojas) ----------
-   Proporção pensada pra caber numa faixa baixa (~350×150), com o nome à esquerda e o
-   ícone do NPC associado à direita, os dois por cima da imagem. O leve deslocamento do
-   background-position em atualizarParallaxCapas() (seção de scroll) dá o efeito parallax. */
+   Proporção pensada pra caber numa faixa baixa (~350×150). O nome já vem desenhado na
+   própria imagem (enviada no painel) — o HTML só sobrepõe o que é funcional/dinâmico:
+   botão de voltar (quando existe) no topo-esquerda, ícone do NPC associado no
+   topo-direita, e uma informação viva (progresso, moedas) numa pilulazinha embaixo. O
+   leve deslocamento do background-position em atualizarParallaxCapa() dá o parallax. */
 .capa-cabecalho{
   position:relative;width:100%;aspect-ratio:7/3;
   border:var(--borda) solid var(--contorno);border-bottom-width:9px;border-radius:var(--r);
   overflow:hidden;margin-bottom:14px;
   background-size:cover;background-position:center 50%;background-color:var(--papel);
+  display:flex;flex-direction:column;justify-content:space-between;
 }
 .capa-cabecalho::before{
   content:'';position:absolute;inset:0;
-  background:linear-gradient(to top, rgba(0,0,0,.6), rgba(0,0,0,0) 65%);
+  background:linear-gradient(to bottom, rgba(0,0,0,.4), rgba(0,0,0,0) 32%, rgba(0,0,0,0) 68%, rgba(0,0,0,.45));
 }
-.capa-cabecalho-conteudo{
-  position:absolute;inset:0;z-index:1;
-  display:flex;align-items:flex-end;justify-content:space-between;gap:10px;
+.capa-cabecalho-topo{
+  position:relative;z-index:1;
+  display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
   padding:10px 12px;
 }
-.capa-titulo{
-  color:#fff;font-family:'Baloo 2','Nunito',sans-serif;font-size:20px;line-height:1.1;
-  text-shadow:0 2px 6px rgba(0,0,0,.55);
+.capa-cabecalho-rodape{position:relative;z-index:1;padding:0 12px 10px}
+.capa-info{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(0,0,0,.45);color:#fff;font-size:13px;font-weight:800;
+  padding:5px 12px;border-radius:999px;text-shadow:0 1px 3px rgba(0,0,0,.4);
 }
 .capa-npc{
-  flex:none;width:50px;height:50px;border-radius:50%;
+  flex:none;width:46px;height:46px;border-radius:50%;
   background:#fff;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35);
-  display:grid;place-items:center;font-size:24px;overflow:hidden;padding:0;
+  display:grid;place-items:center;font-size:22px;overflow:hidden;padding:0;
 }
 .capa-npc img{width:100%;height:100%;object-fit:cover}
 
@@ -1739,14 +1744,15 @@ function blocoNpcsDaTela(tela){
 // cabeçalho de capa opcional (matéria ou loja) — imagem enviada no painel, com o nome à
 // esquerda e o ícone do NPC associado à direita (o mesmo NPC que blocoNpcsDaTela mostraria
 // como card de conversa logo abaixo, se algum tiver "aparece em" apontando pra essa tela)
-function renderCapaCabecalho(titulo, imagemUrl, tela){
+function renderCapaCabecalho(imagemUrl, {tela, voltar, infoLinha} = {}){
   if(!imagemUrl) return '';
   const npc = NPCS.find(n => n.tela === tela && npcAtivoAgora(n));
   return `<div class="capa-cabecalho" style="background-image:url('${esc(imagemUrl)}')">
-    <div class="capa-cabecalho-conteudo">
-      <span class="capa-titulo">${esc(titulo)}</span>
+    <div class="capa-cabecalho-topo">
+      ${voltar ? `<button class="btn pequeno branco" onclick="${voltar}">← Mapa</button>` : '<span></span>'}
       ${npc ? `<button class="capa-npc" onclick="abrirNpc('${esc(npc.id)}')" aria-label="Conversar com ${esc(npc.nome)}">${npc.imagemUrl ? `<img src="${esc(npc.imagemUrl)}" alt="">` : (npc.emoji || '🧑')}</button>` : '<span></span>'}
     </div>
+    ${infoLinha ? `<div class="capa-cabecalho-rodape"><span class="capa-info">${infoLinha}</span></div>` : ''}
   </div>`;
 }
 // parallax bem sutil: desloca o background-position vertical da capa visível conforme ela
@@ -1917,15 +1923,18 @@ function desenharMundo(t){
     .sort((a,b) => ORDEM_SERIES.indexOf(a) - ORDEM_SERIES.indexOf(b));
   const licoesVisiveis = t.licoes.filter(l => filtroSerie==='todos' || l.serie===filtroSerie);
   const outrosMundos = TRILHAS.filter(x => x.id !== t.id);
+  const temCapa = t.capaAtiva && t.capaImagemUrl;
   $('#tela-mundo').innerHTML = `
-    ${t.capaAtiva ? renderCapaCabecalho(t.nome, t.capaImagemUrl, 'mundo:' + t.id) : ''}
+    ${temCapa ? renderCapaCabecalho(t.capaImagemUrl, {
+        tela: 'mundo:' + t.id, voltar: "ir('trilhas')", infoLinha: `${feitas}/${total} lições concluídas`,
+      }) : `
     <div class="mundo-banner" style="--tc:${t.cor}">
       <button class="btn pequeno branco" onclick="ir('trilhas')">← Mapa</button>
       <div class="mundo-banner-corpo">
         <span class="mundo-emblema grande">${t.emoji}</span>
         <div><h2>${t.nome}</h2><p>${feitas}/${total} lições concluídas</p></div>
       </div>
-    </div>
+    </div>`}
     <div class="filtro-series">
       <button class="chip-filtro ${filtroSerie==='todos'?'ativo':''}" onclick="filtrarSerie('todos')">Todos os anos</button>
       ${seriesUsadas.map(s=>
@@ -2625,9 +2634,11 @@ RENDER.lojagenerica = (lojaId) => {
     return;
   }
   const disponiveis = itensDaLoja(lojaId).filter(dentroDaAgenda);
+  const temCapa = loja.capaAtiva && loja.capaImagemUrl;
   $('#tela-lojagenerica').innerHTML = `
-    ${loja.capaAtiva ? renderCapaCabecalho(loja.nome, loja.capaImagemUrl, 'loja:' + lojaId) : ''}
-    <div class="titulo-secao"><h2>${esc(loja.emoji)} ${esc(loja.nome)}</h2><small>você tem 🪙 ${estado.moedas}</small></div>
+    ${temCapa
+      ? renderCapaCabecalho(loja.capaImagemUrl, {tela: 'loja:' + lojaId, infoLinha: `🪙 ${estado.moedas}`})
+      : `<div class="titulo-secao"><h2>${esc(loja.emoji)} ${esc(loja.nome)}</h2><small>você tem 🪙 ${estado.moedas}</small></div>`}
     ${blocoNpcsDaTela('loja:' + lojaId)}
     <div class="grade-3">${disponiveis.map(cartaoItemLoja).join('') || '<p class="vazio">Nada à venda no momento — volte mais tarde!</p>'}</div>`;
 };
