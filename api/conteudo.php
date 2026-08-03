@@ -109,12 +109,38 @@ try {
   $configCasa = bd()->query('SELECT casa_fundo, preco_casa FROM configuracoes WHERE id = 1')->fetch(PDO::FETCH_ASSOC) ?: ['casa_fundo' => '', 'preco_casa' => 5000];
   $casaConfig = ['fundoUrl' => $urlMovel($configCasa['casa_fundo']), 'precoCasa' => (int)$configCasa['preco_casa']];
 
+  // lojas genéricas (Lanchonete, Mercado, e o que o Hostmaster criar depois) — cada uma
+  // vira um destino de verdade no mapa (ponto tipo "loja"). Os itens ficam numa tabela à
+  // parte, com agenda (estoque por tempo limitado) igual aos móveis e variantes opcionais
+  // (sabor/tamanho) que o aluno escolhe na hora de comprar.
+  $lojasLinhas = bd()->query('SELECT id, nome, emoji FROM lojas WHERE publicado = 1 ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+  $lojasPublicadas = array_column($lojasLinhas, 'id');
+  $saidaLojas = array_map(fn($l) => ['id' => $l['id'], 'nome' => $l['nome'], 'emoji' => $l['emoji']], $lojasLinhas);
+
+  $pastaLojas = dirname(__DIR__) . '/assets/lojas';
+  $urlLoja = fn($nome) => $nome !== '' && is_file($pastaLojas . '/' . $nome) ? 'assets/lojas/' . $nome : '';
+  $itensLojaLinhas = $lojasPublicadas ? bd()->query('SELECT * FROM itens_loja WHERE publicado = 1 ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC) : [];
+  // só itens de loja publicada (excluir a loja não apaga o item, só o esconde)
+  $itensLojaLinhas = array_values(array_filter($itensLojaLinhas, fn($it) => in_array($it['loja_id'], $lojasPublicadas, true)));
+  $saidaItensLoja = array_map(fn($it) => [
+    'id' => $it['id'], 'lojaId' => $it['loja_id'], 'nome' => $it['nome'], 'emoji' => $it['emoji'],
+    'preco' => (int)$it['preco'], 'imagemUrl' => $urlLoja($it['imagem']),
+    'fome' => (int)$it['fome'], 'alegria' => (int)$it['alegria'],
+    'variantes' => array_map(fn($v) => [
+      'id' => $v['id'], 'nome' => $v['nome'], 'imagemUrl' => $urlLoja($v['imagem'] ?? ''),
+    ], json_decode($it['variantes'], true) ?: []),
+    'diasSemana' => $it['dias_semana'] === '' ? [] : array_map('intval', explode(',', $it['dias_semana'])),
+    'horaInicio' => $it['hora_inicio'], 'horaFim' => $it['hora_fim'],
+    'dataInicio' => $it['data_inicio'], 'dataFim' => $it['data_fim'],
+  ], $itensLojaLinhas);
+
   $existe = [
     'cena'  => array_column(bd()->query('SELECT id FROM cenas')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'mundo' => array_column(bd()->query('SELECT id FROM mundos')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'licao' => array_column(bd()->query('SELECT id FROM licoes')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'npc'   => array_column(bd()->query('SELECT id FROM npcs')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'item'  => array_column(bd()->query('SELECT id FROM itens')->fetchAll(PDO::FETCH_ASSOC), 'id'),
+    'loja'  => array_column(bd()->query('SELECT id FROM lojas')->fetchAll(PDO::FETCH_ASSOC), 'id'),
     'gatilho' => array_map(fn($m) => json_decode($m['objetivo'], true)['chave'] ?? '',
       array_filter(bd()->query("SELECT objetivo FROM missoes WHERE tipo = 'gatilho'")->fetchAll(PDO::FETCH_ASSOC))),
   ];
@@ -137,6 +163,7 @@ try {
           'licao' => isset($licoesPublicadas[$destino]),
           'npc'   => in_array($destino, $npcsPublicados, true),
           'item'  => in_array($destino, $itensPublicados, true),
+          'loja'  => in_array($destino, $lojasPublicadas, true),
           'gatilho' => in_array($destino, $gatilhosPublicados, true),
         };
         if (!$publicado) {
@@ -167,9 +194,10 @@ try {
   echo json_encode([
     'mundos' => $saidaMundos, 'cenas' => $saidaCenas, 'npcs' => $saidaNpcs, 'missoes' => $saidaMissoes,
     'itens' => $saidaItens, 'moveis' => $saidaMoveis, 'casaConfig' => $casaConfig,
+    'lojas' => $saidaLojas, 'itensLoja' => $saidaItensLoja,
   ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
   error_log('[bichoteca-conteudo] ' . $e->getMessage());
   http_response_code(500);
-  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => [], 'moveis' => [], 'casaConfig' => ['fundoUrl' => '']]);
+  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => [], 'moveis' => [], 'casaConfig' => ['fundoUrl' => ''], 'lojas' => [], 'itensLoja' => []]);
 }

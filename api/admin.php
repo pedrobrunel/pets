@@ -59,6 +59,18 @@
      POST ?acao=casa_fundo_imagem     (multipart: arquivo) -> sobe e já grava o fundo da Casa
      POST ?acao=casa_fundo_remover    -> volta a Casa pro visual padrão (sem fundo)
      POST ?acao=casa_preco_salvar     {precoCasa} -> preço em moedas pra desbloquear a decoração
+     GET  ?acao=lojas_listar
+     GET  ?acao=loja_obter            ?id=xx
+     POST ?acao=loja_salvar           {id, nome, emoji, publicado, ordem}
+     POST ?acao=loja_excluir          {id}
+     GET  ?acao=itens_loja_listar     [?loja=xx]
+     GET  ?acao=item_loja_obter       ?id=xx
+     POST ?acao=item_loja_salvar      {id, lojaId, nome, emoji, preco, imagem, fome, alegria,
+                                        variantes:[{id,nome,imagem}], diasSemana, horaInicio, horaFim,
+                                        dataInicio, dataFim, publicado, ordem}
+     POST ?acao=item_loja_excluir     {id}
+     POST ?acao=item_loja_duplicar    {id, novoId} -> clona um item (fica como rascunho)
+     POST ?acao=item_loja_imagem      (multipart: arquivo, slot=id da variante ou vazio p/ imagem base) -> sobe pra assets/lojas/
    ========================================================= */
 
 declare(strict_types=1);
@@ -73,7 +85,7 @@ const CORES_VALIDAS = ['var(--manga)', 'var(--rosa)', 'var(--mata)', 'var(--ceu)
 /* catálogo de links do jogo: pra onde um ponto de uma cena pode levar.
    "tela" é limitado às abas que existem em app.html (RENDER.*) — nada de string livre,
    senão um ponto mal configurado leva a criança pra uma tela que não existe. */
-const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso', 'npc', 'gatilho', 'item'];
+const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso', 'npc', 'gatilho', 'item', 'loja'];
 // "editarcasa" é a tela de decorar o quarto (arrastar/girar/remover móvel), separada
 // da Casa de propósito — lá é só o perfil do bicho (cuidar, ver progresso). Fica fora
 // de TELAS_NPC (não faz sentido um NPC flutuar sozinho na tela de decoração).
@@ -109,9 +121,11 @@ function pastaCenas(): string { return dirname(__DIR__) . '/assets/cenas'; }
 function pastaNpcs(): string { return dirname(__DIR__) . '/assets/npcs'; }
 function pastaItens(): string { return dirname(__DIR__) . '/assets/itens'; }
 function pastaMoveis(): string { return dirname(__DIR__) . '/assets/moveis'; }
+function pastaLojas(): string { return dirname(__DIR__) . '/assets/lojas'; }
 function caminhoPublicoNpc(string $nome): string { return $nome === '' ? '' : 'assets/npcs/' . $nome; }
 function caminhoPublicoItem(string $nome): string { return $nome === '' ? '' : 'assets/itens/' . $nome; }
 function caminhoPublicoMovel(string $nome): string { return $nome === '' ? '' : 'assets/moveis/' . $nome; }
+function caminhoPublicoLoja(string $nome): string { return $nome === '' ? '' : 'assets/lojas/' . $nome; }
 /* a imagem pode estar em assets/cenas/ (enviada pelo painel) ou em assets/ (veio no
    repositório, como o mapa-mundosv2.webp da ilha) — o front tenta nessa ordem */
 function caminhoPublicoImagem(string $nome): string {
@@ -137,8 +151,8 @@ function validarPonto(array $p, int $i): ?string {
     return "Ponto \"$rotulo\": tela \"$destino\" não existe (use: " . implode(', ', TELAS_VALIDAS) . ').';
   }
   if ($tipo === 'aviso' && mb_strlen($destino) > 160) return "Ponto \"$rotulo\": o aviso passou de 160 caracteres.";
-  // mundo/cena/licao/npc/item: confere se o alvo existe de verdade, pra não gerar link quebrado
-  $tabelas = ['mundo' => 'mundos', 'cena' => 'cenas', 'licao' => 'licoes', 'npc' => 'npcs', 'item' => 'itens'];
+  // mundo/cena/licao/npc/item/loja: confere se o alvo existe de verdade, pra não gerar link quebrado
+  $tabelas = ['mundo' => 'mundos', 'cena' => 'cenas', 'licao' => 'licoes', 'npc' => 'npcs', 'item' => 'itens', 'loja' => 'lojas'];
   if (isset($tabelas[$tipo])) {
     $st = bd()->prepare('SELECT COUNT(*) FROM ' . $tabelas[$tipo] . ' WHERE id = ?');
     $st->execute([$destino]);
@@ -190,6 +204,58 @@ function validarMovel(array $m): ?string {
     if ($nomeImg !== '' && !validarNomeImagem($nomeImg)) return "\"$campo\" tem um nome de arquivo inválido.";
   }
   return validarAgenda($m);
+}
+
+/** valida uma loja genérica (Lanchonete, Mercado, ou o que o Hostmaster criar depois).
+    @return string|null mensagem de erro, ou null se ok */
+function validarLoja(array $l): ?string {
+  $nome = trim((string)($l['nome'] ?? ''));
+  if ($nome === '' || mb_strlen($nome) > 60) return '"nome" precisa ter de 1 a 60 caracteres.';
+  $emoji = (string)($l['emoji'] ?? '🏪');
+  if ($emoji === '' || mb_strlen($emoji) > 8) return '"emoji" é obrigatório.';
+  return null;
+}
+
+/* valida as variantes de um item de loja (JSON: [{id, nome, imagem}]) — sabores/tamanhos
+   que o aluno escolhe na hora de comprar. Cada variante precisa de id (curto, vira parte
+   da chave no inventário) e nome; imagem é opcional (cai pro emoji/imagem base do item). */
+function validarVariantes($variantes): ?string {
+  if (!is_array($variantes)) return '"variantes" precisa ser uma lista.';
+  if (count($variantes) > 8) return 'Máximo de 8 variantes por item.';
+  $ids = [];
+  foreach ($variantes as $i => $v) {
+    if (!is_array($v)) return "Variante $i: formato inválido.";
+    $id = (string)($v['id'] ?? '');
+    if (!preg_match('/^[a-z0-9]{1,24}$/', $id)) return "Variante $i: \"id\" precisa ter de 1 a 24 letras minúsculas ou números.";
+    if (in_array($id, $ids, true)) return "Variante \"$id\" repetida.";
+    $ids[] = $id;
+    $nome = trim((string)($v['nome'] ?? ''));
+    if ($nome === '' || mb_strlen($nome) > 40) return "Variante \"$id\": \"nome\" precisa ter de 1 a 40 caracteres.";
+    $imagem = trim((string)($v['imagem'] ?? ''));
+    if ($imagem !== '' && !validarNomeImagem($imagem)) return "Variante \"$id\": nome de arquivo de imagem inválido.";
+  }
+  return null;
+}
+
+/** valida um item de uma loja genérica. @return string|null mensagem de erro, ou null se ok */
+function validarItemLoja(array $it): ?string {
+  $nome = trim((string)($it['nome'] ?? ''));
+  if ($nome === '' || mb_strlen($nome) > 60) return '"nome" precisa ter de 1 a 60 caracteres.';
+  $emoji = (string)($it['emoji'] ?? '🔹');
+  if ($emoji === '' || mb_strlen($emoji) > 8) return '"emoji" é obrigatório.';
+  if (!is_numeric($it['preco'] ?? null) || (int)$it['preco'] < 0 || (int)$it['preco'] > 100000) {
+    return '"preco" precisa ser um número entre 0 e 100000.';
+  }
+  foreach (['fome', 'alegria'] as $campo) {
+    if (!is_numeric($it[$campo] ?? 0) || (int)($it[$campo] ?? 0) < 0 || (int)($it[$campo] ?? 0) > 100) {
+      return "\"$campo\" precisa ser um número entre 0 e 100 (ou vazio, se o item não alimenta).";
+    }
+  }
+  $imagem = trim((string)($it['imagem'] ?? ''));
+  if ($imagem !== '' && !validarNomeImagem($imagem)) return '"imagem" tem um nome de arquivo inválido.';
+  $erroVariantes = validarVariantes($it['variantes'] ?? []);
+  if ($erroVariantes) return $erroVariantes;
+  return validarAgenda($it);
 }
 
 /* chave de nó do diálogo: mais permissiva que validarId (aceita "_") pra não atrapalhar
@@ -1337,6 +1403,170 @@ try {
     responder(['ok' => true]);
   }
 
+  /* ---------- Lojas genéricas (Lanchonete, Mercado, e as que o Hostmaster criar) ---------- */
+
+  if ($acao === 'lojas_listar') {
+    $linhas = bd()->query('SELECT id, nome, emoji, publicado, ordem FROM lojas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    responder(['lojas' => array_map(fn($l) => [
+      'id' => $l['id'], 'nome' => $l['nome'], 'emoji' => $l['emoji'],
+      'publicado' => (bool)$l['publicado'], 'ordem' => (int)$l['ordem'],
+    ], $linhas)]);
+  }
+
+  if ($acao === 'loja_obter') {
+    $st = bd()->prepare('SELECT id, nome, emoji, publicado, ordem FROM lojas WHERE id = ?');
+    $st->execute([(string)($_GET['id'] ?? '')]);
+    $l = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$l) responder(['erro' => 'Loja não encontrada.'], 404);
+    responder(['id' => $l['id'], 'nome' => $l['nome'], 'emoji' => $l['emoji'], 'publicado' => (bool)$l['publicado'], 'ordem' => (int)$l['ordem']]);
+  }
+
+  if ($acao === 'loja_salvar') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    if (!validarId($id)) responder(['erro' => '"id" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
+    $erro = validarLoja($d);
+    if ($erro) responder(['erro' => $erro], 422);
+    bd()->prepare('INSERT INTO lojas (id, nome, emoji, publicado, ordem) VALUES (?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), publicado=VALUES(publicado), ordem=VALUES(ordem)')
+      ->execute([$id, trim((string)$d['nome']), (string)($d['emoji'] ?? '🏪'), !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0)]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'loja_excluir') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    // os itens dela vão junto (FOREIGN KEY ... ON DELETE CASCADE) — avisa quantos, senão
+    // o Hostmaster apaga sem saber que zerou o catálogo inteiro
+    $st = bd()->prepare('SELECT COUNT(*) FROM itens_loja WHERE loja_id = ?');
+    $st->execute([$id]);
+    $itensAfetados = (int)$st->fetchColumn();
+    bd()->prepare('DELETE FROM lojas WHERE id = ?')->execute([$id]);
+    responder(['ok' => true, 'itensAfetados' => $itensAfetados]);
+  }
+
+  function linhaItemLoja(array $it): array {
+    return [
+      'id' => $it['id'], 'lojaId' => $it['loja_id'], 'nome' => $it['nome'], 'emoji' => $it['emoji'],
+      'preco' => (int)$it['preco'], 'imagem' => $it['imagem'], 'imagemUrl' => caminhoPublicoLoja($it['imagem']),
+      'fome' => (int)$it['fome'], 'alegria' => (int)$it['alegria'],
+      'variantes' => array_map(fn($v) => [
+        'id' => $v['id'], 'nome' => $v['nome'], 'imagem' => $v['imagem'] ?? '', 'imagemUrl' => caminhoPublicoLoja($v['imagem'] ?? ''),
+      ], json_decode($it['variantes'], true) ?: []),
+      'diasSemana' => $it['dias_semana'], 'horaInicio' => $it['hora_inicio'], 'horaFim' => $it['hora_fim'],
+      'dataInicio' => $it['data_inicio'], 'dataFim' => $it['data_fim'],
+      'publicado' => (bool)$it['publicado'], 'ordem' => (int)$it['ordem'],
+    ];
+  }
+
+  if ($acao === 'itens_loja_listar') {
+    $lojaId = $_GET['loja'] ?? null;
+    if ($lojaId) {
+      $st = bd()->prepare('SELECT * FROM itens_loja WHERE loja_id = ? ORDER BY ordem, nome');
+      $st->execute([(string)$lojaId]);
+    } else {
+      $st = bd()->query('SELECT * FROM itens_loja ORDER BY loja_id, ordem, nome');
+    }
+    responder(['itens' => array_map('linhaItemLoja', $st->fetchAll(PDO::FETCH_ASSOC))]);
+  }
+
+  if ($acao === 'item_loja_obter') {
+    $st = bd()->prepare('SELECT * FROM itens_loja WHERE id = ?');
+    $st->execute([(string)($_GET['id'] ?? '')]);
+    $it = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$it) responder(['erro' => 'Item não encontrado.'], 404);
+    responder(linhaItemLoja($it));
+  }
+
+  if ($acao === 'item_loja_salvar') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    if (!validarId($id)) responder(['erro' => '"id" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
+    $lojaId = (string)($d['lojaId'] ?? '');
+    $st = bd()->prepare('SELECT COUNT(*) FROM lojas WHERE id = ?');
+    $st->execute([$lojaId]);
+    if (!$st->fetchColumn()) responder(['erro' => 'Escolha uma loja válida.'], 422);
+    $erro = validarItemLoja($d);
+    if ($erro) responder(['erro' => $erro], 422);
+    $variantes = array_map(fn($v) => [
+      'id' => (string)$v['id'], 'nome' => trim((string)$v['nome']), 'imagem' => trim((string)($v['imagem'] ?? '')),
+    ], $d['variantes'] ?? []);
+    bd()->prepare('INSERT INTO itens_loja (id, loja_id, nome, emoji, preco, imagem, fome, alegria, variantes,
+        dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE loja_id=VALUES(loja_id), nome=VALUES(nome), emoji=VALUES(emoji), preco=VALUES(preco),
+        imagem=VALUES(imagem), fome=VALUES(fome), alegria=VALUES(alegria), variantes=VALUES(variantes),
+        dias_semana=VALUES(dias_semana), hora_inicio=VALUES(hora_inicio), hora_fim=VALUES(hora_fim),
+        data_inicio=VALUES(data_inicio), data_fim=VALUES(data_fim), publicado=VALUES(publicado), ordem=VALUES(ordem)')
+      ->execute([
+        $id, $lojaId, trim((string)$d['nome']), (string)($d['emoji'] ?? '🔹'), (int)$d['preco'],
+        trim((string)($d['imagem'] ?? '')), (int)($d['fome'] ?? 0), (int)($d['alegria'] ?? 0),
+        json_encode($variantes, JSON_UNESCAPED_UNICODE),
+        normalizarDiasSemana(trim((string)($d['diasSemana'] ?? ''))), trim((string)($d['horaInicio'] ?? '')), trim((string)($d['horaFim'] ?? '')),
+        trim((string)($d['dataInicio'] ?? '')), trim((string)($d['dataFim'] ?? '')),
+        !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0),
+      ]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'item_loja_excluir') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    bd()->prepare('DELETE FROM itens_loja WHERE id = ?')->execute([$id]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'item_loja_duplicar') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    $novoId = (string)($d['novoId'] ?? '');
+    if (!validarId($novoId)) responder(['erro' => '"novoId" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
+    $st = bd()->prepare('SELECT * FROM itens_loja WHERE id = ?');
+    $st->execute([$id]);
+    $it = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$it) responder(['erro' => 'Item não encontrado.'], 404);
+    bd()->prepare('INSERT INTO itens_loja (id, loja_id, nome, emoji, preco, imagem, fome, alegria, variantes,
+        dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)')
+      ->execute([
+        $novoId, $it['loja_id'], $it['nome'] . ' (cópia)', $it['emoji'], $it['preco'], $it['imagem'], $it['fome'], $it['alegria'],
+        $it['variantes'], $it['dias_semana'], $it['hora_inicio'], $it['hora_fim'], $it['data_inicio'], $it['data_fim'], $it['ordem'],
+      ]);
+    responder(['ok' => true, 'id' => $novoId]);
+  }
+
+  // upload de imagem pra um item de loja — "slot" opcional identifica QUAL variante recebe
+  // a imagem (o id dela); sem "slot", vira a imagem base do item
+  if ($acao === 'item_loja_imagem') {
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || ($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+      $limite = ini_get('upload_max_filesize');
+      $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+        ? "A imagem passou do limite do servidor ($limite)."
+        : 'Nenhum arquivo recebido.';
+      responder(['erro' => $motivo], 422);
+    }
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_IMAGEM[$ext])) {
+      responder(['erro' => 'Formato não aceito. Use webp, png ou jpg (webp é o mais leve).'], 422);
+    }
+    $info = @getimagesize($arq['tmp_name']);
+    if (!$info || !in_array($info['mime'], EXTENSOES_IMAGEM, true)) {
+      responder(['erro' => 'O arquivo não é uma imagem válida.'], 422);
+    }
+    $base = strtolower(pathinfo((string)$arq['name'], PATHINFO_FILENAME));
+    $base = preg_replace('/[^a-z0-9_-]+/', '-', $base) ?: 'item';
+    $base = trim($base, '-') ?: 'item';
+    $nome = substr($base, 0, 60) . '-' . bin2hex(random_bytes(3)) . '.' . $ext;
+    if (!is_dir(pastaLojas()) && !@mkdir(pastaLojas(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta assets/lojas no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaLojas() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo em assets/lojas (confira a permissão da pasta).'], 500);
+    }
+    responder(['ok' => true, 'slot' => (string)($_POST['slot'] ?? ''), 'imagem' => $nome, 'imagemUrl' => 'assets/lojas/' . $nome]);
+  }
+
   if ($acao === 'destinos') {
     // "rascunho" vai junto: um ponto que aponta pra mundo/cena/lição não publicada é
     // escondido do aluno por conteudo.php, então o painel precisa poder avisar disso
@@ -1345,6 +1575,7 @@ try {
     $licoes = bd()->query('SELECT id, titulo, emoji, publicado FROM licoes ORDER BY mundo_id, ordem')->fetchAll(PDO::FETCH_ASSOC);
     $npcs = bd()->query('SELECT id, nome, emoji, publicado FROM npcs ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     $itens = bd()->query('SELECT id, nome, emoji, publicado FROM itens ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    $lojas = bd()->query('SELECT id, nome, emoji, publicado FROM lojas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     // gatilhos não são linhas próprias — são a "chave" que missões tipo "gatilho" pedem;
     // a lista vem das missões pra evitar typo entre o ponto e a missão que ele ativa
     $gatilhos = bd()->query('SELECT id, titulo, publicado, JSON_UNQUOTE(JSON_EXTRACT(objetivo, \'$.chave\')) AS chave
@@ -1358,6 +1589,7 @@ try {
       'npc'   => array_map(fn($n) => ['id' => $n['id'], 'rotulo' => $marca($n['emoji'] . ' ' . $n['nome'], $n['publicado']), 'publicado' => (bool)$n['publicado']], $npcs),
       'gatilho' => array_map(fn($g) => ['id' => $g['chave'], 'rotulo' => $marca('🎯 ' . $g['chave'] . ' (missão "' . $g['titulo'] . '")', $g['publicado']), 'publicado' => (bool)$g['publicado']], $gatilhos),
       'item' => array_map(fn($it) => ['id' => $it['id'], 'rotulo' => $marca($it['emoji'] . ' ' . $it['nome'], $it['publicado']), 'publicado' => (bool)$it['publicado']], $itens),
+      'loja' => array_map(fn($l) => ['id' => $l['id'], 'rotulo' => $marca($l['emoji'] . ' ' . $l['nome'], $l['publicado']), 'publicado' => (bool)$l['publicado']], $lojas),
     ]);
   }
 

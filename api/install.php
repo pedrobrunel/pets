@@ -239,6 +239,48 @@ try {
     if (!in_array($coluna, $colunasMoveis, true)) $pdo->exec("ALTER TABLE moveis ADD COLUMN $coluna $definicao");
   }
 
+  /* lojas genéricas: o Hostmaster cria quantas quiser (Lanchonete, Mercado, e o que vier
+     depois) sem precisar de código novo — cada uma vira um destino de verdade no mapa
+     (ponto tipo "loja", destino = id da loja). Os itens ficam numa tabela à parte,
+     ligados por loja_id, com o mesmo padrão de agenda (estoque por tempo limitado) já
+     usado nos móveis, mais "variantes" (JSON: [{id, nome, imagem}]) pra sabores/tamanhos
+     — o aluno escolhe qual levar na hora de comprar. fome/alegria são opcionais: só
+     preenche se o item for de verdade uma comida (a Lanchonete provavelmente sim, o
+     Mercado pode ter item que é só pra guardar). */
+  $pdo->exec('CREATE TABLE IF NOT EXISTS lojas (
+    id            VARCHAR(24) PRIMARY KEY,
+    nome          VARCHAR(60) NOT NULL,
+    emoji         VARCHAR(8)  NOT NULL DEFAULT \'🏪\',
+    publicado     TINYINT(1) NOT NULL DEFAULT 1,
+    ordem         INT NOT NULL DEFAULT 0,
+    criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  $pdo->exec('CREATE TABLE IF NOT EXISTS itens_loja (
+    id            VARCHAR(24) PRIMARY KEY,
+    loja_id       VARCHAR(24) NOT NULL,
+    nome          VARCHAR(60) NOT NULL,
+    emoji         VARCHAR(8)  NOT NULL DEFAULT \'🔹\',
+    preco         INT NOT NULL DEFAULT 0,
+    imagem        VARCHAR(160) NOT NULL DEFAULT \'\',
+    fome          INT NOT NULL DEFAULT 0,
+    alegria       INT NOT NULL DEFAULT 0,
+    variantes     JSON NOT NULL,
+    dias_semana   VARCHAR(20) NOT NULL DEFAULT \'\',
+    hora_inicio   VARCHAR(5)  NOT NULL DEFAULT \'\',
+    hora_fim      VARCHAR(5)  NOT NULL DEFAULT \'\',
+    data_inicio   VARCHAR(10) NOT NULL DEFAULT \'\',
+    data_fim      VARCHAR(10) NOT NULL DEFAULT \'\',
+    publicado     TINYINT(1) NOT NULL DEFAULT 1,
+    ordem         INT NOT NULL DEFAULT 0,
+    criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (loja_id) REFERENCES lojas(id) ON DELETE CASCADE,
+    INDEX (loja_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  $pastaLojas = dirname(__DIR__) . '/assets/lojas';
+  if (!is_dir($pastaLojas)) @mkdir($pastaLojas, 0755, true);
+
   // configurações gerais do jogo: fundo da Casa e preço pra desbloquear a decoração —
   // um valor só, vale pra todo mundo (não é por jogador). Linha única (id sempre 1).
   $pdo->exec('CREATE TABLE IF NOT EXISTS configuracoes (
@@ -382,6 +424,37 @@ try {
     $fundoSemeado = true;
   }
 
+  /* semeia as duas lojas de exemplo (Lanchonete e Mercado) só na primeira vez — mostra o
+     sistema genérico de lojas já funcionando, com um item de cada tipo: um com variantes
+     (sabores) e um só pra guardar (sem fome/alegria). Só emoji, sem imagem — o Hostmaster
+     troca por foto de verdade quando quiser, na aba Lojas. */
+  $lojasExistentes = (int)$pdo->query('SELECT COUNT(*) FROM lojas')->fetchColumn();
+  $lojasSemeadas = 0;
+  if ($lojasExistentes === 0) {
+    $pdo->prepare('INSERT INTO lojas (id, nome, emoji, publicado, ordem) VALUES (?, ?, ?, 1, ?)')
+      ->execute(['lanchonete', 'Lanchonete', '🍔', 0]);
+    $pdo->prepare('INSERT INTO lojas (id, nome, emoji, publicado, ordem) VALUES (?, ?, ?, 1, ?)')
+      ->execute(['mercado', 'Mercado', '🛒', 1]);
+    $variantesSuco = json_encode([
+      ['id' => 'morango', 'nome' => 'Morango', 'imagem' => ''],
+      ['id' => 'uva', 'nome' => 'Uva', 'imagem' => ''],
+      ['id' => 'laranja', 'nome' => 'Laranja', 'imagem' => ''],
+    ], JSON_UNESCAPED_UNICODE);
+    $pdo->prepare('INSERT INTO itens_loja (id, loja_id, nome, emoji, preco, fome, alegria, variantes, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)')
+      ->execute(['sucogelado', 'lanchonete', 'Suco gelado', '🧃', 12, 8, 10, $variantesSuco, 0]);
+    $pdo->prepare('INSERT INTO itens_loja (id, loja_id, nome, emoji, preco, fome, alegria, variantes, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)')
+      ->execute(['sanduiche', 'lanchonete', 'Sanduíche natural', '🥪', 18, 22, 6, '[]', 1]);
+    $pdo->prepare('INSERT INTO itens_loja (id, loja_id, nome, emoji, preco, fome, alegria, variantes, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)')
+      ->execute(['cestabasica', 'mercado', 'Cesta de frutas', '🧺', 25, 15, 4, '[]', 0]);
+    $pdo->prepare('INSERT INTO itens_loja (id, loja_id, nome, emoji, preco, fome, alegria, variantes, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)')
+      ->execute(['bicho_pelucia', 'mercado', 'Bichinho de pelúcia', '🧸', 35, 0, 0, '[]', 1]);
+    $lojasSemeadas = 2;
+  }
+
   echo '<p>✅ Banco pronto! Tabelas criadas (ou já existiam — rodar de novo não faz mal).</p>'
      . ($pontosSemeados
         ? '<p>🗺️ Cena "Ilha do saber" criada com ' . $pontosSemeados . ' pontos clicáveis — edite em <code>/admin.html</code>, aba Mapas.</p>'
@@ -399,6 +472,9 @@ try {
      . ($fundoSemeado
         ? '<p>🏠 Fundo padrão da Casa configurado (o quarto de pedra azul).</p>'
         : '<p>🏠 A Casa já tinha um fundo configurado — nada foi trocado.</p>')
+     . ($lojasSemeadas
+        ? '<p>🏪 Lojas de exemplo "Lanchonete" e "Mercado" criadas, com alguns itens — edite em <code>/admin.html</code>, aba Lojas. Falta só colocar um ponto tipo "Visitar uma loja" em cada uma, na aba Mapas, pra dar acesso.</p>'
+        : '<p>🏪 Já havia loja cadastrada — nada foi semeado.</p>')
      . '<p>Acesse <code>/admin.html</code> para entrar no painel. Depois é só apagar este arquivo (api/install.php) do servidor, ou deixá-lo — ele nunca sobrescreve conteúdo já existente.</p>';
 } catch (Throwable $e) {
   http_response_code(500);
