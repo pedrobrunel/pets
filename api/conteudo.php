@@ -124,6 +124,7 @@ try {
   $itensLojaLinhas = array_values(array_filter($itensLojaLinhas, fn($it) => in_array($it['loja_id'], $lojasPublicadas, true)));
   $saidaItensLoja = array_map(fn($it) => [
     'id' => $it['id'], 'lojaId' => $it['loja_id'], 'nome' => $it['nome'], 'emoji' => $it['emoji'],
+    'tipo' => $it['tipo'],
     'preco' => (int)$it['preco'], 'imagemUrl' => $urlLoja($it['imagem']),
     'fome' => (int)$it['fome'], 'alegria' => (int)$it['alegria'],
     'variantes' => array_map(fn($v) => [

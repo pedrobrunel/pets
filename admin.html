@@ -702,6 +702,11 @@ body.conectando-fluxo{cursor:crosshair}
         </div>
         <label>nome</label>
         <input type="text" id="item-loja-nome" placeholder="ex.: Suco gelado">
+        <label>tipo</label>
+        <select id="item-loja-tipo">
+          <option value="comida">Comida (dá pro bicho, some ao consumir)</option>
+          <option value="acessorio">Acessório (veste/tira, fica guardado pra sempre)</option>
+        </select>
         <label>imagem base (opcional)</label>
         <div class="upload" id="zona-upload-item-loja">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
         <input type="file" id="input-item-loja" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
@@ -1315,6 +1320,7 @@ async function carregarNpcs(){
   const [d] = await Promise.all([
     api('npcs_listar').catch(() => ({npcs:[]})),
     carregarMissoesCache(),
+    atualizarTelasNpcComLojas(),
   ]);
   npcsCache = d.npcs;
   $('#tabela-npcs').innerHTML = `
@@ -1703,7 +1709,7 @@ $('#npc-imagem-tipo').addEventListener('change', () => {
   $('#npc-aviso-lottie').style.display = $('#npc-imagem-tipo').value === 'lottie' ? 'block' : 'none';
 });
 
-const TELAS_NPC = [
+const TELAS_NPC_FIXAS = [
   {v:'',       rotulo:'— só via ponto no mapa —'},
   {v:'casa',   rotulo:'Casa'},
   {v:'arcade', rotulo:'Arcade'},
@@ -1712,6 +1718,16 @@ const TELAS_NPC = [
   {v:'perfil', rotulo:'Perfil'},
   {v:'lojamoveis', rotulo:'Loja de Móveis'},
 ];
+// as telas fixas acima + uma entrada por loja cadastrada (aba Lojas) — assim um NPC pode
+// flutuar dentro da Lanchonete, do Mercado etc., sem precisar de ponto no mapa
+let TELAS_NPC = [...TELAS_NPC_FIXAS];
+async function atualizarTelasNpcComLojas(){
+  const lojas = await api('lojas_listar').then(d => d.lojas).catch(() => []);
+  TELAS_NPC = [...TELAS_NPC_FIXAS, ...lojas.map(l => ({v: 'loja:' + l.id, rotulo: 'Loja: ' + l.nome}))];
+  const atual = $('#npc-tela').value;
+  $('#npc-tela').innerHTML = TELAS_NPC.map(t => `<option value="${t.v}">${t.rotulo}</option>`).join('');
+  if(TELAS_NPC.some(t => t.v === atual)) $('#npc-tela').value = atual;
+}
 $('#npc-tela').innerHTML = TELAS_NPC.map(t => `<option value="${t.v}">${t.rotulo}</option>`).join('');
 
 const DIAS_SEMANA = [{v:1,rotulo:'seg'},{v:2,rotulo:'ter'},{v:3,rotulo:'qua'},{v:4,rotulo:'qui'},{v:5,rotulo:'sex'},{v:6,rotulo:'sáb'},{v:7,rotulo:'dom'}];
@@ -1843,17 +1859,26 @@ const TIPOS_MISSAO = [
   {v:'visitar_cena',  rotulo:'Visitar um mapa'},
   {v:'gatilho',       rotulo:'Ativar um gatilho (tocar num ponto específico)'},
 ];
-// espelha ITENS de app.html — só os "comida" entram em missão de entrega (ver nota em admin.php)
-const ITENS_COMIDA = [
-  {id:'melancia', rotulo:'🍉 Melancia'}, {id:'racao', rotulo:'🥣 Ração boa'},
-  {id:'peixe', rotulo:'🐟 Peixe fresco'}, {id:'bolo', rotulo:'🍰 Bolo de aniversário'},
-];
 let missoesCache = [], cenasParaMissaoCache = null;
 $('#missao-tipo').innerHTML = TIPOS_MISSAO.map(t => `<option value="${t.v}">${t.rotulo}</option>`).join('');
-$('#missao-item').innerHTML = ITENS_COMIDA.map(i => `<option value="${i.id}">${i.rotulo}</option>`).join('');
+
+// só item tipo "comida" de alguma loja entra em missão de entrega (ver nota em
+// admin.php) — a lista vem do catálogo de verdade, não de um array fixo: qualquer
+// item novo criado na aba Lojas já aparece aqui na hora
+async function atualizarItensComidaParaMissao(){
+  const d = await api('itens_loja_listar').catch(() => ({itens:[]}));
+  const itensComida = d.itens.filter(it => it.tipo !== 'acessorio');
+  const atual = $('#missao-item').value;
+  $('#missao-item').innerHTML = itensComida.map(it => `<option value="${it.id}">${it.emoji} ${esc(it.nome)}</option>`).join('')
+    || '<option value="">— nenhum item de comida cadastrado ainda —</option>';
+  if(itensComida.some(it => it.id === atual)) $('#missao-item').value = atual;
+}
 
 async function carregarMissoesCache(){
-  const d = await api('missoes_listar').catch(() => ({missoes:[]}));
+  const [d] = await Promise.all([
+    api('missoes_listar').catch(() => ({missoes:[]})),
+    atualizarItensComidaParaMissao(),
+  ]);
   missoesCache = d.missoes;
   return missoesCache;
 }
@@ -2356,7 +2381,7 @@ async function carregarItensLoja(){
     <tr><th>Ordem</th><th>Item</th><th>Loja</th><th>Preço</th><th>Status</th><th></th></tr>
     ${itensLojaCache.map(it => `<tr>
       <td>${it.ordem}</td>
-      <td>${it.imagemUrl ? `<img class="npc-thumb" src="${esc(it.imagemUrl)}">` : ''}${it.emoji} ${esc(it.nome)}${it.variantes.length?` <small style="opacity:.6">(${it.variantes.length} variante${it.variantes.length>1?'s':''})</small>`:''} <code style="opacity:.5">${it.id}</code></td>
+      <td>${it.imagemUrl ? `<img class="npc-thumb" src="${esc(it.imagemUrl)}">` : ''}${it.emoji} ${esc(it.nome)} <small style="opacity:.6">(${it.tipo === 'acessorio' ? 'acessório' : 'comida'})</small>${it.variantes.length?` <small style="opacity:.6">— ${it.variantes.length} variante${it.variantes.length>1?'s':''}</small>`:''} <code style="opacity:.5">${it.id}</code></td>
       <td>${esc(nomeLoja(it.lojaId))}</td>
       <td>🪙 ${it.preco}</td>
       <td><span class="selo ${it.publicado?'on':'off'}">${it.publicado?'publicado':'rascunho'}</span></td>
@@ -2429,6 +2454,7 @@ window.editarItemLoja = async (id) => {
   $('#item-loja-id').value = it.id; $('#item-loja-id').disabled = true;
   $('#item-loja-loja').value = it.lojaId;
   $('#item-loja-nome').value = it.nome; $('#item-loja-emoji').value = it.emoji;
+  $('#item-loja-tipo').value = it.tipo || 'comida';
   $('#item-loja-preco').value = it.preco; $('#item-loja-fome').value = it.fome; $('#item-loja-alegria').value = it.alegria;
   $('#item-loja-ordem').value = it.ordem; $('#item-loja-publicado').checked = it.publicado;
   itemLojaImagem = it.imagem;
@@ -2499,6 +2525,7 @@ $('#form-item-loja').addEventListener('submit', async e => {
     const id = $('#item-loja-id').value.trim();
     await api('item_loja_salvar', {method:'POST', corpo:{
       id, lojaId: $('#item-loja-loja').value, nome: $('#item-loja-nome').value.trim(), emoji: $('#item-loja-emoji').value.trim() || '🔹',
+      tipo: $('#item-loja-tipo').value,
       preco: Number($('#item-loja-preco').value) || 0, imagem: itemLojaImagem,
       fome: Number($('#item-loja-fome').value) || 0, alegria: Number($('#item-loja-alegria').value) || 0,
       variantes: variantesEdit.map(v => ({id:v.id, nome:v.nome, imagem:v.imagem||''})),

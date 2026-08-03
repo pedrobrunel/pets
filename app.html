@@ -1447,8 +1447,8 @@ const acharNpc = id => NPCS.find(n => n.id === id);
 // missões (catálogo central, cadastrado na aba Missões) — o NPC só referencia o id
 let MISSOES = [];
 const acharMissao = id => MISSOES.find(m => m.id === id);
-// itens colecionáveis soltos no mapa (aba Itens) — diferente da ITENS da loja (comida/
-// acessório, comprado com moeda): estes só existem, o aluno acha e pega, sem custo
+// itens colecionáveis soltos no mapa (aba Itens) — diferente dos itens de loja (comida/
+// acessório, comprado com moeda, ver ITENS_LOJA): estes só existem, o aluno acha e pega, sem custo
 let ITENS_MAPA = [];
 const acharItemMapa = id => ITENS_MAPA.find(it => it.id === id);
 // móveis (catálogo da Loja de Móveis, aba Móveis) e fundo da Casa — comprado com moedas,
@@ -1506,7 +1506,7 @@ function statusMissao(missaoId){
 }
 function faltaParaMissao(m){
   if(m.tipo === 'entregar_item'){
-    const item = ITENS.find(i => i.id === m.objetivo.itemId);
+    const item = ITENS_LOJA.find(i => i.id === m.objetivo.itemId);
     const tem = estado.inventario[m.objetivo.itemId] || 0;
     return `Ainda falta trazer ${item ? item.nome.toLowerCase() : 'o item'} (tem ${tem} de ${m.objetivo.quantidade}). Compre na Loja!`;
   }
@@ -2424,24 +2424,19 @@ function jogoSequencia(){
   proximaRodada();
 }
 
-/* ---------- 9. TELA: LOJA ---------- */
-const ITENS = [
-  {id:'melancia', emoji:'🍉', nome:'Melancia', preco:15, tipo:'comida', fome:22, alegria:6},
-  {id:'racao',    emoji:'🥣', nome:'Ração boa', preco:10, tipo:'comida', fome:16, alegria:2},
-  {id:'peixe',    emoji:'🐟', nome:'Peixe fresco', preco:22, tipo:'comida', fome:30, alegria:10},
-  {id:'bolo',     emoji:'🍰', nome:'Bolo de aniversário', preco:40, tipo:'comida', fome:18, alegria:26},
-  {id:'chapeu',   emoji:'🎩', nome:'Chapéu de festa', preco:70, tipo:'acessorio'},
-  {id:'oculos',   emoji:'🕶️', nome:'Óculos maneiro', preco:90, tipo:'acessorio'},
-  {id:'cachecol', emoji:'🧣', nome:'Cachecol roxo', preco:110, tipo:'acessorio'}
-];
+/* ---------- 9. TELA: LOJA DA VILA ----------
+   Uma loja como qualquer outra do motor genérico (ver seção 9c) — só que com id fixo
+   "lojadavila" e aba própria no rodapé, por ser a lojinha padrão do jogo desde sempre. */
 let lojaAba = 'comprar';
 function trocarAbaLoja(aba){ lojaAba = aba; RENDER.loja(); }
 RENDER.loja = () => {
-  const comidasNaMochila = ITENS.filter(i => i.tipo==='comida' && estado.inventario[i.id] > 0);
-  const acessoriosNaMochila = ITENS.filter(i => i.tipo==='acessorio' && estado.mochila.includes(i.id));
+  const itensVila = itensDaLoja('lojadavila').filter(dentroDaAgenda);
+  const comidasVila = itensVila.filter(it => it.tipo !== 'acessorio');
+  const acessoriosVila = itensVila.filter(it => it.tipo === 'acessorio');
+  const acessoriosNaMochila = ITENS_LOJA.filter(it => it.tipo === 'acessorio' && estado.mochila.includes(it.id));
   const itensEspeciais = estado.itensColetados.map(acharItemMapa).filter(Boolean);
   const comprasLoja = itensLojaNaMochila();
-  const mochilaVazia = !comidasNaMochila.length && !acessoriosNaMochila.length && !itensEspeciais.length && !comprasLoja.length;
+  const mochilaVazia = !acessoriosNaMochila.length && !itensEspeciais.length && !comprasLoja.length;
   $('#tela-loja').innerHTML = `
     <div class="titulo-secao"><h2>Loja da vila</h2><small>você tem 🪙 ${estado.moedas}</small></div>
     ${blocoNpcsDaTela('loja')}
@@ -2457,19 +2452,16 @@ RENDER.loja = () => {
     </div>
     ${lojaAba==='comprar' ? `
       <div class="titulo-secao"><h2 style="font-size:21px">Comidas</h2></div>
-      <div class="grade-3">${ITENS.filter(i=>i.tipo==='comida').map(cartaoItem).join('')}</div>
+      <div class="grade-3">${comidasVila.map(cartaoItemLoja).join('') || '<p class="vazio">Nenhuma comida à venda no momento.</p>'}</div>
       <div class="titulo-secao"><h2 style="font-size:21px">Acessórios</h2></div>
-      <div class="grade-3">${ITENS.filter(i=>i.tipo==='acessorio').map(cartaoItem).join('')}</div>
+      <div class="grade-3">${acessoriosVila.map(cartaoItemLoja).join('') || '<p class="vazio">Nenhum acessório à venda no momento.</p>'}</div>
     ` : `
-      ${comidasNaMochila.length ? `
+      ${comprasLoja.length ? `
         <div class="titulo-secao"><h2 style="font-size:21px">Comida guardada</h2><small>toque pra dar pro bicho</small></div>
-        <div class="grade-3">${comidasNaMochila.map(cartaoMochila).join('')}</div>` : ''}
+        <div class="grade-3">${comprasLoja.map(cartaoMochilaLoja).join('')}</div>` : ''}
       ${acessoriosNaMochila.length ? `
         <div class="titulo-secao"><h2 style="font-size:21px">Acessórios</h2></div>
-        <div class="grade-3">${acessoriosNaMochila.map(cartaoItem).join('')}</div>` : ''}
-      ${comprasLoja.length ? `
-        <div class="titulo-secao"><h2 style="font-size:21px">Comprado nas lojas</h2><small>toque pra dar pro bicho</small></div>
-        <div class="grade-3">${comprasLoja.map(cartaoMochilaLoja).join('')}</div>` : ''}
+        <div class="grade-3">${acessoriosNaMochila.map(cartaoItemLoja).join('')}</div>` : ''}
       ${itensEspeciais.length ? `
         <div class="titulo-secao"><h2 style="font-size:21px">Itens especiais</h2></div>
         <div class="grade-3">${itensEspeciais.map(it => `<div class="item-loja">
@@ -2480,53 +2472,7 @@ RENDER.loja = () => {
       ${mochilaVazia ? `<p class="vazio"><span class="emoji">🎒</span>Sua mochila tá vazia. Compre algo na aba Comprar!</p>` : ''}
     `}`;
 };
-function cartaoItem(i){
-  const tem = estado.mochila.includes(i.id);
-  const posto = estado.equipado.includes(i.id);
-  const podePagar = estado.moedas >= i.preco;
-  let rot, cls;
-  if(i.tipo==='acessorio' && tem){ rot = posto ? 'Tirar' : 'Vestir'; cls = posto ? 'roxo' : 'azul'; }
-  else { rot = '🪙 '+i.preco; cls = podePagar ? '' : 'bloq'; }
-  return `<div class="item-loja"><span class="emoji">${i.emoji}</span><b>${i.nome}</b>
-    <button class="btn pequeno ${cls}" onclick="usarItem('${i.id}')">${rot}</button></div>`;
-}
-function cartaoMochila(i){
-  return `<div class="item-loja"><span class="emoji">${i.emoji}</span><b>${i.nome}</b>
-    <small style="font-weight:900;color:#7F8C8D">tem ${estado.inventario[i.id]}</small>
-    <button class="btn pequeno laranja" onclick="consumirItem('${i.id}')">Dar pro bicho</button></div>`;
-}
-function usarItem(id){
-  const i = ITENS.find(x=>x.id===id);
-  if(i.tipo==='acessorio' && estado.mochila.includes(id)){
-    const posto = estado.equipado.includes(id);
-    estado.equipado = posto ? estado.equipado.filter(x=>x!==id) : [...estado.equipado, id];
-    brinde(posto ? 'Guardado na mochila.' : 'Ficou um charme! 😎');
-    agendarSalvar();
-    return RENDER.loja();
-  }
-  if(estado.moedas < i.preco) return brinde('Faltam 🪙 ' + (i.preco-estado.moedas) + '. Bora jogar um minigame!');
-  estado.moedas -= i.preco;
-  if(i.tipo==='comida'){
-    estado.inventario[id] = (estado.inventario[id]||0) + 1;
-    brinde(i.emoji + ' Guardado na mochila!');
-  } else {
-    estado.mochila.push(id); estado.equipado.push(id);
-    brinde('Novo acessório desbloqueado!');
-  }
-  atualizarHud(); RENDER.loja();
-  agendarSalvar();
-}
-function consumirItem(id){
-  const i = ITENS.find(x=>x.id===id);
-  if(!i || !(estado.inventario[id] > 0)) return;
-  estado.inventario[id]--;
-  estado.fome = lim(estado.fome + i.fome);
-  estado.felicidade = lim(estado.felicidade + i.alegria);
-  brinde(i.emoji + ' Nhac! Fome em ' + lim(estado.fome) + '.');
-  atualizarHud(); RENDER.loja();
-  agendarSalvar();
-}
-// itens comprados nas lojas genéricas (Lanchonete, Mercado etc) ficam no mesmo
+// itens comprados nas lojas genéricas (Lanchonete, Mercado, Loja da vila...) ficam no mesmo
 // estado.inventario dos itens antigos, mas com chave "itemId" ou "itemId__varianteId"
 // (ver chaveInventarioLoja, seção 9c) — por isso precisam de leitura/consumo à parte
 function itensLojaNaMochila(){
@@ -2616,12 +2562,25 @@ RENDER.lojagenerica = (lojaId) => {
   const disponiveis = itensDaLoja(lojaId).filter(dentroDaAgenda);
   $('#tela-lojagenerica').innerHTML = `
     <div class="titulo-secao"><h2>${esc(loja.emoji)} ${esc(loja.nome)}</h2><small>você tem 🪙 ${estado.moedas}</small></div>
+    ${blocoNpcsDaTela('loja:' + lojaId)}
     <div class="grade-3">${disponiveis.map(cartaoItemLoja).join('') || '<p class="vazio">Nada à venda no momento — volte mais tarde!</p>'}</div>`;
 };
 function cartaoItemLoja(it){
-  const podePagar = estado.moedas >= it.preco;
   const variantes = it.variantes || [];
   const imagemInicial = (variantes[0] && variantes[0].imagemUrl) || it.imagemUrl;
+  const podePagar = estado.moedas >= it.preco;
+  let botao;
+  // acessório: compra uma vez só, depois é veste/tira (sem custo) — comida: compra
+  // repetida, cada uma vai pro inventário até ser dada pro bicho (ver seção 9/9c)
+  if(it.tipo === 'acessorio'){
+    const tem = estado.mochila.includes(it.id);
+    const posto = estado.equipado.includes(it.id);
+    const rot = tem ? (posto ? 'Tirar' : 'Vestir') : ('🪙 ' + it.preco);
+    const cls = tem ? (posto ? 'roxo' : 'azul') : (podePagar ? '' : 'bloq');
+    botao = `<button class="btn pequeno ${cls}" onclick="usarItemLoja('${it.id}')">${rot}</button>`;
+  } else {
+    botao = `<button class="btn pequeno ${podePagar?'':'bloq'}" onclick="usarItemLoja('${it.id}')">🪙 ${it.preco}</button>`;
+  }
   return `<div class="item-loja">
     ${temAgenda(it) ? `<span class="chip" style="display:block;font-size:9px;padding:2px 6px;margin:-4px auto 6px;width:fit-content">⏳ por tempo limitado</span>` : ''}
     ${imagemInicial ? `<img id="img-item-loja-${it.id}" src="${esc(imagemInicial)}" alt="" style="width:48px;height:48px;object-fit:contain">` : `<span class="emoji">${esc(it.emoji)}</span>`}
@@ -2629,7 +2588,7 @@ function cartaoItemLoja(it){
     ${variantes.length ? `<select class="select-variante" id="sel-variante-${it.id}" onchange="trocarImagemItemLoja('${it.id}', this.value)">
       ${variantes.map(v => `<option value="${esc(v.id)}">${esc(v.nome)}</option>`).join('')}
     </select>` : ''}
-    <button class="btn pequeno ${podePagar?'':'bloq'}" onclick="comprarItemLoja('${it.id}')">🪙 ${it.preco}</button>
+    ${botao}
   </div>`;
 }
 function trocarImagemItemLoja(itemId, varianteId){
@@ -2638,17 +2597,34 @@ function trocarImagemItemLoja(itemId, varianteId){
   const img = $('#img-item-loja-' + itemId);
   if(img) img.src = (v && v.imagemUrl) || it.imagemUrl || '';
 }
-function comprarItemLoja(itemId){
+// atualiza só a tela de onde a compra partiu (Loja da vila tem aba própria no rodapé;
+// as demais lojas usam a tela genérica) — telaAtual diz qual das duas está aberta
+function atualizarTelaDaLoja(lojaId){
+  return telaAtual === 'loja' ? RENDER.loja() : RENDER.lojagenerica(lojaId);
+}
+function usarItemLoja(itemId){
   const it = ITENS_LOJA.find(x => x.id === itemId);
   if(!it) return;
-  const sel = $('#sel-variante-' + itemId);
-  const varianteId = sel ? sel.value : null;
+  if(it.tipo === 'acessorio' && estado.mochila.includes(itemId)){
+    const posto = estado.equipado.includes(itemId);
+    estado.equipado = posto ? estado.equipado.filter(x=>x!==itemId) : [...estado.equipado, itemId];
+    brinde(posto ? 'Guardado na mochila.' : 'Ficou um charme! 😎');
+    agendarSalvar();
+    return atualizarTelaDaLoja(it.lojaId);
+  }
   if(estado.moedas < it.preco) return brinde('Faltam 🪙 ' + (it.preco-estado.moedas) + '. Bora jogar um minigame!');
   estado.moedas -= it.preco;
-  const chave = chaveInventarioLoja(itemId, varianteId);
-  estado.inventario[chave] = (estado.inventario[chave]||0) + 1;
-  brinde(it.emoji + ' Guardado na mochila!');
-  atualizarHud(); RENDER.lojagenerica(it.lojaId);
+  if(it.tipo === 'acessorio'){
+    estado.mochila.push(itemId); estado.equipado.push(itemId);
+    brinde('Novo acessório desbloqueado!');
+  } else {
+    const sel = $('#sel-variante-' + itemId);
+    const varianteId = sel ? sel.value : null;
+    const chave = chaveInventarioLoja(itemId, varianteId);
+    estado.inventario[chave] = (estado.inventario[chave]||0) + 1;
+    brinde(it.emoji + ' Guardado na mochila!');
+  }
+  atualizarHud(); atualizarTelaDaLoja(it.lojaId);
   agendarSalvar();
 }
 

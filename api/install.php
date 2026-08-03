@@ -261,6 +261,7 @@ try {
     loja_id       VARCHAR(24) NOT NULL,
     nome          VARCHAR(60) NOT NULL,
     emoji         VARCHAR(8)  NOT NULL DEFAULT \'🔹\',
+    tipo          VARCHAR(12) NOT NULL DEFAULT \'comida\',
     preco         INT NOT NULL DEFAULT 0,
     imagem        VARCHAR(160) NOT NULL DEFAULT \'\',
     fome          INT NOT NULL DEFAULT 0,
@@ -278,6 +279,15 @@ try {
     FOREIGN KEY (loja_id) REFERENCES lojas(id) ON DELETE CASCADE,
     INDEX (loja_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  // "tipo" chegou depois de itens_loja já existir em produção (comida = consumível, dá
+  // fome/alegria; acessorio = veste/tira, sem efeito) — mesma checagem por
+  // INFORMATION_SCHEMA usada nas outras colunas novas deste arquivo.
+  $colunasItensLoja = array_column($pdo->query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'itens_loja'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+  if (!in_array('tipo', $colunasItensLoja, true)) {
+    $pdo->exec("ALTER TABLE itens_loja ADD COLUMN tipo VARCHAR(12) NOT NULL DEFAULT 'comida'");
+  }
   $pastaLojas = dirname(__DIR__) . '/assets/lojas';
   if (!is_dir($pastaLojas)) @mkdir($pastaLojas, 0755, true);
 
@@ -455,6 +465,35 @@ try {
     $lojasSemeadas = 2;
   }
 
+  /* migra a "Loja da vila" (antes um array fixo ITENS em app.html, com comida e
+     acessório misturados) pro motor genérico de Lojas — mesmos ids de sempre, pra quem
+     já tem itens no inventário/mochila continuar reconhecendo tudo certinho. Roda uma
+     vez só (checagem própria, independente da dos exemplos acima). */
+  $stLojaVila = $pdo->prepare('SELECT COUNT(*) FROM lojas WHERE id = ?');
+  $stLojaVila->execute(['lojadavila']);
+  $lojaVilaExiste = (int)$stLojaVila->fetchColumn();
+  $lojaVilaSemeada = false;
+  if ($lojaVilaExiste === 0) {
+    $pdo->prepare('INSERT INTO lojas (id, nome, emoji, publicado, ordem) VALUES (?, ?, ?, 1, ?)')
+      ->execute(['lojadavila', 'Loja da vila', '🏪', -1]);
+    $itensVila = [
+      ['melancia', 'Melancia',            '🍉', 'comida',    15, 22, 6,  1],
+      ['racao',    'Ração boa',           '🥣', 'comida',    10, 16, 2,  2],
+      ['peixe',    'Peixe fresco',        '🐟', 'comida',    22, 30, 10, 3],
+      ['bolo',     'Bolo de aniversário', '🍰', 'comida',    40, 18, 26, 4],
+      ['chapeu',   'Chapéu de festa',     '🎩', 'acessorio', 70, 0,  0,  5],
+      ['oculos',   'Óculos maneiro',      '🕶️', 'acessorio', 90, 0,  0,  6],
+      ['cachecol', 'Cachecol roxo',       '🧣', 'acessorio', 110, 0, 0,  7],
+    ];
+    $inserirItemVila = $pdo->prepare('INSERT INTO itens_loja
+      (id, loja_id, nome, emoji, tipo, preco, fome, alegria, variantes, publicado, ordem)
+      VALUES (?, \'lojadavila\', ?, ?, ?, ?, ?, ?, \'[]\', 1, ?)');
+    foreach ($itensVila as [$id, $nome, $emoji, $tipo, $preco, $fome, $alegria, $ordem]) {
+      $inserirItemVila->execute([$id, $nome, $emoji, $tipo, $preco, $fome, $alegria, $ordem]);
+    }
+    $lojaVilaSemeada = true;
+  }
+
   echo '<p>✅ Banco pronto! Tabelas criadas (ou já existiam — rodar de novo não faz mal).</p>'
      . ($pontosSemeados
         ? '<p>🗺️ Cena "Ilha do saber" criada com ' . $pontosSemeados . ' pontos clicáveis — edite em <code>/admin.html</code>, aba Mapas.</p>'
@@ -475,6 +514,9 @@ try {
      . ($lojasSemeadas
         ? '<p>🏪 Lojas de exemplo "Lanchonete" e "Mercado" criadas, com alguns itens — edite em <code>/admin.html</code>, aba Lojas. Falta só colocar um ponto tipo "Visitar uma loja" em cada uma, na aba Mapas, pra dar acesso.</p>'
         : '<p>🏪 Já havia loja cadastrada — nada foi semeado.</p>')
+     . ($lojaVilaSemeada
+        ? '<p>🎒 A "Loja da vila" (comida e acessórios da aba Loja, no rodapé do jogo) agora também é uma loja normal, editável em <code>/admin.html</code> → Lojas. Os itens têm os mesmos ids de sempre, então quem já tinha algo guardado continua com tudo certinho.</p>'
+        : '<p>🎒 A "Loja da vila" já tinha sido migrada — nada foi trocado.</p>')
      . '<p>Acesse <code>/admin.html</code> para entrar no painel. Depois é só apagar este arquivo (api/install.php) do servidor, ou deixá-lo — ele nunca sobrescreve conteúdo já existente.</p>';
 } catch (Throwable $e) {
   http_response_code(500);
