@@ -475,6 +475,8 @@ body.tela-cheia #app{padding:0;max-width:none}
   padding:12px 8px;text-align:center}
 .item-loja .emoji{font-size:32px;display:block}
 .item-loja b{display:block;font-size:13px;margin:4px 0 6px}
+.item-loja select.select-variante{width:100%;font-size:12px;padding:4px 6px;border-radius:8px;
+  border:2px solid var(--contorno);margin-bottom:6px;font-family:inherit}
 
 /* ---------- mural ---------- */
 .recado{background:#fff;border:var(--borda) solid var(--contorno);border-bottom-width:6px;border-radius:18px;
@@ -693,6 +695,8 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
   <section id="tela-loja" class="tela"></section>
   <!-- ====== LOJA DE MÓVEIS ====== -->
   <section id="tela-lojamoveis" class="tela"></section>
+  <!-- ====== LOJA GENÉRICA (Lanchonete, Mercado, etc — aba Lojas do admin) ====== -->
+  <section id="tela-lojagenerica" class="tela"></section>
   <!-- ====== MURAL ====== -->
   <section id="tela-mural" class="tela"></section>
   <!-- ====== PERFIL ====== -->
@@ -1452,6 +1456,12 @@ const acharItemMapa = id => ITENS_MAPA.find(it => it.id === id);
 let MOVEIS = [];
 const acharMovel = id => MOVEIS.find(m => m.id === id);
 let CASA_CONFIG = {fundoUrl:'', precoCasa:5000};
+// lojas genéricas (aba Lojas): cada ponto tipo "loja" num mapa aponta pro id de uma
+// loja daqui, e os itens (com variantes/agenda opcionais) ficam em ITENS_LOJA
+let LOJAS = [];
+const acharLoja = id => LOJAS.find(l => l.id === id);
+let ITENS_LOJA = [];
+const itensDaLoja = lojaId => ITENS_LOJA.filter(it => it.lojaId === lojaId);
 /* agenda: dias da semana, horário e período de datas, todos opcionais (vazio = sem
    restrição). Decidido com a hora do aparelho de quem está jogando — não tem por que ir
    no servidor só pra saber se "agora" está dentro da janela. Mesmo formato usado pelos
@@ -1612,6 +1622,7 @@ function abrirPonto(i, el){
   if(p.tipo === 'npc')   return abrirNpc(p.destino);
   if(p.tipo === 'gatilho') return ativarGatilho(p.destino);
   if(p.tipo === 'item') return coletarItem(p.destino);
+  if(p.tipo === 'loja') return ir('lojagenerica', p.destino);
   if(p.tipo === 'cena'){
     const proxima = acharCena(p.destino);
     if(!proxima) return brinde('Esse caminho ainda não leva a nenhum lugar. 🚧');
@@ -2429,7 +2440,8 @@ RENDER.loja = () => {
   const comidasNaMochila = ITENS.filter(i => i.tipo==='comida' && estado.inventario[i.id] > 0);
   const acessoriosNaMochila = ITENS.filter(i => i.tipo==='acessorio' && estado.mochila.includes(i.id));
   const itensEspeciais = estado.itensColetados.map(acharItemMapa).filter(Boolean);
-  const mochilaVazia = !comidasNaMochila.length && !acessoriosNaMochila.length && !itensEspeciais.length;
+  const comprasLoja = itensLojaNaMochila();
+  const mochilaVazia = !comidasNaMochila.length && !acessoriosNaMochila.length && !itensEspeciais.length && !comprasLoja.length;
   $('#tela-loja').innerHTML = `
     <div class="titulo-secao"><h2>Loja da vila</h2><small>você tem 🪙 ${estado.moedas}</small></div>
     ${blocoNpcsDaTela('loja')}
@@ -2455,6 +2467,9 @@ RENDER.loja = () => {
       ${acessoriosNaMochila.length ? `
         <div class="titulo-secao"><h2 style="font-size:21px">Acessórios</h2></div>
         <div class="grade-3">${acessoriosNaMochila.map(cartaoItem).join('')}</div>` : ''}
+      ${comprasLoja.length ? `
+        <div class="titulo-secao"><h2 style="font-size:21px">Comprado nas lojas</h2><small>toque pra dar pro bicho</small></div>
+        <div class="grade-3">${comprasLoja.map(cartaoMochilaLoja).join('')}</div>` : ''}
       ${itensEspeciais.length ? `
         <div class="titulo-secao"><h2 style="font-size:21px">Itens especiais</h2></div>
         <div class="grade-3">${itensEspeciais.map(it => `<div class="item-loja">
@@ -2511,6 +2526,43 @@ function consumirItem(id){
   atualizarHud(); RENDER.loja();
   agendarSalvar();
 }
+// itens comprados nas lojas genéricas (Lanchonete, Mercado etc) ficam no mesmo
+// estado.inventario dos itens antigos, mas com chave "itemId" ou "itemId__varianteId"
+// (ver chaveInventarioLoja, seção 9c) — por isso precisam de leitura/consumo à parte
+function itensLojaNaMochila(){
+  return Object.keys(estado.inventario)
+    .filter(chave => estado.inventario[chave] > 0)
+    .map(chave => {
+      const [itemId, varianteId] = chave.split('__');
+      const it = ITENS_LOJA.find(x => x.id === itemId);
+      if(!it) return null;
+      const variante = varianteId ? (it.variantes||[]).find(v => v.id === varianteId) : null;
+      return {chave, it, variante};
+    })
+    .filter(Boolean);
+}
+function cartaoMochilaLoja({chave, it, variante}){
+  const nome = variante ? it.nome + ' (' + variante.nome + ')' : it.nome;
+  const imagem = (variante && variante.imagemUrl) || it.imagemUrl;
+  const temEfeito = it.fome > 0 || it.alegria > 0;
+  return `<div class="item-loja">
+    ${imagem ? `<img src="${esc(imagem)}" alt="" style="width:32px;height:32px;object-fit:contain">` : `<span class="emoji">${esc(it.emoji)}</span>`}
+    <b>${esc(nome)}</b>
+    <small style="font-weight:900;color:#7F8C8D">tem ${estado.inventario[chave]}</small>
+    ${temEfeito ? `<button class="btn pequeno laranja" onclick="consumirItemLoja('${chave}')">Dar pro bicho</button>` : ''}
+  </div>`;
+}
+function consumirItemLoja(chave){
+  const itemId = chave.split('__')[0];
+  const it = ITENS_LOJA.find(x => x.id === itemId);
+  if(!it || !(estado.inventario[chave] > 0)) return;
+  estado.inventario[chave]--;
+  estado.fome = lim(estado.fome + it.fome);
+  estado.felicidade = lim(estado.felicidade + it.alegria);
+  brinde(it.emoji + ' Nhac! Fome em ' + lim(estado.fome) + '.');
+  atualizarHud(); RENDER.loja();
+  agendarSalvar();
+}
 
 /* ---------- 9b. TELA: LOJA DE MÓVEIS (decorar a Casa, estilo Club Penguin) ----------
    Só alcançável por um ponto tipo "tela" num mapa (aba Mapas) — sem aba própria no
@@ -2544,6 +2596,59 @@ function comprarMovel(id){
   estado.moveisComprados.push(id);
   brinde(m.nome + ' comprado! Vá pra Casa decorar. 🛋️');
   atualizarHud(); RENDER.lojamoveis();
+  agendarSalvar();
+}
+
+/* ---------- 9c. TELA: LOJA GENÉRICA (Lanchonete, Mercado, e quaisquer outras que Pedro
+   criar na aba Lojas do admin) ----------
+   Igual à Loja de Móveis: só alcançável por um ponto tipo "loja" num mapa. Cada loja tem
+   seus próprios itens (comida/objeto, com fome/alegria opcionais), que podem ter
+   variantes (ex.: sabores) escolhidas antes de comprar, e agenda opcional (mesmo formato
+   dos NPCs/móveis) pra "estoque por tempo limitado". Comprado, o item cai na mochila
+   (estado.inventario), separado por variante — mesma pilha usada na aba Mochila. */
+const chaveInventarioLoja = (itemId, varianteId) => varianteId ? itemId + '__' + varianteId : itemId;
+RENDER.lojagenerica = (lojaId) => {
+  const loja = acharLoja(lojaId);
+  if(!loja){
+    $('#tela-lojagenerica').innerHTML = `<p class="vazio" style="margin-top:80px"><span class="emoji">🏪</span>Loja não encontrada.</p>`;
+    return;
+  }
+  const disponiveis = itensDaLoja(lojaId).filter(dentroDaAgenda);
+  $('#tela-lojagenerica').innerHTML = `
+    <div class="titulo-secao"><h2>${esc(loja.emoji)} ${esc(loja.nome)}</h2><small>você tem 🪙 ${estado.moedas}</small></div>
+    <div class="grade-3">${disponiveis.map(cartaoItemLoja).join('') || '<p class="vazio">Nada à venda no momento — volte mais tarde!</p>'}</div>`;
+};
+function cartaoItemLoja(it){
+  const podePagar = estado.moedas >= it.preco;
+  const variantes = it.variantes || [];
+  const imagemInicial = (variantes[0] && variantes[0].imagemUrl) || it.imagemUrl;
+  return `<div class="item-loja">
+    ${temAgenda(it) ? `<span class="chip" style="display:block;font-size:9px;padding:2px 6px;margin:-4px auto 6px;width:fit-content">⏳ por tempo limitado</span>` : ''}
+    ${imagemInicial ? `<img id="img-item-loja-${it.id}" src="${esc(imagemInicial)}" alt="" style="width:48px;height:48px;object-fit:contain">` : `<span class="emoji">${esc(it.emoji)}</span>`}
+    <b>${esc(it.nome)}</b>
+    ${variantes.length ? `<select class="select-variante" id="sel-variante-${it.id}" onchange="trocarImagemItemLoja('${it.id}', this.value)">
+      ${variantes.map(v => `<option value="${esc(v.id)}">${esc(v.nome)}</option>`).join('')}
+    </select>` : ''}
+    <button class="btn pequeno ${podePagar?'':'bloq'}" onclick="comprarItemLoja('${it.id}')">🪙 ${it.preco}</button>
+  </div>`;
+}
+function trocarImagemItemLoja(itemId, varianteId){
+  const it = ITENS_LOJA.find(x => x.id === itemId);
+  const v = it && it.variantes.find(x => x.id === varianteId);
+  const img = $('#img-item-loja-' + itemId);
+  if(img) img.src = (v && v.imagemUrl) || it.imagemUrl || '';
+}
+function comprarItemLoja(itemId){
+  const it = ITENS_LOJA.find(x => x.id === itemId);
+  if(!it) return;
+  const sel = $('#sel-variante-' + itemId);
+  const varianteId = sel ? sel.value : null;
+  if(estado.moedas < it.preco) return brinde('Faltam 🪙 ' + (it.preco-estado.moedas) + '. Bora jogar um minigame!');
+  estado.moedas -= it.preco;
+  const chave = chaveInventarioLoja(itemId, varianteId);
+  estado.inventario[chave] = (estado.inventario[chave]||0) + 1;
+  brinde(it.emoji + ' Guardado na mochila!');
+  atualizarHud(); RENDER.lojagenerica(it.lojaId);
   agendarSalvar();
 }
 
@@ -2735,6 +2840,8 @@ async function carregarConteudo(){
     if(Array.isArray(dados.itens)) ITENS_MAPA = dados.itens;
     if(Array.isArray(dados.moveis)) MOVEIS = dados.moveis;
     if(dados.casaConfig) CASA_CONFIG = dados.casaConfig;
+    if(Array.isArray(dados.lojas)) LOJAS = dados.lojas;
+    if(Array.isArray(dados.itensLoja)) ITENS_LOJA = dados.itensLoja;
   }catch(e){ /* offline ou hospedagem sem PHP: fica com o conteúdo embutido */ }
 }
 // dispara já no carregamento da página — some com a espera perceptível, porque

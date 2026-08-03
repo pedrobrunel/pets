@@ -167,6 +167,10 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
 .npc-thumb{width:34px;height:34px;border-radius:8px;object-fit:cover;vertical-align:-10px;margin-right:6px;background:#F4F6F7}
 .movel-thumb{width:96px;max-height:96px;object-fit:contain;border-radius:8px;background:#F4F6F7;border:1px solid var(--contorno);padding:6px;display:block;margin-bottom:8px}
 .casa-fundo-thumb{max-width:100%;max-height:180px;border-radius:10px;border:1px solid var(--contorno);display:block}
+.linha-variante{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--contorno);border-radius:10px;margin-top:6px;background:#FAFBFB}
+.linha-variante input[type=text]{flex:1;padding:6px 8px;font-size:13px}
+.linha-variante img{width:34px;height:34px;object-fit:contain;border-radius:6px;background:#fff;border:1px solid var(--contorno)}
+.linha-variante button{flex:none}
 
 /* --- editor de diálogo em fluxograma (canvas de nós + linhas) --- */
 #btn-modo-lista.ativo, #btn-modo-fluxo.ativo{background:var(--tinta);color:#fff;border-color:var(--tinta)}
@@ -246,6 +250,7 @@ body.conectando-fluxo{cursor:crosshair}
       <button data-aba="missoes">🎯 Missões</button>
       <button data-aba="itens">🔭 Itens</button>
       <button data-aba="moveis">🛋️ Móveis</button>
+      <button data-aba="lojas">🏪 Lojas</button>
       <button data-aba="mundos">🎒 Mundos</button>
       <button data-aba="licoes">📚 Lições</button>
       <button data-aba="jogadores">🧒 Jogadores</button>
@@ -656,6 +661,88 @@ body.conectando-fluxo{cursor:crosshair}
       <div class="painel"><table id="tabela-moveis"></table></div>
     </section>
 
+    <section id="aba-lojas" class="oculto">
+      <h2>Lojas</h2>
+      <p class="sub">crie quantas lojas quiser (Lanchonete, Mercado...) — cada uma vira um destino de verdade: coloque um ponto tipo "Visitar uma loja" apontando pra ela num mapa (aba Mapas).</p>
+
+      <button class="btn" id="btn-nova-loja" style="margin-bottom:14px">+ Nova loja</button>
+      <form id="form-loja" class="oculto">
+        <h3 id="titulo-form-loja" style="font-size:16px">Nova loja</h3>
+        <div class="linha3">
+          <div><label>id (fixo, não dá pra editar depois)</label><input type="text" id="loja-id" placeholder="ex.: lanchonete"></div>
+          <div><label>emoji</label><input type="text" id="loja-emoji" placeholder="🍔" value="🏪"></div>
+          <div><label>ordem</label><input type="number" id="loja-ordem" value="0"></div>
+        </div>
+        <label>nome</label>
+        <input type="text" id="loja-nome" placeholder="ex.: Lanchonete">
+        <div class="check"><input type="checkbox" id="loja-publicado" checked><label style="margin:0" for="loja-publicado">publicada (aparece pro aluno)</label></div>
+        <div id="loja-aviso" class="aviso-form"></div>
+        <div class="rodape-form">
+          <button type="submit" class="btn mata">Salvar loja</button>
+          <button type="button" class="btn branco" id="btn-cancelar-loja">Cancelar</button>
+          <button type="button" class="btn erro" id="btn-excluir-loja" style="margin-left:auto">Excluir loja</button>
+        </div>
+      </form>
+      <div class="painel" style="margin-bottom:24px"><table id="tabela-lojas"></table></div>
+
+      <h2>Itens</h2>
+      <div class="linha3" style="align-items:end">
+        <div style="grid-column:1/-1"><label>filtrar por loja</label><select id="filtro-loja-itens" style="max-width:280px"></select></div>
+      </div>
+      <button class="btn" id="btn-novo-item-loja" style="margin:10px 0 14px">+ Novo item</button>
+
+      <form id="form-item-loja" class="oculto">
+        <h3 id="titulo-form-item-loja" style="font-size:16px">Novo item</h3>
+        <label>loja</label>
+        <select id="item-loja-loja"></select>
+        <div class="linha3" style="margin-top:8px">
+          <div><label>id (fixo, não dá pra editar depois)</label><input type="text" id="item-loja-id" placeholder="ex.: sucogelado"></div>
+          <div><label>emoji (usado até ter imagem)</label><input type="text" id="item-loja-emoji" placeholder="🧃" value="🔹"></div>
+          <div><label>ordem</label><input type="number" id="item-loja-ordem" value="0"></div>
+        </div>
+        <label>nome</label>
+        <input type="text" id="item-loja-nome" placeholder="ex.: Suco gelado">
+        <label>imagem base (opcional)</label>
+        <div class="upload" id="zona-upload-item-loja">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+        <input type="file" id="input-item-loja" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
+        <div id="preview-item-loja"></div>
+        <p class="dica-editor">Sem imagem, o item aparece com o emoji. Serve de imagem padrão quando não tiver variante escolhida (ou a variante não tiver foto própria).</p>
+
+        <div class="linha3" style="margin-top:10px">
+          <div><label>preço (moedas)</label><input type="number" id="item-loja-preco" value="10" min="0"></div>
+          <div><label>fome (opcional)</label><input type="number" id="item-loja-fome" value="0" min="0" max="100"></div>
+          <div><label>alegria (opcional)</label><input type="number" id="item-loja-alegria" value="0" min="0" max="100"></div>
+        </div>
+        <p class="dica-editor">Fome/alegria zerados: o item só fica guardado na mochila (ex.: um brinquedo). Preenchidos: o aluno pode "dar pro bicho" e ganha esses pontos, igual à comida da Loja da vila.</p>
+
+        <label style="margin-top:6px">variantes <span style="font-weight:700;color:#7F8C8D">(opcional — sabores, tamanhos... o aluno escolhe uma na hora de comprar)</span></label>
+        <div id="lista-variantes"></div>
+        <button type="button" class="btn linha branco" id="btn-add-variante" style="margin-top:6px">+ variante</button>
+
+        <label style="margin-top:14px">estoque por tempo limitado <span style="font-weight:700;color:#7F8C8D">(tudo opcional — vazio = sempre à venda)</span></label>
+        <div class="dias-semana" id="item-loja-dias-semana"></div>
+        <div class="linha2" style="margin-top:8px">
+          <div><label style="margin-top:6px">horário — de</label><input type="text" id="item-loja-hora-inicio" placeholder="08:00" maxlength="5"></div>
+          <div><label style="margin-top:6px">até</label><input type="text" id="item-loja-hora-fim" placeholder="18:00" maxlength="5"></div>
+        </div>
+        <div class="linha2">
+          <div><label style="margin-top:6px">só a partir de</label><input type="text" id="item-loja-data-inicio" placeholder="AAAA-MM-DD" maxlength="10"></div>
+          <div><label style="margin-top:6px">até</label><input type="text" id="item-loja-data-fim" placeholder="AAAA-MM-DD" maxlength="10"></div>
+        </div>
+
+        <div class="check" style="margin-top:10px"><input type="checkbox" id="item-loja-publicado" checked><label style="margin:0" for="item-loja-publicado">publicado (aparece pro aluno)</label></div>
+
+        <div id="item-loja-aviso" class="aviso-form"></div>
+        <div class="rodape-form">
+          <button type="submit" class="btn mata">Salvar item</button>
+          <button type="button" class="btn branco" id="btn-cancelar-item-loja">Cancelar</button>
+          <button type="button" class="btn erro" id="btn-excluir-item-loja" style="margin-left:auto">Excluir item</button>
+        </div>
+      </form>
+
+      <div class="painel"><table id="tabela-itens-loja"></table></div>
+    </section>
+
     <section id="aba-mundos" class="oculto">
       <h2>Mundos</h2>
       <p class="sub">cada mundo é uma matéria (a trilha de lições). Pra ele aparecer no mapa, crie um ponto na aba Mapas.</p>
@@ -840,6 +927,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   if(b.dataset.aba === 'missoes') carregarMissoes();
   if(b.dataset.aba === 'itens') carregarItens();
   if(b.dataset.aba === 'moveis') { carregarMoveis(); carregarCasaFundo(); }
+  if(b.dataset.aba === 'lojas') carregarLojas();
 });
 
 /* ---------- painel (métricas) ---------- */
@@ -866,6 +954,7 @@ const TIPOS_PONTO = [
   {v:'npc',     rotulo:'Conversar com um NPC'},
   {v:'gatilho', rotulo:'Ativar um gatilho de missão'},
   {v:'item',    rotulo:'Pegar um item (vai pro inventário)'},
+  {v:'loja',    rotulo:'Visitar uma loja'},
   {v:'tela',    rotulo:'Uma tela do jogo'},
   {v:'aviso',   rotulo:'Só mostrar um recadinho'},
 ];
@@ -2168,6 +2257,259 @@ $('#btn-remover-casa-fundo').onclick = async () => {
   await api('casa_fundo_remover', {method:'POST', corpo:{}});
   carregarCasaFundo();
 };
+
+/* ---------- Lojas genéricas (Lanchonete, Mercado, e as que forem criadas) ---------- */
+let lojasCache = [];
+async function carregarLojas(){
+  const d = await api('lojas_listar').catch(() => ({lojas:[]}));
+  lojasCache = d.lojas;
+  $('#tabela-lojas').innerHTML = `
+    <tr><th>Ordem</th><th>Loja</th><th>Status</th><th></th></tr>
+    ${lojasCache.map(l => `<tr>
+      <td>${l.ordem}</td>
+      <td>${l.emoji} ${esc(l.nome)} <code style="opacity:.5">${l.id}</code></td>
+      <td><span class="selo ${l.publicado?'on':'off'}">${l.publicado?'publicada':'rascunho'}</span></td>
+      <td class="acoes">
+        <button class="btn linha branco" onclick="editarLoja('${l.id}')">Editar</button>
+        <button class="btn linha erro" onclick="excluirLoja('${l.id}','${esc(l.nome)}')">Excluir</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="4">Nenhuma loja ainda.</td></tr>'}`;
+  const opcoesLoja = lojasCache.map(l => `<option value="${l.id}">${l.emoji} ${esc(l.nome)}</option>`).join('');
+  $('#item-loja-loja').innerHTML = opcoesLoja || '<option value="">— crie uma loja primeiro —</option>';
+  $('#filtro-loja-itens').innerHTML = `<option value="">Todas as lojas</option>` + opcoesLoja;
+  carregarItensLoja();
+}
+function limparFormLoja(){
+  $('#form-loja').reset();
+  $('#loja-id').disabled = false;
+  $('#loja-emoji').value = '🏪';
+  $('#loja-aviso').style.display = 'none';
+  $('#btn-excluir-loja').classList.add('oculto');
+}
+$('#btn-nova-loja').onclick = () => {
+  limparFormLoja();
+  $('#titulo-form-loja').textContent = 'Nova loja';
+  $('#form-loja').classList.remove('oculto');
+  $('#form-loja').scrollIntoView({behavior:'smooth'});
+};
+$('#btn-cancelar-loja').onclick = () => $('#form-loja').classList.add('oculto');
+window.editarLoja = async (id) => {
+  const l = await api('loja_obter', {query:`&id=${encodeURIComponent(id)}`}).catch(e => { alert(e.message); return null; });
+  if(!l) return;
+  limparFormLoja();
+  $('#loja-id').value = l.id; $('#loja-id').disabled = true;
+  $('#loja-nome').value = l.nome; $('#loja-emoji').value = l.emoji;
+  $('#loja-ordem').value = l.ordem; $('#loja-publicado').checked = l.publicado;
+  $('#btn-excluir-loja').classList.remove('oculto');
+  $('#titulo-form-loja').textContent = 'Editar loja';
+  $('#form-loja').classList.remove('oculto');
+  $('#form-loja').scrollIntoView({behavior:'smooth'});
+};
+window.excluirLoja = async (id, nome) => {
+  if(!confirm(`Excluir a loja "${nome}"? Todos os itens dela também somem.`)) return;
+  const r = await api('loja_excluir', {method:'POST', corpo:{id}});
+  if(r.itensAfetados) alert(`Loja excluída junto com ${r.itensAfetados} item(ns).`);
+  $('#form-loja').classList.add('oculto');
+  carregarLojas();
+};
+$('#btn-excluir-loja').onclick = () => {
+  const id = $('#loja-id').value;
+  const l = lojasCache.find(x => x.id === id);
+  if(l) excluirLoja(id, l.nome);
+};
+$('#form-loja').addEventListener('submit', async e => {
+  e.preventDefault();
+  const aviso = $('#loja-aviso');
+  aviso.style.display = 'none';
+  try{
+    const id = $('#loja-id').value.trim();
+    await api('loja_salvar', {method:'POST', corpo:{
+      id, nome: $('#loja-nome').value.trim(), emoji: $('#loja-emoji').value.trim() || '🏪',
+      publicado: $('#loja-publicado').checked, ordem: Number($('#loja-ordem').value) || 0,
+    }});
+    $('#form-loja').classList.add('oculto');
+    carregarLojas();
+  }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
+});
+$('#filtro-loja-itens').addEventListener('change', carregarItensLoja);
+
+/* ---------- itens das lojas genéricas (com variantes e agenda) ---------- */
+let itensLojaCache = [];
+let variantesEdit = [];
+let itemLojaDiasSemanaSel = [];
+$('#item-loja-dias-semana').innerHTML = DIAS_SEMANA.map(d => `<button type="button" data-dia="${d.v}">${d.rotulo}</button>`).join('');
+$$('#item-loja-dias-semana button').forEach(b => b.onclick = () => {
+  const dia = Number(b.dataset.dia);
+  itemLojaDiasSemanaSel = itemLojaDiasSemanaSel.includes(dia) ? itemLojaDiasSemanaSel.filter(d => d !== dia) : [...itemLojaDiasSemanaSel, dia];
+  pintarItemLojaDiasSemana();
+});
+function pintarItemLojaDiasSemana(){
+  $$('#item-loja-dias-semana button').forEach(b => b.classList.toggle('ativo', itemLojaDiasSemanaSel.includes(Number(b.dataset.dia))));
+}
+
+async function carregarItensLoja(){
+  const lojaId = $('#filtro-loja-itens').value;
+  const d = await api('itens_loja_listar', {query: lojaId ? `&loja=${encodeURIComponent(lojaId)}` : ''}).catch(() => ({itens:[]}));
+  itensLojaCache = d.itens;
+  const nomeLoja = id => lojasCache.find(l => l.id === id)?.nome || id;
+  $('#tabela-itens-loja').innerHTML = `
+    <tr><th>Ordem</th><th>Item</th><th>Loja</th><th>Preço</th><th>Status</th><th></th></tr>
+    ${itensLojaCache.map(it => `<tr>
+      <td>${it.ordem}</td>
+      <td>${it.imagemUrl ? `<img class="npc-thumb" src="${esc(it.imagemUrl)}">` : ''}${it.emoji} ${esc(it.nome)}${it.variantes.length?` <small style="opacity:.6">(${it.variantes.length} variante${it.variantes.length>1?'s':''})</small>`:''} <code style="opacity:.5">${it.id}</code></td>
+      <td>${esc(nomeLoja(it.lojaId))}</td>
+      <td>🪙 ${it.preco}</td>
+      <td><span class="selo ${it.publicado?'on':'off'}">${it.publicado?'publicado':'rascunho'}</span></td>
+      <td class="acoes">
+        <button class="btn linha branco" onclick="editarItemLoja('${it.id}')">Editar</button>
+        <button class="btn linha branco" onclick="duplicarItemLoja('${it.id}','${esc(it.nome)}')">Duplicar</button>
+        <button class="btn linha erro" onclick="excluirItemLoja('${it.id}','${esc(it.nome)}')">Excluir</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="6">Nenhum item ainda.</td></tr>'}`;
+}
+function renderVariantes(){
+  $('#lista-variantes').innerHTML = variantesEdit.map((v, i) => `<div class="linha-variante">
+    ${v.imagemUrl ? `<img src="${esc(v.imagemUrl)}">` : ''}
+    <input type="text" placeholder="código (ex: morango)" value="${esc(v.id)}" oninput="variantesEdit[${i}].id=this.value.trim()">
+    <input type="text" placeholder="nome (ex: Morango)" value="${esc(v.nome)}" oninput="variantesEdit[${i}].nome=this.value">
+    <input type="file" class="oculto" id="input-variante-${i}" accept=".webp,.png,.jpg,.jpeg,image/*">
+    <button type="button" class="btn linha branco" onclick="$('#input-variante-${i}').click()">🖼️</button>
+    <button type="button" class="btn linha erro" onclick="variantesEdit.splice(${i},1); renderVariantes();">✕</button>
+  </div>`).join('') || '<p class="sub" style="margin:6px 0 0">Nenhuma variante — o item vende do jeito único mesmo.</p>';
+  variantesEdit.forEach((v, i) => {
+    $(`#input-variante-${i}`)?.addEventListener('change', e => { if(e.target.files[0]) enviarImagemVariante(i, e.target.files[0]); });
+  });
+}
+$('#btn-add-variante').onclick = () => {
+  if(variantesEdit.length >= 8) return alert('Máximo de 8 variantes por item.');
+  variantesEdit.push({id:'', nome:'', imagem:'', imagemUrl:''});
+  renderVariantes();
+};
+async function enviarImagemVariante(i, arquivo){
+  const aviso = $('#item-loja-aviso');
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    const r = await fetch('api/admin.php?acao=item_loja_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    variantesEdit[i].imagem = d.imagem;
+    variantesEdit[i].imagemUrl = d.imagemUrl;
+    renderVariantes();
+  }catch(e){ aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block'; }
+}
+
+function limparFormItemLoja(){
+  $('#form-item-loja').reset();
+  $('#item-loja-id').disabled = false;
+  $('#item-loja-emoji').value = '🔹';
+  $('#item-loja-aviso').style.display = 'none';
+  $('#btn-excluir-item-loja').classList.add('oculto');
+  $('#preview-item-loja').innerHTML = '';
+  itemLojaImagem = '';
+  variantesEdit = [];
+  renderVariantes();
+  itemLojaDiasSemanaSel = [];
+  pintarItemLojaDiasSemana();
+  if($('#filtro-loja-itens').value) $('#item-loja-loja').value = $('#filtro-loja-itens').value;
+}
+let itemLojaImagem = '';
+$('#btn-novo-item-loja').onclick = () => {
+  if(!lojasCache.length) return alert('Crie uma loja primeiro.');
+  limparFormItemLoja();
+  $('#titulo-form-item-loja').textContent = 'Novo item';
+  $('#form-item-loja').classList.remove('oculto');
+  $('#form-item-loja').scrollIntoView({behavior:'smooth'});
+};
+$('#btn-cancelar-item-loja').onclick = () => $('#form-item-loja').classList.add('oculto');
+window.editarItemLoja = async (id) => {
+  const it = await api('item_loja_obter', {query:`&id=${encodeURIComponent(id)}`}).catch(e => { alert(e.message); return null; });
+  if(!it) return;
+  limparFormItemLoja();
+  $('#item-loja-id').value = it.id; $('#item-loja-id').disabled = true;
+  $('#item-loja-loja').value = it.lojaId;
+  $('#item-loja-nome').value = it.nome; $('#item-loja-emoji').value = it.emoji;
+  $('#item-loja-preco').value = it.preco; $('#item-loja-fome').value = it.fome; $('#item-loja-alegria').value = it.alegria;
+  $('#item-loja-ordem').value = it.ordem; $('#item-loja-publicado').checked = it.publicado;
+  itemLojaImagem = it.imagem;
+  $('#preview-item-loja').innerHTML = it.imagemUrl ? `<img class="movel-thumb" src="${esc(it.imagemUrl)}">` : '';
+  variantesEdit = it.variantes.map(v => ({...v}));
+  renderVariantes();
+  itemLojaDiasSemanaSel = it.diasSemana ? it.diasSemana.split(',').map(Number) : [];
+  pintarItemLojaDiasSemana();
+  $('#item-loja-hora-inicio').value = it.horaInicio || '';
+  $('#item-loja-hora-fim').value = it.horaFim || '';
+  $('#item-loja-data-inicio').value = it.dataInicio || '';
+  $('#item-loja-data-fim').value = it.dataFim || '';
+  $('#btn-excluir-item-loja').classList.remove('oculto');
+  $('#titulo-form-item-loja').textContent = 'Editar item';
+  $('#form-item-loja').classList.remove('oculto');
+  $('#form-item-loja').scrollIntoView({behavior:'smooth'});
+};
+window.excluirItemLoja = async (id, nome) => {
+  if(!confirm(`Excluir o item "${nome}"?`)) return;
+  await api('item_loja_excluir', {method:'POST', corpo:{id}});
+  $('#form-item-loja').classList.add('oculto');
+  carregarItensLoja();
+};
+window.duplicarItemLoja = async (id, nome) => {
+  const novoId = prompt(`Duplicar "${nome}" — id do item novo (2 a 24 letras minúsculas ou números):`, id + '2');
+  if(!novoId) return;
+  try{
+    const r = await api('item_loja_duplicar', {method:'POST', corpo:{id, novoId: novoId.trim()}});
+    await carregarItensLoja();
+    editarItemLoja(r.id);
+  }catch(e){ alert(e.message); }
+};
+$('#btn-excluir-item-loja').onclick = () => {
+  const id = $('#item-loja-id').value;
+  const it = itensLojaCache.find(x => x.id === id);
+  if(it) excluirItemLoja(id, it.nome);
+};
+$('#zona-upload-item-loja').onclick = () => $('#input-item-loja').click();
+$('#input-item-loja').onchange = e => { if(e.target.files[0]) enviarImagemItemLoja(e.target.files[0]); };
+['dragover','drop'].forEach(ev => $('#zona-upload-item-loja').addEventListener(ev, e => e.preventDefault()));
+$('#zona-upload-item-loja').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemItemLoja(e.dataTransfer.files[0]); });
+async function enviarImagemItemLoja(arquivo){
+  const aviso = $('#item-loja-aviso');
+  const zona = $('#zona-upload-item-loja');
+  const textoOriginal = zona.textContent;
+  zona.textContent = '⏳ Enviando…';
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    const r = await fetch('api/admin.php?acao=item_loja_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    itemLojaImagem = d.imagem;
+    $('#preview-item-loja').innerHTML = `<img class="movel-thumb" src="${esc(d.imagemUrl)}">`;
+    aviso.className = 'aviso-form ok'; aviso.textContent = 'Imagem enviada. Agora salve o item.'; aviso.style.display = 'block';
+  }catch(e){
+    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
+  }finally{ zona.textContent = textoOriginal; }
+}
+$('#form-item-loja').addEventListener('submit', async e => {
+  e.preventDefault();
+  const aviso = $('#item-loja-aviso');
+  aviso.style.display = 'none';
+  for(const v of variantesEdit){
+    if(!v.id || !v.nome) return (aviso.className='aviso-form erro', aviso.textContent='Preencha código e nome de todas as variantes (ou remova as vazias).', aviso.style.display='block');
+  }
+  try{
+    const id = $('#item-loja-id').value.trim();
+    await api('item_loja_salvar', {method:'POST', corpo:{
+      id, lojaId: $('#item-loja-loja').value, nome: $('#item-loja-nome').value.trim(), emoji: $('#item-loja-emoji').value.trim() || '🔹',
+      preco: Number($('#item-loja-preco').value) || 0, imagem: itemLojaImagem,
+      fome: Number($('#item-loja-fome').value) || 0, alegria: Number($('#item-loja-alegria').value) || 0,
+      variantes: variantesEdit.map(v => ({id:v.id, nome:v.nome, imagem:v.imagem||''})),
+      diasSemana: itemLojaDiasSemanaSel.join(','), horaInicio: $('#item-loja-hora-inicio').value.trim(), horaFim: $('#item-loja-hora-fim').value.trim(),
+      dataInicio: $('#item-loja-data-inicio').value.trim(), dataFim: $('#item-loja-data-fim').value.trim(),
+      publicado: $('#item-loja-publicado').checked, ordem: Number($('#item-loja-ordem').value) || 0,
+    }});
+    $('#form-item-loja').classList.add('oculto');
+    carregarItensLoja();
+  }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
+});
 
 /* ---------- mundos ---------- */
 let mundosCache = [];
