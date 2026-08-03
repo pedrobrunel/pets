@@ -94,16 +94,24 @@ const TELAS_VALIDAS = ['casa', 'trilhas', 'arcade', 'loja', 'mural', 'perfil', '
 // quem posiciona um NPC é o ponto no mapa mesmo, senão teria dois jeitos de fazer a
 // mesma coisa competindo entre si.
 const TELAS_NPC = ['casa', 'arcade', 'loja', 'mural', 'perfil', 'lojamoveis'];
+// além das telas fixas acima, um NPC também pode flutuar dentro de uma loja genérica
+// específica (aba Lojas) — "tela" nesse caso vem como "loja:<id>", id validado contra a
+// tabela lojas (é dinâmica, não dá pra fechar num enum como as outras)
+function telaNpcValida(string $tela): bool {
+  if ($tela === '' || in_array($tela, TELAS_NPC, true)) return true;
+  if (str_starts_with($tela, 'loja:')) {
+    $st = bd()->prepare('SELECT COUNT(*) FROM lojas WHERE id = ?');
+    $st->execute([substr($tela, 5)]);
+    return (bool)$st->fetchColumn();
+  }
+  return false;
+}
 const ROTULOS_TELA = ['lojamoveis' => 'Loja de Móveis', 'editarcasa' => 'Casa — editor de móveis'];
 const EXTENSOES_IMAGEM = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg'];
 
 /* catálogo de objetivos de missão — três tipos hoje, mas fechado e validado igual a
    TIPOS_BLOCO/TIPOS_PONTO, pra dar pra crescer sem virar bagunça de string livre. */
 const TIPOS_MISSAO = ['entregar_item', 'visitar_cena', 'gatilho'];
-// só os itens tipo "comida" da loja entram em missão de entrega: são os únicos que o
-// jogador guarda com quantidade (estado.inventario); acessório vai pra mochila sem
-// contador, não dá pra pedir "traga 3". Espelha o ITENS de app.html de propósito.
-const ITENS_COMIDA = ['melancia', 'racao', 'peixe', 'bolo'];
 
 function validarId(string $id): bool {
   return (bool)preg_match('/^[a-z0-9]{2,24}$/', $id);
@@ -238,11 +246,14 @@ function validarVariantes($variantes): ?string {
 }
 
 /** valida um item de uma loja genérica. @return string|null mensagem de erro, ou null se ok */
+const TIPOS_ITEM_LOJA = ['comida', 'acessorio'];
 function validarItemLoja(array $it): ?string {
   $nome = trim((string)($it['nome'] ?? ''));
   if ($nome === '' || mb_strlen($nome) > 60) return '"nome" precisa ter de 1 a 60 caracteres.';
   $emoji = (string)($it['emoji'] ?? '🔹');
   if ($emoji === '' || mb_strlen($emoji) > 8) return '"emoji" é obrigatório.';
+  $tipoItem = (string)($it['tipo'] ?? 'comida');
+  if (!in_array($tipoItem, TIPOS_ITEM_LOJA, true)) return '"tipo" precisa ser "comida" ou "acessorio".';
   if (!is_numeric($it['preco'] ?? null) || (int)$it['preco'] < 0 || (int)$it['preco'] > 100000) {
     return '"preco" precisa ser um número entre 0 e 100000.';
   }
@@ -368,7 +379,11 @@ function validarMissao(array $m): ?string {
   if (!is_array($objetivo)) return '"objetivo" inválido.';
   if ($tipo === 'entregar_item') {
     $itemId = (string)($objetivo['itemId'] ?? '');
-    if (!in_array($itemId, ITENS_COMIDA, true)) return 'Escolha um item válido da loja pra entregar (' . implode(', ', ITENS_COMIDA) . ').';
+    // só item tipo "comida" entra em missão de entrega: é o único que o jogador guarda
+    // com quantidade (estado.inventario); acessório vai pra mochila sem contador
+    $st = bd()->prepare("SELECT COUNT(*) FROM itens_loja WHERE id = ? AND tipo = 'comida'");
+    $st->execute([$itemId]);
+    if (!$st->fetchColumn()) return "Escolha um item de comida que exista numa loja (\"$itemId\" não encontrado).";
     $quantidade = $objetivo['quantidade'] ?? null;
     if (!is_int($quantidade) || $quantidade < 1 || $quantidade > 99) return '"quantidade" precisa ser um número inteiro de 1 a 99.';
   } elseif ($tipo === 'visitar_cena') {
@@ -965,7 +980,7 @@ try {
     $imagemTipo = (string)($d['imagemTipo'] ?? 'png');
     if (!in_array($imagemTipo, ['png', 'lottie'], true)) responder(['erro' => '"imagemTipo" precisa ser "png" ou "lottie".'], 422);
     $tela = trim((string)($d['tela'] ?? ''));
-    if ($tela !== '' && !in_array($tela, TELAS_NPC, true)) responder(['erro' => '"tela" precisa ser uma destas: ' . implode(', ', TELAS_NPC) . ', ou vazio (só via ponto no mapa).'], 422);
+    if (!telaNpcValida($tela)) responder(['erro' => '"tela" precisa ser uma tela válida, uma loja existente ("loja:id"), ou vazio (só via ponto no mapa).'], 422);
 
     $erroAgenda = validarAgenda($d);
     if ($erroAgenda) responder(['erro' => $erroAgenda], 422);
@@ -1448,6 +1463,7 @@ try {
   function linhaItemLoja(array $it): array {
     return [
       'id' => $it['id'], 'lojaId' => $it['loja_id'], 'nome' => $it['nome'], 'emoji' => $it['emoji'],
+      'tipo' => $it['tipo'],
       'preco' => (int)$it['preco'], 'imagem' => $it['imagem'], 'imagemUrl' => caminhoPublicoLoja($it['imagem']),
       'fome' => (int)$it['fome'], 'alegria' => (int)$it['alegria'],
       'variantes' => array_map(fn($v) => [
@@ -1491,15 +1507,15 @@ try {
     $variantes = array_map(fn($v) => [
       'id' => (string)$v['id'], 'nome' => trim((string)$v['nome']), 'imagem' => trim((string)($v['imagem'] ?? '')),
     ], $d['variantes'] ?? []);
-    bd()->prepare('INSERT INTO itens_loja (id, loja_id, nome, emoji, preco, imagem, fome, alegria, variantes,
+    bd()->prepare('INSERT INTO itens_loja (id, loja_id, nome, emoji, tipo, preco, imagem, fome, alegria, variantes,
         dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, publicado, ordem)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE loja_id=VALUES(loja_id), nome=VALUES(nome), emoji=VALUES(emoji), preco=VALUES(preco),
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE loja_id=VALUES(loja_id), nome=VALUES(nome), emoji=VALUES(emoji), tipo=VALUES(tipo), preco=VALUES(preco),
         imagem=VALUES(imagem), fome=VALUES(fome), alegria=VALUES(alegria), variantes=VALUES(variantes),
         dias_semana=VALUES(dias_semana), hora_inicio=VALUES(hora_inicio), hora_fim=VALUES(hora_fim),
         data_inicio=VALUES(data_inicio), data_fim=VALUES(data_fim), publicado=VALUES(publicado), ordem=VALUES(ordem)')
       ->execute([
-        $id, $lojaId, trim((string)$d['nome']), (string)($d['emoji'] ?? '🔹'), (int)$d['preco'],
+        $id, $lojaId, trim((string)$d['nome']), (string)($d['emoji'] ?? '🔹'), (string)($d['tipo'] ?? 'comida'), (int)$d['preco'],
         trim((string)($d['imagem'] ?? '')), (int)($d['fome'] ?? 0), (int)($d['alegria'] ?? 0),
         json_encode($variantes, JSON_UNESCAPED_UNICODE),
         normalizarDiasSemana(trim((string)($d['diasSemana'] ?? ''))), trim((string)($d['horaInicio'] ?? '')), trim((string)($d['horaFim'] ?? '')),
@@ -1525,11 +1541,11 @@ try {
     $st->execute([$id]);
     $it = $st->fetch(PDO::FETCH_ASSOC);
     if (!$it) responder(['erro' => 'Item não encontrado.'], 404);
-    bd()->prepare('INSERT INTO itens_loja (id, loja_id, nome, emoji, preco, imagem, fome, alegria, variantes,
+    bd()->prepare('INSERT INTO itens_loja (id, loja_id, nome, emoji, tipo, preco, imagem, fome, alegria, variantes,
         dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, publicado, ordem)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)')
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)')
       ->execute([
-        $novoId, $it['loja_id'], $it['nome'] . ' (cópia)', $it['emoji'], $it['preco'], $it['imagem'], $it['fome'], $it['alegria'],
+        $novoId, $it['loja_id'], $it['nome'] . ' (cópia)', $it['emoji'], $it['tipo'], $it['preco'], $it['imagem'], $it['fome'], $it['alegria'],
         $it['variantes'], $it['dias_semana'], $it['hora_inicio'], $it['hora_fim'], $it['data_inicio'], $it['data_fim'], $it['ordem'],
       ]);
     responder(['ok' => true, 'id' => $novoId]);
