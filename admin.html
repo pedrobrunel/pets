@@ -676,6 +676,14 @@ body.conectando-fluxo{cursor:crosshair}
         <label>nome</label>
         <input type="text" id="loja-nome" placeholder="ex.: Lanchonete">
         <div class="check"><input type="checkbox" id="loja-publicado" checked><label style="margin:0" for="loja-publicado">publicada (aparece pro aluno)</label></div>
+
+        <label style="margin-top:14px">cabeçalho com imagem <span style="font-weight:700;color:#7F8C8D">(opcional — aparece em cima, na tela da loja)</span></label>
+        <div class="upload" id="zona-upload-loja">🖼️ Arraste a imagem aqui, ou clique pra escolher — proporção ideal 350×150</div>
+        <input type="file" id="input-loja" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
+        <div id="preview-loja"></div>
+        <div class="check" style="margin-top:8px"><input type="checkbox" id="loja-capa-ativa"><label style="margin:0" for="loja-capa-ativa">mostrar esse cabeçalho pro aluno</label></div>
+        <p class="dica-editor">O nome da loja fica à esquerda e, à direita, o ícone do NPC marcado como "aparece em: Loja: &lt;essa loja&gt;" na aba NPCs (se tiver um).</p>
+
         <div id="loja-aviso" class="aviso-form"></div>
         <div class="rodape-form">
           <button type="submit" class="btn mata">Salvar loja</button>
@@ -764,6 +772,14 @@ body.conectando-fluxo{cursor:crosshair}
         <label>cor</label>
         <select id="mundo-cor"></select>
         <div class="check"><input type="checkbox" id="mundo-publicado" checked><label style="margin:0" for="mundo-publicado">publicado (aparece pro aluno)</label></div>
+
+        <label style="margin-top:14px">cabeçalho com imagem <span style="font-weight:700;color:#7F8C8D">(opcional — aparece em cima, na tela da matéria)</span></label>
+        <div class="upload" id="zona-upload-mundo">🖼️ Arraste a imagem aqui, ou clique pra escolher — proporção ideal 350×150</div>
+        <input type="file" id="input-mundo" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
+        <div id="preview-mundo"></div>
+        <div class="check" style="margin-top:8px"><input type="checkbox" id="mundo-capa-ativa"><label style="margin:0" for="mundo-capa-ativa">mostrar esse cabeçalho pro aluno</label></div>
+        <p class="dica-editor">O nome da matéria fica à esquerda e, à direita, o ícone do NPC marcado como "aparece em: Mundo: &lt;essa matéria&gt;" na aba NPCs (se tiver um). Tem um efeito sutil de parallax ao rolar a tela.</p>
+
         <div id="mundo-aviso" class="aviso-form"></div>
         <div class="rodape-form">
           <button type="submit" class="btn mata">Salvar mundo</button>
@@ -1722,12 +1738,21 @@ const TELAS_NPC_FIXAS = [
   {v:'perfil', rotulo:'Perfil'},
   {v:'lojamoveis', rotulo:'Loja de Móveis'},
 ];
-// as telas fixas acima + uma entrada por loja cadastrada (aba Lojas) — assim um NPC pode
-// flutuar dentro da Lanchonete, do Mercado etc., sem precisar de ponto no mapa
+// as telas fixas acima + uma entrada por loja e por mundo (matéria) cadastrados — assim
+// um NPC pode flutuar dentro da Lanchonete, de uma matéria específica etc., sem precisar
+// de ponto no mapa. É esse NPC (se tiver um) que aparece no cabeçalho com imagem da loja
+// ou da matéria (ver capaImagem/capaAtiva nos forms de Lojas e Mundos).
 let TELAS_NPC = [...TELAS_NPC_FIXAS];
 async function atualizarTelasNpcComLojas(){
-  const lojas = await api('lojas_listar').then(d => d.lojas).catch(() => []);
-  TELAS_NPC = [...TELAS_NPC_FIXAS, ...lojas.map(l => ({v: 'loja:' + l.id, rotulo: 'Loja: ' + l.nome}))];
+  const [lojas, mundos] = await Promise.all([
+    api('lojas_listar').then(d => d.lojas).catch(() => []),
+    api('mundos_listar').then(d => d.mundos).catch(() => []),
+  ]);
+  TELAS_NPC = [
+    ...TELAS_NPC_FIXAS,
+    ...lojas.map(l => ({v: 'loja:' + l.id, rotulo: 'Loja: ' + l.nome})),
+    ...mundos.map(m => ({v: 'mundo:' + m.id, rotulo: 'Mundo: ' + m.nome})),
+  ];
   const atual = $('#npc-tela').value;
   $('#npc-tela').innerHTML = TELAS_NPC.map(t => `<option value="${t.v}">${t.rotulo}</option>`).join('');
   if(TELAS_NPC.some(t => t.v === atual)) $('#npc-tela').value = atual;
@@ -2308,12 +2333,15 @@ async function carregarLojas(){
   $('#filtro-loja-itens').innerHTML = `<option value="">Todas as lojas</option>` + opcoesLoja;
   carregarItensLoja();
 }
+let lojaCapaImagem = '';
 function limparFormLoja(){
   $('#form-loja').reset();
   $('#loja-id').disabled = false;
   $('#loja-emoji').value = '🏪';
   $('#loja-aviso').style.display = 'none';
   $('#btn-excluir-loja').classList.add('oculto');
+  lojaCapaImagem = '';
+  $('#preview-loja').innerHTML = '';
 }
 $('#btn-nova-loja').onclick = () => {
   limparFormLoja();
@@ -2329,11 +2357,36 @@ window.editarLoja = async (id) => {
   $('#loja-id').value = l.id; $('#loja-id').disabled = true;
   $('#loja-nome').value = l.nome; $('#loja-emoji').value = l.emoji;
   $('#loja-ordem').value = l.ordem; $('#loja-publicado').checked = l.publicado;
+  $('#loja-capa-ativa').checked = l.capaAtiva;
+  lojaCapaImagem = l.capaImagem || '';
+  $('#preview-loja').innerHTML = l.capaImagemUrl ? `<img class="movel-thumb" src="${esc(l.capaImagemUrl)}">` : '';
   $('#btn-excluir-loja').classList.remove('oculto');
   $('#titulo-form-loja').textContent = 'Editar loja';
   $('#form-loja').classList.remove('oculto');
   $('#form-loja').scrollIntoView({behavior:'smooth'});
 };
+$('#zona-upload-loja').onclick = () => $('#input-loja').click();
+$('#input-loja').onchange = e => { if(e.target.files[0]) enviarImagemLoja(e.target.files[0]); };
+['dragover','drop'].forEach(ev => $('#zona-upload-loja').addEventListener(ev, e => e.preventDefault()));
+$('#zona-upload-loja').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemLoja(e.dataTransfer.files[0]); });
+async function enviarImagemLoja(arquivo){
+  const aviso = $('#loja-aviso');
+  const zona = $('#zona-upload-loja');
+  const textoOriginal = zona.textContent;
+  zona.textContent = '⏳ Enviando…';
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    const r = await fetch('api/admin.php?acao=loja_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    lojaCapaImagem = d.imagem;
+    $('#preview-loja').innerHTML = `<img class="movel-thumb" src="${esc(d.imagemUrl)}">`;
+    aviso.className = 'aviso-form ok'; aviso.textContent = 'Imagem enviada. Agora salve a loja.'; aviso.style.display = 'block';
+  }catch(e){
+    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
+  }finally{ zona.textContent = textoOriginal; }
+}
 window.excluirLoja = async (id, nome) => {
   if(!confirm(`Excluir a loja "${nome}"? Todos os itens dela também somem.`)) return;
   const r = await api('loja_excluir', {method:'POST', corpo:{id}});
@@ -2355,6 +2408,7 @@ $('#form-loja').addEventListener('submit', async e => {
     await api('loja_salvar', {method:'POST', corpo:{
       id, nome: $('#loja-nome').value.trim(), emoji: $('#loja-emoji').value.trim() || '🏪',
       publicado: $('#loja-publicado').checked, ordem: Number($('#loja-ordem').value) || 0,
+      capaImagem: lojaCapaImagem, capaAtiva: $('#loja-capa-ativa').checked,
     }});
     $('#form-loja').classList.add('oculto');
     carregarLojas();
@@ -2572,11 +2626,14 @@ function atualizarSelectsMundo(){
 $('#mundo-cor').innerHTML = opcoesCor();
 $('#licao-serie').innerHTML = SERIES.map(s => `<option>${s}</option>`).join('');
 
+let mundoCapaImagem = '';
 $('#btn-novo-mundo').onclick = () => {
   $('#form-mundo').reset();
   $('#mundo-id').disabled = false;
   $('#titulo-form-mundo').textContent = 'Novo mundo';
   $('#mundo-aviso').style.display = 'none';
+  mundoCapaImagem = '';
+  $('#preview-mundo').innerHTML = '';
   $('#form-mundo').classList.remove('oculto');
 };
 $('#btn-cancelar-mundo').onclick = () => $('#form-mundo').classList.add('oculto');
@@ -2586,6 +2643,9 @@ window.editarMundo = (id) => {
   $('#mundo-nome').value = m.nome; $('#mundo-emoji').value = m.emoji;
   $('#mundo-ordem').value = m.ordem; $('#mundo-cor').value = m.cor;
   $('#mundo-publicado').checked = m.publicado;
+  $('#mundo-capa-ativa').checked = m.capaAtiva;
+  mundoCapaImagem = m.capaImagem || '';
+  $('#preview-mundo').innerHTML = m.capaImagemUrl ? `<img class="movel-thumb" src="${esc(m.capaImagemUrl)}">` : '';
   $('#titulo-form-mundo').textContent = 'Editar mundo';
   $('#mundo-aviso').style.display = 'none';
   $('#form-mundo').classList.remove('oculto');
@@ -2596,6 +2656,28 @@ window.excluirMundo = async (id, nome) => {
   await api('mundo_excluir', {method:'POST', corpo:{id}});
   carregarMundos();
 };
+$('#zona-upload-mundo').onclick = () => $('#input-mundo').click();
+$('#input-mundo').onchange = e => { if(e.target.files[0]) enviarImagemMundo(e.target.files[0]); };
+['dragover','drop'].forEach(ev => $('#zona-upload-mundo').addEventListener(ev, e => e.preventDefault()));
+$('#zona-upload-mundo').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemMundo(e.dataTransfer.files[0]); });
+async function enviarImagemMundo(arquivo){
+  const aviso = $('#mundo-aviso');
+  const zona = $('#zona-upload-mundo');
+  const textoOriginal = zona.textContent;
+  zona.textContent = '⏳ Enviando…';
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    const r = await fetch('api/admin.php?acao=mundo_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    mundoCapaImagem = d.imagem;
+    $('#preview-mundo').innerHTML = `<img class="movel-thumb" src="${esc(d.imagemUrl)}">`;
+    aviso.className = 'aviso-form ok'; aviso.textContent = 'Imagem enviada. Agora salve o mundo.'; aviso.style.display = 'block';
+  }catch(e){
+    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
+  }finally{ zona.textContent = textoOriginal; }
+}
 $('#form-mundo').addEventListener('submit', async (e) => {
   e.preventDefault();
   const aviso = $('#mundo-aviso');
@@ -2603,6 +2685,7 @@ $('#form-mundo').addEventListener('submit', async (e) => {
     await api('mundo_salvar', {method:'POST', corpo:{
       id: $('#mundo-id').value.trim(), nome: $('#mundo-nome').value.trim(), emoji: $('#mundo-emoji').value.trim(),
       cor: $('#mundo-cor').value, ordem: Number($('#mundo-ordem').value) || 0, publicado: $('#mundo-publicado').checked,
+      capaImagem: mundoCapaImagem, capaAtiva: $('#mundo-capa-ativa').checked,
     }});
     $('#form-mundo').classList.add('oculto');
     carregarMundos();

@@ -12,9 +12,13 @@ header('Cache-Control: no-store'); // conteúdo muda a qualquer edição no pain
 require __DIR__ . '/bd.php';
 
 try {
-  $mundos = bd()->query('SELECT id, nome, emoji, cor FROM mundos WHERE publicado = 1 ORDER BY ordem, nome')
+  $mundos = bd()->query('SELECT id, nome, emoji, cor, capa_imagem, capa_ativa FROM mundos WHERE publicado = 1 ORDER BY ordem, nome')
     ->fetchAll(PDO::FETCH_ASSOC);
   $st = bd()->prepare('SELECT id, emoji, titulo, serie, blocos FROM licoes WHERE mundo_id = ? AND publicado = 1 ORDER BY ordem, titulo');
+  // cabeçalho opcional com imagem de capa (aba Mundos/Lojas do admin) — mesma pasta usada
+  // pelo upload do painel, url só sai preenchida se o arquivo realmente existir
+  $pastaMundos = dirname(__DIR__) . '/assets/mundos';
+  $urlMundo = fn($nome) => $nome !== '' && is_file($pastaMundos . '/' . $nome) ? 'assets/mundos/' . $nome : '';
 
   $saidaMundos = [];
   $licoesPublicadas = [];
@@ -27,7 +31,10 @@ try {
         'blocos' => json_decode($l['blocos'], true),
       ];
     }, $st->fetchAll(PDO::FETCH_ASSOC));
-    if ($licoes) $saidaMundos[] = ['id' => $m['id'], 'nome' => $m['nome'], 'emoji' => $m['emoji'], 'cor' => $m['cor'], 'licoes' => $licoes];
+    if ($licoes) $saidaMundos[] = [
+      'id' => $m['id'], 'nome' => $m['nome'], 'emoji' => $m['emoji'], 'cor' => $m['cor'], 'licoes' => $licoes,
+      'capaImagemUrl' => $urlMundo($m['capa_imagem']), 'capaAtiva' => (bool)$m['capa_ativa'],
+    ];
   }
   $mundosPublicados = array_column($saidaMundos, 'id');
 
@@ -113,12 +120,14 @@ try {
   // vira um destino de verdade no mapa (ponto tipo "loja"). Os itens ficam numa tabela à
   // parte, com agenda (estoque por tempo limitado) igual aos móveis e variantes opcionais
   // (sabor/tamanho) que o aluno escolhe na hora de comprar.
-  $lojasLinhas = bd()->query('SELECT id, nome, emoji FROM lojas WHERE publicado = 1 ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+  $lojasLinhas = bd()->query('SELECT id, nome, emoji, capa_imagem, capa_ativa FROM lojas WHERE publicado = 1 ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
   $lojasPublicadas = array_column($lojasLinhas, 'id');
-  $saidaLojas = array_map(fn($l) => ['id' => $l['id'], 'nome' => $l['nome'], 'emoji' => $l['emoji']], $lojasLinhas);
-
   $pastaLojas = dirname(__DIR__) . '/assets/lojas';
   $urlLoja = fn($nome) => $nome !== '' && is_file($pastaLojas . '/' . $nome) ? 'assets/lojas/' . $nome : '';
+  $saidaLojas = array_map(fn($l) => [
+    'id' => $l['id'], 'nome' => $l['nome'], 'emoji' => $l['emoji'],
+    'capaImagemUrl' => $urlLoja($l['capa_imagem']), 'capaAtiva' => (bool)$l['capa_ativa'],
+  ], $lojasLinhas);
   $itensLojaLinhas = $lojasPublicadas ? bd()->query('SELECT * FROM itens_loja WHERE publicado = 1 ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC) : [];
   // só itens de loja publicada (excluir a loja não apaga o item, só o esconde)
   $itensLojaLinhas = array_values(array_filter($itensLojaLinhas, fn($it) => in_array($it['loja_id'], $lojasPublicadas, true)));

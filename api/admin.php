@@ -10,8 +10,9 @@
      POST ?acao=admin_sair
      GET  ?acao=admin_eu
      GET  ?acao=mundos_listar
-     POST ?acao=mundo_salvar          {id, nome, emoji, cor, ordem, publicado}
+     POST ?acao=mundo_salvar          {id, nome, emoji, cor, ordem, publicado, capaImagem, capaAtiva}
      POST ?acao=mundo_excluir         {id}
+     POST ?acao=mundo_imagem          (multipart: arquivo) -> sobe imagem de capa pra assets/mundos/
      GET  ?acao=licoes_listar         [?mundo=xx]
      GET  ?acao=licao_obter           ?id=xx
      POST ?acao=licao_salvar          {id, mundoId, titulo, emoji, serie, ordem, publicado, blocos:[...]}
@@ -61,8 +62,9 @@
      POST ?acao=casa_preco_salvar     {precoCasa} -> preço em moedas pra desbloquear a decoração
      GET  ?acao=lojas_listar
      GET  ?acao=loja_obter            ?id=xx
-     POST ?acao=loja_salvar           {id, nome, emoji, publicado, ordem}
+     POST ?acao=loja_salvar           {id, nome, emoji, publicado, ordem, capaImagem, capaAtiva}
      POST ?acao=loja_excluir          {id}
+     POST ?acao=loja_imagem           (multipart: arquivo) -> sobe imagem de capa pra assets/lojas/
      GET  ?acao=itens_loja_listar     [?loja=xx]
      GET  ?acao=item_loja_obter       ?id=xx
      POST ?acao=item_loja_salvar      {id, lojaId, nome, emoji, preco, imagem, fome, alegria,
@@ -108,6 +110,11 @@ function telaNpcValida(string $tela): bool {
     $st->execute([substr($tela, 5)]);
     return (bool)$st->fetchColumn();
   }
+  if (str_starts_with($tela, 'mundo:')) {
+    $st = bd()->prepare('SELECT COUNT(*) FROM mundos WHERE id = ?');
+    $st->execute([substr($tela, 6)]);
+    return (bool)$st->fetchColumn();
+  }
   return false;
 }
 const ROTULOS_TELA = ['lojamoveis' => 'Loja de Móveis', 'editarcasa' => 'Casa — editor de móveis'];
@@ -134,6 +141,8 @@ function pastaNpcs(): string { return dirname(__DIR__) . '/assets/npcs'; }
 function pastaItens(): string { return dirname(__DIR__) . '/assets/itens'; }
 function pastaMoveis(): string { return dirname(__DIR__) . '/assets/moveis'; }
 function pastaLojas(): string { return dirname(__DIR__) . '/assets/lojas'; }
+function pastaMundos(): string { return dirname(__DIR__) . '/assets/mundos'; }
+function caminhoPublicoMundo(string $nome): string { return $nome === '' ? '' : 'assets/mundos/' . $nome; }
 function caminhoPublicoNpc(string $nome): string { return $nome === '' ? '' : 'assets/npcs/' . $nome; }
 function caminhoPublicoItem(string $nome): string { return $nome === '' ? '' : 'assets/itens/' . $nome; }
 function caminhoPublicoMovel(string $nome): string { return $nome === '' ? '' : 'assets/moveis/' . $nome; }
@@ -225,6 +234,8 @@ function validarLoja(array $l): ?string {
   if ($nome === '' || mb_strlen($nome) > 60) return '"nome" precisa ter de 1 a 60 caracteres.';
   $emoji = (string)($l['emoji'] ?? '🏪');
   if ($emoji === '' || mb_strlen($emoji) > 8) return '"emoji" é obrigatório.';
+  $capaImagem = trim((string)($l['capaImagem'] ?? ''));
+  if ($capaImagem !== '' && !validarNomeImagem($capaImagem)) return '"capaImagem" tem um nome de arquivo inválido.';
   return null;
 }
 
@@ -518,11 +529,12 @@ try {
   if (!isset($_SESSION['admin_id'])) responder(['erro' => 'Entre no painel primeiro.'], 401);
 
   if ($acao === 'mundos_listar') {
-    $linhas = bd()->query('SELECT m.id, m.nome, m.emoji, m.cor, m.ordem, m.publicado, COUNT(l.id) AS licoes
+    $linhas = bd()->query('SELECT m.id, m.nome, m.emoji, m.cor, m.ordem, m.publicado, m.capa_imagem, m.capa_ativa, COUNT(l.id) AS licoes
       FROM mundos m LEFT JOIN licoes l ON l.mundo_id = m.id GROUP BY m.id ORDER BY m.ordem, m.nome')->fetchAll(PDO::FETCH_ASSOC);
     responder(['mundos' => array_map(fn($m) => [
       'id' => $m['id'], 'nome' => $m['nome'], 'emoji' => $m['emoji'], 'cor' => $m['cor'],
       'ordem' => (int)$m['ordem'], 'publicado' => (bool)$m['publicado'], 'licoes' => (int)$m['licoes'],
+      'capaImagem' => $m['capa_imagem'], 'capaImagemUrl' => caminhoPublicoMundo($m['capa_imagem']), 'capaAtiva' => (bool)$m['capa_ativa'],
     ], $linhas)]);
   }
 
@@ -538,10 +550,29 @@ try {
     if (!in_array($cor, CORES_VALIDAS, true)) responder(['erro' => '"cor" precisa ser uma das cores do tema: ' . implode(', ', CORES_VALIDAS)], 422);
     $ordem = (int)($d['ordem'] ?? 0);
     $publicado = !empty($d['publicado']) ? 1 : 0;
-    bd()->prepare('INSERT INTO mundos (id, nome, emoji, cor, ordem, publicado) VALUES (?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), cor=VALUES(cor), ordem=VALUES(ordem), publicado=VALUES(publicado)')
-      ->execute([$id, $nome, $emoji, $cor, $ordem, $publicado]);
+    $capaImagem = trim((string)($d['capaImagem'] ?? ''));
+    if ($capaImagem !== '' && !validarNomeImagem($capaImagem)) responder(['erro' => '"capaImagem" tem um nome de arquivo inválido.'], 422);
+    $capaAtiva = !empty($d['capaAtiva']) ? 1 : 0;
+    bd()->prepare('INSERT INTO mundos (id, nome, emoji, cor, ordem, publicado, capa_imagem, capa_ativa) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), cor=VALUES(cor), ordem=VALUES(ordem), publicado=VALUES(publicado),
+        capa_imagem=VALUES(capa_imagem), capa_ativa=VALUES(capa_ativa)')
+      ->execute([$id, $nome, $emoji, $cor, $ordem, $publicado, $capaImagem, $capaAtiva]);
     responder(['ok' => true]);
+  }
+
+  if ($acao === 'mundo_imagem') {
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || $arq['error'] !== UPLOAD_ERR_OK) responder(['erro' => 'Falha no envio da imagem.'], 422);
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_IMAGEM[$ext])) responder(['erro' => 'Formato inválido. Use webp, png ou jpg.'], 422);
+    $nome = bin2hex(random_bytes(8)) . '.' . $ext;
+    if (!is_dir(pastaMundos()) && !@mkdir(pastaMundos(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta de imagens das matérias no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaMundos() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui salvar a imagem no servidor.'], 500);
+    }
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoMundo($nome)]);
   }
 
   if ($acao === 'mundo_excluir') {
@@ -1425,19 +1456,23 @@ try {
   /* ---------- Lojas genéricas (Lanchonete, Mercado, e as que o Hostmaster criar) ---------- */
 
   if ($acao === 'lojas_listar') {
-    $linhas = bd()->query('SELECT id, nome, emoji, publicado, ordem FROM lojas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    $linhas = bd()->query('SELECT id, nome, emoji, publicado, ordem, capa_imagem, capa_ativa FROM lojas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     responder(['lojas' => array_map(fn($l) => [
       'id' => $l['id'], 'nome' => $l['nome'], 'emoji' => $l['emoji'],
       'publicado' => (bool)$l['publicado'], 'ordem' => (int)$l['ordem'],
+      'capaImagem' => $l['capa_imagem'], 'capaImagemUrl' => caminhoPublicoLoja($l['capa_imagem']), 'capaAtiva' => (bool)$l['capa_ativa'],
     ], $linhas)]);
   }
 
   if ($acao === 'loja_obter') {
-    $st = bd()->prepare('SELECT id, nome, emoji, publicado, ordem FROM lojas WHERE id = ?');
+    $st = bd()->prepare('SELECT id, nome, emoji, publicado, ordem, capa_imagem, capa_ativa FROM lojas WHERE id = ?');
     $st->execute([(string)($_GET['id'] ?? '')]);
     $l = $st->fetch(PDO::FETCH_ASSOC);
     if (!$l) responder(['erro' => 'Loja não encontrada.'], 404);
-    responder(['id' => $l['id'], 'nome' => $l['nome'], 'emoji' => $l['emoji'], 'publicado' => (bool)$l['publicado'], 'ordem' => (int)$l['ordem']]);
+    responder([
+      'id' => $l['id'], 'nome' => $l['nome'], 'emoji' => $l['emoji'], 'publicado' => (bool)$l['publicado'], 'ordem' => (int)$l['ordem'],
+      'capaImagem' => $l['capa_imagem'], 'capaImagemUrl' => caminhoPublicoLoja($l['capa_imagem']), 'capaAtiva' => (bool)$l['capa_ativa'],
+    ]);
   }
 
   if ($acao === 'loja_salvar') {
@@ -1446,10 +1481,29 @@ try {
     if (!validarId($id)) responder(['erro' => '"id" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
     $erro = validarLoja($d);
     if ($erro) responder(['erro' => $erro], 422);
-    bd()->prepare('INSERT INTO lojas (id, nome, emoji, publicado, ordem) VALUES (?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), publicado=VALUES(publicado), ordem=VALUES(ordem)')
-      ->execute([$id, trim((string)$d['nome']), (string)($d['emoji'] ?? '🏪'), !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0)]);
+    bd()->prepare('INSERT INTO lojas (id, nome, emoji, publicado, ordem, capa_imagem, capa_ativa) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), publicado=VALUES(publicado), ordem=VALUES(ordem),
+        capa_imagem=VALUES(capa_imagem), capa_ativa=VALUES(capa_ativa)')
+      ->execute([
+        $id, trim((string)$d['nome']), (string)($d['emoji'] ?? '🏪'), !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0),
+        trim((string)($d['capaImagem'] ?? '')), !empty($d['capaAtiva']) ? 1 : 0,
+      ]);
     responder(['ok' => true]);
+  }
+
+  if ($acao === 'loja_imagem') {
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || $arq['error'] !== UPLOAD_ERR_OK) responder(['erro' => 'Falha no envio da imagem.'], 422);
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_IMAGEM[$ext])) responder(['erro' => 'Formato inválido. Use webp, png ou jpg.'], 422);
+    $nome = bin2hex(random_bytes(8)) . '.' . $ext;
+    if (!is_dir(pastaLojas()) && !@mkdir(pastaLojas(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta de imagens das lojas no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaLojas() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui salvar a imagem no servidor.'], 500);
+    }
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoLoja($nome)]);
   }
 
   if ($acao === 'loja_excluir') {
