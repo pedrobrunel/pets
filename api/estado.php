@@ -12,6 +12,7 @@
      POST ?acao=completar_licao {licaoId, respostas}   -> confere gabarito e credita moedas/XP
      POST ?acao=item_loja_comprar {itemId}             -> decremento atômico de estoque limitado
      POST ?acao=presentear_item {itemId, varianteId, apelidoDestino} -> transfere 1 unidade da mochila
+     GET  ?acao=ranking                                -> top 10 por nível e por sequência (só apelido/bicho/número)
      GET  ?acao=resumo_responsavel                     -> painel de acompanhamento (mesmo login do jogador)
    ========================================================= */
 
@@ -85,6 +86,30 @@ try {
     }
     $estado['presentesRecebidos'] = $presentesRecebidos; // efêmero — o cliente lê e descarta, não faz parte do estado salvo de verdade
     responder($estado);
+  }
+
+  /* ranking entre quem joga — só apelido, bicho e um número (nível ou sequência), nunca
+     moedas ou qualquer outra coisa mais sensível. Filtra fora quem tá zerado (conta nova,
+     nunca jogou) pra não poluir a lista; cada métrica é uma consulta separada porque um
+     jogador pode estar bem numa e mal na outra. */
+  if ($acao === 'ranking') {
+    $porNivel = bd()->query("SELECT apelido,
+        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(estado, '$.tipo')), 'capivara') AS tipo,
+        COALESCE(JSON_EXTRACT(estado, '$.xp'), 0) AS xp
+      FROM jogadores HAVING xp > 0 ORDER BY xp DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
+    $porStreak = bd()->query("SELECT apelido,
+        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(estado, '$.tipo')), 'capivara') AS tipo,
+        COALESCE(JSON_EXTRACT(estado, '$.streak.atual'), 0) AS streak_atual,
+        COALESCE(JSON_EXTRACT(estado, '$.streak.melhor'), 0) AS streak_melhor
+      FROM jogadores HAVING streak_atual > 0 ORDER BY streak_atual DESC, streak_melhor DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
+    responder([
+      'porNivel' => array_map(fn($l) => [
+        'apelido' => $l['apelido'], 'tipo' => $l['tipo'], 'nivel' => intdiv((int)$l['xp'], 120) + 1, 'xp' => (int)$l['xp'],
+      ], $porNivel),
+      'porStreak' => array_map(fn($l) => [
+        'apelido' => $l['apelido'], 'tipo' => $l['tipo'], 'streakAtual' => (int)$l['streak_atual'], 'streakMelhor' => (int)$l['streak_melhor'],
+      ], $porStreak),
+    ]);
   }
 
   /* visitar a casa de outro jogador: só o necessário pra desenhar o quarto dele — nunca

@@ -576,6 +576,9 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
 .missao-item:last-child{border-bottom:none}
 .missao-status{font-size:16px;line-height:1.3}
 .aviso-mini{font-size:11px;font-weight:700;opacity:.6;text-align:center;margin:0}
+.ranking-linha{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:12px}
+.ranking-linha.eu{background:var(--jabuti);background:color-mix(in srgb, var(--jabuti) 25%, transparent)}
+.ranking-linha svg{flex-shrink:0}
 /* álbum de conquistas: cartas colecionáveis — desbloqueada brilha tipo "carta rara",
    bloqueada fica em silhueta cinza (dá pra ver o que falta, sem entregar o emoji) */
 .grade-conquistas{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:4px 0}
@@ -2959,9 +2962,41 @@ RENDER.perfil = () => {
 
     <div class="perfil-rodape">
       <button class="btn branco pequeno" onclick="compartilhar()">🔗 Compartilhar</button>
+      <button class="btn branco pequeno" onclick="abrirRanking()">🏆 Ranking</button>
       <p class="aviso-mini">🔒 Mostra só apelido, bicho, nível e conquistas — nunca nome real, idade ou escola.</p>
     </div>`;
 };
+// ranking entre quem joga — só apelido, bicho e um número (nível ou sequência), nada
+// de dado sensível. Precisa de conta salva dos dois lados (é o servidor quem calcula)
+async function abrirRanking(){
+  if(!logado){
+    modal(`<h2 style="font-size:22px">🏆 Ranking</h2><p style="margin:10px 0">Só dá pra ver o ranking com conta salva (usuário e senha) — jogando sem conta não tem como.</p>
+      <button class="btn grande branco" style="margin-top:6px" onclick="fecharModal()">Fechar</button>`);
+    return;
+  }
+  modal(`<h2 style="font-size:22px">🏆 Ranking</h2><p style="margin:10px 0">Carregando…</p>`);
+  try{
+    const r = await fetch('api/estado.php?acao=ranking', {cache:'no-store'});
+    const d = await r.json().catch(() => ({porNivel:[], porStreak:[]}));
+    if(!r.ok) throw new Error(d.erro || 'Não deu pra carregar o ranking.');
+    const linha = (l, valor) => `<div class="ranking-linha${l.apelido===estado.apelido?' eu':''}">
+      ${svgBicho(l.tipo, {estilo:'width:30px;height:30px'})}
+      <b style="flex:1">${esc(l.apelido)}</b>
+      <span class="chip">${valor}</span>
+    </div>`;
+    modal(`
+      <h2 style="font-size:22px">🏆 Ranking</h2>
+      <p style="margin:4px 0 10px;font-size:12px;font-weight:700;opacity:.7">Só apelido, bicho e número — nada de nome real.</p>
+      <h3 style="font-size:15px;margin:12px 0 6px">⭐ Top níveis</h3>
+      ${d.porNivel.length ? d.porNivel.map(l => linha(l, 'Nível ' + l.nivel)).join('') : '<p class="vazio" style="margin:0">Ninguém no ranking ainda.</p>'}
+      <h3 style="font-size:15px;margin:14px 0 6px">🔥 Top sequências</h3>
+      ${d.porStreak.length ? d.porStreak.map(l => linha(l, l.streakAtual + ' dia' + (l.streakAtual===1?'':'s'))).join('') : '<p class="vazio" style="margin:0">Ninguém no ranking ainda.</p>'}
+      <button class="btn grande branco" style="margin-top:14px" onclick="fecharModal()">Fechar</button>`);
+  }catch(e){
+    modal(`<h2 style="font-size:22px">🏆 Ranking</h2><p style="margin:10px 0">${esc(e.message)}</p>
+      <button class="btn grande branco" style="margin-top:6px" onclick="fecharModal()">Fechar</button>`);
+  }
+}
 // "diário de missões": só aparece se o jogador já tiver alguma (aceita ou concluída) —
 // pra não poluir o perfil de quem nunca esbarrou com um NPC de missão
 function blocoMinhasMissoes(){
