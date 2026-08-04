@@ -31,6 +31,20 @@ try {
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
+  // presentes pendentes: quem manda só mexe na própria linha de "jogadores" (decrementa
+  // a mochila); o item entra numa fila aqui até o destinatário abrir o jogo de novo, e é
+  // só o próprio destinatário (dono da linha dele) quem aplica o +1 e apaga a fila — assim
+  // nunca tem duas escritas concorrentes na mesma linha de "jogadores" por causa de um presente.
+  $pdo->exec('CREATE TABLE IF NOT EXISTS presentes (
+    id                INT AUTO_INCREMENT PRIMARY KEY,
+    destinatario_id   INT NOT NULL,
+    item_chave        VARCHAR(64) NOT NULL,
+    remetente_apelido VARCHAR(14) NOT NULL,
+    criado_em         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (destinatario_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    INDEX (destinatario_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
   $pdo->exec('CREATE TABLE IF NOT EXISTS admins (
     id         INT AUTO_INCREMENT PRIMARY KEY,
     usuario    VARCHAR(40)  NOT NULL UNIQUE,
