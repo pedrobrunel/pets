@@ -322,18 +322,35 @@ try {
   // configurações gerais do jogo: fundo da Casa e preço pra desbloquear a decoração —
   // um valor só, vale pra todo mundo (não é por jogador). Linha única (id sempre 1).
   $pdo->exec('CREATE TABLE IF NOT EXISTS configuracoes (
-    id         TINYINT PRIMARY KEY DEFAULT 1,
-    casa_fundo VARCHAR(160) NOT NULL DEFAULT \'\',
-    preco_casa INT NOT NULL DEFAULT 5000
+    id                    TINYINT PRIMARY KEY DEFAULT 1,
+    casa_fundo            VARCHAR(160) NOT NULL DEFAULT \'\',
+    preco_casa            INT NOT NULL DEFAULT 5000,
+    capa_lojamoveis_imagem VARCHAR(160) NOT NULL DEFAULT \'\',
+    capa_lojamoveis_ativa  TINYINT(1) NOT NULL DEFAULT 0,
+    capa_mural_imagem      VARCHAR(160) NOT NULL DEFAULT \'\',
+    capa_mural_ativa       TINYINT(1) NOT NULL DEFAULT 0
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
-  // preco_casa chegou depois de "configuracoes" já existir em produção — mesma checagem
-  // por INFORMATION_SCHEMA usada nas outras colunas novas deste arquivo. Roda ANTES do
-  // INSERT logo abaixo, senão o INSERT referencia uma coluna que ainda não existe.
+  // preco_casa e as colunas de capa chegaram depois de "configuracoes" já existir em
+  // produção — mesma checagem por INFORMATION_SCHEMA usada nas outras colunas novas deste
+  // arquivo. Roda ANTES do INSERT logo abaixo, senão o INSERT referencia uma coluna que
+  // ainda não existe.
   $colunasConfig = array_column($pdo->query(
     "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracoes'"
   )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
   if (!in_array('preco_casa', $colunasConfig, true)) {
     $pdo->exec('ALTER TABLE configuracoes ADD COLUMN preco_casa INT NOT NULL DEFAULT 5000');
+  }
+  if (!in_array('capa_lojamoveis_imagem', $colunasConfig, true)) {
+    $pdo->exec('ALTER TABLE configuracoes ADD COLUMN capa_lojamoveis_imagem VARCHAR(160) NOT NULL DEFAULT \'\'');
+  }
+  if (!in_array('capa_lojamoveis_ativa', $colunasConfig, true)) {
+    $pdo->exec('ALTER TABLE configuracoes ADD COLUMN capa_lojamoveis_ativa TINYINT(1) NOT NULL DEFAULT 0');
+  }
+  if (!in_array('capa_mural_imagem', $colunasConfig, true)) {
+    $pdo->exec('ALTER TABLE configuracoes ADD COLUMN capa_mural_imagem VARCHAR(160) NOT NULL DEFAULT \'\'');
+  }
+  if (!in_array('capa_mural_ativa', $colunasConfig, true)) {
+    $pdo->exec('ALTER TABLE configuracoes ADD COLUMN capa_mural_ativa TINYINT(1) NOT NULL DEFAULT 0');
   }
   $pdo->exec('INSERT IGNORE INTO configuracoes (id, casa_fundo, preco_casa) VALUES (1, \'\', 5000)');
 

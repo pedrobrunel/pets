@@ -1507,6 +1507,9 @@ const acharItemMapa = id => ITENS_MAPA.find(it => it.id === id);
 let MOVEIS = [];
 const acharMovel = id => MOVEIS.find(m => m.id === id);
 let CASA_CONFIG = {fundoUrl:'', precoCasa:5000};
+// capas de cabeçalho das telas fixas sem entidade própria no banco (Loja de Móveis, Mural)
+// — mesmo sistema visual dos mundos/lojas genéricas, configurado direto em "configuracoes"
+let CAPAS = {lojamoveisImagemUrl:'', lojamoveisAtiva:false, muralImagemUrl:'', muralAtiva:false};
 // lojas genéricas (aba Lojas): cada ponto tipo "loja" num mapa aponta pro id de uma
 // loja daqui, e os itens (com variantes/agenda opcionais) ficam em ITENS_LOJA
 let LOJAS = [];
@@ -2543,8 +2546,12 @@ RENDER.loja = () => {
   const itensEspeciais = estado.itensColetados.map(acharItemMapa).filter(Boolean);
   const comprasLoja = itensLojaNaMochila();
   const mochilaVazia = !acessoriosNaMochila.length && !itensEspeciais.length && !comprasLoja.length;
+  const lojaVila = acharLoja('lojadavila');
+  const temCapaVila = lojaVila && lojaVila.capaAtiva && lojaVila.capaImagemUrl;
   $('#tela-loja').innerHTML = `
-    <div class="titulo-secao"><h2>Loja da vila</h2><small>você tem 🪙 ${estado.moedas}</small></div>
+    ${temCapaVila
+      ? renderCapaCabecalho(lojaVila.capaImagemUrl, {tela: 'loja', infoLinha: `🪙 ${estado.moedas}`})
+      : `<div class="titulo-secao"><h2>Loja da vila</h2><small>você tem 🪙 ${estado.moedas}</small></div>`}
     ${blocoNpcsDaTela('loja')}
     <div class="sticker" style="text-align:center;padding-bottom:8px">
       ${svgBicho(estado.tipo,{equipado:estado.equipado, estilo:'width:130px;height:130px'})}
@@ -2624,8 +2631,11 @@ function consumirItemLoja(chave){
 const temAgenda = a => !!(a.horaInicio || a.dataInicio || (a.diasSemana && a.diasSemana.length));
 RENDER.lojamoveis = () => {
   const disponiveis = MOVEIS.filter(dentroDaAgenda);
+  const temCapaMoveis = CAPAS.lojamoveisAtiva && CAPAS.lojamoveisImagemUrl;
   $('#tela-lojamoveis').innerHTML = `
-    <div class="titulo-secao"><h2>Loja de Móveis</h2><small>você tem 🪙 ${estado.moedas}</small></div>
+    ${temCapaMoveis
+      ? renderCapaCabecalho(CAPAS.lojamoveisImagemUrl, {tela: 'lojamoveis', infoLinha: `🪙 ${estado.moedas}`})
+      : `<div class="titulo-secao"><h2>Loja de Móveis</h2><small>você tem 🪙 ${estado.moedas}</small></div>`}
     ${blocoNpcsDaTela('lojamoveis')}
     <div class="grade-3">${disponiveis.map(cartaoMovel).join('') || '<p class="vazio">Nenhum móvel à venda no momento — volte mais tarde!</p>'}</div>
     <p style="font-size:12px;font-weight:700;opacity:.75;margin:14px 4px 0">Comprou? Vá pra Casa e toque em "Editar minha casa" pra colocar o móvel no seu quarto.</p>`;
@@ -2748,8 +2758,11 @@ RENDER.mural = () => {
   const previa = [recadoNovo.inicio, recadoNovo.meio, recadoNovo.fim].filter(Boolean).join(' ');
   const blocos = (chave) => BLOCOS[chave].map(t =>
     `<button class="bloco" aria-pressed="${recadoNovo[chave]===t}" onclick="escolherBloco('${chave}',this.textContent)">${t}</button>`).join('');
+  const temCapaMural = CAPAS.muralAtiva && CAPAS.muralImagemUrl;
   $('#tela-mural').innerHTML = `
-    <div class="titulo-secao"><h2>Mural da vila</h2><small>só frases prontas</small></div>
+    ${temCapaMural
+      ? renderCapaCabecalho(CAPAS.muralImagemUrl, {tela: 'mural'})
+      : `<div class="titulo-secao"><h2>Mural da vila</h2><small>só frases prontas</small></div>`}
     ${blocoNpcsDaTela('mural')}
     <div class="sticker">
       <p style="margin:0 0 4px;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.5px">1. Comece assim</p>
@@ -2925,6 +2938,7 @@ async function carregarConteudo(){
     if(Array.isArray(dados.itens)) ITENS_MAPA = dados.itens;
     if(Array.isArray(dados.moveis)) MOVEIS = dados.moveis;
     if(dados.casaConfig) CASA_CONFIG = dados.casaConfig;
+    if(dados.capas) CAPAS = dados.capas;
     if(Array.isArray(dados.lojas)) LOJAS = dados.lojas;
     if(Array.isArray(dados.itensLoja)) ITENS_LOJA = dados.itensLoja;
   }catch(e){ /* offline ou hospedagem sem PHP: fica com o conteúdo embutido */ }

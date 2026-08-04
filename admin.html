@@ -599,6 +599,28 @@ body.conectando-fluxo{cursor:crosshair}
         <div id="casa-preco-aviso" class="aviso-form"></div>
       </div>
 
+      <div class="painel" style="padding:16px;margin-bottom:20px">
+        <h3 style="font-size:16px;margin-top:0">Cabeçalho da Loja de Móveis</h3>
+        <p class="sub" style="margin-top:0">mesmo cabeçalho de capa das trilhas e lojas — opcional, aparece em cima da tela.</p>
+        <div id="preview-capa-lojamoveis" style="margin-bottom:10px"></div>
+        <div class="upload" id="zona-upload-capa-lojamoveis">🖼️ Arraste a imagem aqui, ou clique pra escolher — proporção ideal 350×150</div>
+        <input type="file" id="input-capa-lojamoveis" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
+        <div id="capa-lojamoveis-aviso" class="aviso-form"></div>
+        <div class="check" style="margin-top:8px"><input type="checkbox" id="capa-lojamoveis-ativa"><label style="margin:0" for="capa-lojamoveis-ativa">mostrar esse cabeçalho pro aluno</label></div>
+        <p class="dica-editor">Capriche na imagem com "Loja de Móveis" já desenhado nela — o app não escreve o nome por cima, só sobrepõe quanto de moeda o aluno tem e o ícone do NPC marcado como "aparece em: Loja de Móveis" na aba NPCs (se tiver um), no canto direito.</p>
+      </div>
+
+      <div class="painel" style="padding:16px;margin-bottom:20px">
+        <h3 style="font-size:16px;margin-top:0">Cabeçalho do Mural da vila</h3>
+        <p class="sub" style="margin-top:0">mesmo cabeçalho de capa das trilhas e lojas — opcional, aparece em cima da tela.</p>
+        <div id="preview-capa-mural" style="margin-bottom:10px"></div>
+        <div class="upload" id="zona-upload-capa-mural">🖼️ Arraste a imagem aqui, ou clique pra escolher — proporção ideal 350×150</div>
+        <input type="file" id="input-capa-mural" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
+        <div id="capa-mural-aviso" class="aviso-form"></div>
+        <div class="check" style="margin-top:8px"><input type="checkbox" id="capa-mural-ativa"><label style="margin:0" for="capa-mural-ativa">mostrar esse cabeçalho pro aluno</label></div>
+        <p class="dica-editor">Capriche na imagem com "Mural da vila" já desenhado nela — o app não escreve o nome por cima, só sobrepõe o ícone do NPC marcado como "aparece em: Mural" na aba NPCs (se tiver um), no canto direito.</p>
+      </div>
+
       <button class="btn" id="btn-novo-movel" style="margin-bottom:14px">+ Novo móvel</button>
 
       <form id="form-movel" class="oculto">
@@ -951,7 +973,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   if(b.dataset.aba === 'npcs') carregarNpcs();
   if(b.dataset.aba === 'missoes') carregarMissoes();
   if(b.dataset.aba === 'itens') carregarItens();
-  if(b.dataset.aba === 'moveis') { carregarMoveis(); carregarCasaFundo(); }
+  if(b.dataset.aba === 'moveis') { carregarMoveis(); carregarCasaFundo(); carregarCapasFixas(); }
   if(b.dataset.aba === 'lojas') carregarLojas();
 });
 
@@ -2311,6 +2333,52 @@ $('#btn-remover-casa-fundo').onclick = async () => {
   await api('casa_fundo_remover', {method:'POST', corpo:{}});
   carregarCasaFundo();
 };
+
+/* cabeçalhos de capa das telas fixas sem entidade própria (Loja de Móveis, Mural) —
+   mesmo sistema visual dos mundos/lojas genéricas, configuração única salva em "configuracoes" */
+async function carregarCapasFixas(){
+  const d = await api('capas_obter').catch(() => ({lojamoveis:{imagemUrl:'',ativa:false}, mural:{imagemUrl:'',ativa:false}}));
+  ['lojamoveis', 'mural'].forEach(campo => {
+    const c = d[campo] || {imagemUrl:'', ativa:false};
+    $('#preview-capa-' + campo).innerHTML = c.imagemUrl ? `<img class="casa-fundo-thumb" src="${esc(c.imagemUrl)}">` : '<p class="sub" style="margin:0">Nenhuma imagem enviada ainda.</p>';
+    $('#capa-' + campo + '-ativa').checked = c.ativa;
+  });
+}
+['lojamoveis', 'mural'].forEach(campo => {
+  $('#zona-upload-capa-' + campo).onclick = () => $('#input-capa-' + campo).click();
+  $('#input-capa-' + campo).onchange = e => { if(e.target.files[0]) enviarCapaFixa(campo, e.target.files[0]); };
+  ['dragover','drop'].forEach(ev => $('#zona-upload-capa-' + campo).addEventListener(ev, e => e.preventDefault()));
+  $('#zona-upload-capa-' + campo).addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarCapaFixa(campo, e.dataTransfer.files[0]); });
+  $('#capa-' + campo + '-ativa').onchange = async e => {
+    const aviso = $('#capa-' + campo + '-aviso');
+    try{
+      await api('capas_salvar', {method:'POST', corpo:{campo, ativa: e.target.checked}});
+    }catch(err){
+      e.target.checked = !e.target.checked;
+      aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block';
+    }
+  };
+});
+async function enviarCapaFixa(campo, arquivo){
+  const aviso = $('#capa-' + campo + '-aviso');
+  const zona = $('#zona-upload-capa-' + campo);
+  const textoOriginal = zona.textContent;
+  zona.textContent = '⏳ Enviando…';
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    fd.append('campo', campo);
+    const r = await fetch('api/admin.php?acao=capas_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    aviso.className = 'aviso-form ok';
+    aviso.textContent = 'Imagem atualizada!';
+    aviso.style.display = 'block';
+    carregarCapasFixas();
+  }catch(e){
+    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
+  }finally{ zona.textContent = textoOriginal; }
+}
 
 /* ---------- Lojas genéricas (Lanchonete, Mercado, e as que forem criadas) ---------- */
 let lojasCache = [];
