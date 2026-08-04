@@ -13,6 +13,8 @@
      POST ?acao=item_loja_comprar {itemId}             -> decremento atômico de estoque limitado
      POST ?acao=presentear_item {itemId, varianteId, apelidoDestino} -> transfere 1 unidade da mochila
      GET  ?acao=ranking                                -> top 10 por nível e por sequência (só apelido/bicho/número)
+     POST ?acao=push_inscrever  {endpoint, p256dh, auth} -> ativa lembrete de sequência nesse aparelho
+     POST ?acao=push_desinscrever {endpoint}            -> desativa nesse aparelho
      GET  ?acao=resumo_responsavel                     -> painel de acompanhamento (mesmo login do jogador)
    ========================================================= */
 
@@ -110,6 +112,27 @@ try {
         'apelido' => $l['apelido'], 'tipo' => $l['tipo'], 'streakAtual' => (int)$l['streak_atual'], 'streakMelhor' => (int)$l['streak_melhor'],
       ], $porStreak),
     ]);
+  }
+
+  /* inscrição de notificação push (lembrete de sequência, opcional — ativado no Perfil).
+     Um aparelho = uma inscrição; se o mesmo endpoint já existir pra esse jogador, apaga a
+     antiga antes (evita duplicar notificação no mesmo aparelho quando ele reativa). */
+  if ($acao === 'push_inscrever') {
+    $d = corpo();
+    $endpoint = (string)($d['endpoint'] ?? '');
+    $p256dh = (string)($d['p256dh'] ?? '');
+    $auth = (string)($d['auth'] ?? '');
+    if ($endpoint === '' || $p256dh === '' || $auth === '') responder(['erro' => 'Inscrição incompleta.'], 422);
+    bd()->prepare('DELETE FROM push_inscricoes WHERE jogador_id = ? AND endpoint = ?')->execute([$id, $endpoint]);
+    bd()->prepare('INSERT INTO push_inscricoes (jogador_id, endpoint, chave_p256dh, chave_auth) VALUES (?, ?, ?, ?)')
+      ->execute([$id, $endpoint, $p256dh, $auth]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'push_desinscrever') {
+    $endpoint = (string)(corpo()['endpoint'] ?? '');
+    bd()->prepare('DELETE FROM push_inscricoes WHERE jogador_id = ? AND endpoint = ?')->execute([$id, $endpoint]);
+    responder(['ok' => true]);
   }
 
   /* visitar a casa de outro jogador: só o necessário pra desenhar o quarto dele — nunca

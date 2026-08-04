@@ -45,6 +45,21 @@ try {
     INDEX (destinatario_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
+  // inscrições de notificação push (lembrete de sequência) — um jogador pode ter mais de
+  // uma (celular + computador, por exemplo). endpoint é a URL única que o navegador dá
+  // pra cada inscrição; sem UNIQUE por causa do tamanho em utf8mb4, resolvido na aplicação
+  // (apaga a antiga com o mesmo endpoint antes de inserir de novo)
+  $pdo->exec('CREATE TABLE IF NOT EXISTS push_inscricoes (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    jogador_id   INT NOT NULL,
+    endpoint     VARCHAR(500) NOT NULL,
+    chave_p256dh VARCHAR(255) NOT NULL,
+    chave_auth   VARCHAR(255) NOT NULL,
+    criado_em    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (jogador_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    INDEX (jogador_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
   $pdo->exec('CREATE TABLE IF NOT EXISTS admins (
     id         INT AUTO_INCREMENT PRIMARY KEY,
     usuario    VARCHAR(40)  NOT NULL UNIQUE,

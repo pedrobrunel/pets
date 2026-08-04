@@ -1,6 +1,9 @@
 # credenciais — nunca versionar
 api/config.php
 
+# dependências PHP (composer install) — geradas no deploy, não vão pro Git
+/vendor/
+
 # lixo de sistema
 .DS_Store
 Thumbs.db
