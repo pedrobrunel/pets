@@ -11,6 +11,7 @@
      GET  ?acao=ver_casa        ?apelido=xx            -> casa (só isso) de outro jogador, pra visitar
      POST ?acao=completar_licao {licaoId, respostas}   -> confere gabarito e credita moedas/XP
      POST ?acao=item_loja_comprar {itemId}             -> decremento atômico de estoque limitado
+     POST ?acao=presentear_item {itemId, varianteId, apelidoDestino} -> transfere 1 unidade da mochila
      GET  ?acao=resumo_responsavel                     -> painel de acompanhamento (mesmo login do jogador)
    ========================================================= */
 
@@ -62,7 +63,28 @@ try {
   if ($acao === 'carregar') {
     $st = bd()->prepare('SELECT estado FROM jogadores WHERE id = ?');
     $st->execute([$id]);
-    responder(json_decode((string)$st->fetchColumn(), true) ?: []);
+    $estado = json_decode((string)$st->fetchColumn(), true) ?: [];
+
+    // presentes pendentes (ver "presentear_item" abaixo): só o dono da linha entrega,
+    // aqui mesmo no carregar — evita duas escritas concorrentes na mesma linha por causa
+    // de um presente chegando enquanto o próprio jogador também está salvando algo seu
+    $stPresentes = bd()->prepare('SELECT id, item_chave, remetente_apelido FROM presentes WHERE destinatario_id = ?');
+    $stPresentes->execute([$id]);
+    $presentes = $stPresentes->fetchAll(PDO::FETCH_ASSOC);
+    $presentesRecebidos = [];
+    if ($presentes) {
+      $estado['inventario'] = $estado['inventario'] ?? [];
+      foreach ($presentes as $p) {
+        $estado['inventario'][$p['item_chave']] = (int)($estado['inventario'][$p['item_chave']] ?? 0) + 1;
+        $presentesRecebidos[] = ['itemChave' => $p['item_chave'], 'de' => $p['remetente_apelido']];
+      }
+      bd()->prepare('UPDATE jogadores SET estado = ? WHERE id = ?')->execute([json_encode($estado, JSON_UNESCAPED_UNICODE), $id]);
+      $idsPresentes = array_column($presentes, 'id');
+      $marcas = implode(',', array_fill(0, count($idsPresentes), '?'));
+      bd()->prepare("DELETE FROM presentes WHERE id IN ($marcas)")->execute($idsPresentes);
+    }
+    $estado['presentesRecebidos'] = $presentesRecebidos; // efêmero — o cliente lê e descarta, não faz parte do estado salvo de verdade
+    responder($estado);
   }
 
   /* visitar a casa de outro jogador: só o necessário pra desenhar o quarto dele — nunca
@@ -107,6 +129,44 @@ try {
     $chk = bd()->prepare('SELECT estoque_total - estoque_vendido AS restante FROM itens_loja WHERE id = ?');
     $chk->execute([$itemId]);
     responder(['ok' => true, 'estoqueRestante' => (int)$chk->fetchColumn()]);
+  }
+
+  /* presentear: manda 1 unidade de um item da mochila pra outro jogador, pelo apelido.
+     Só mexe na PRÓPRIA linha do remetente (decrementa a mochila) — nunca escreve direto
+     na linha do destinatário. O item fica pendente na tabela "presentes" até o
+     destinatário abrir o jogo de novo; é aí que ele mesmo aplica o +1 na própria linha
+     (ver "carregar" acima). Isso evita a corrida clássica de duas escritas concorrentes
+     na mesma linha: se escrevêssemos direto na mochila do destinatário aqui, e o
+     autosave (debounce de 2s) do PRÓPRIO destinatário disparasse logo depois com um
+     estado desatualizado (sem saber do presente), ele sobrescreveria o presente e o
+     item sumia sem ninguém perceber. */
+  if ($acao === 'presentear_item') {
+    $d = corpo();
+    $itemId = (string)($d['itemId'] ?? '');
+    $varianteId = trim((string)($d['varianteId'] ?? ''));
+    $apelidoDestino = trim((string)($d['apelidoDestino'] ?? ''));
+    if (!preg_match('/^[\p{L}0-9_]{3,14}$/u', $apelidoDestino)) responder(['erro' => 'Apelido inválido.'], 422);
+
+    $st = bd()->prepare('SELECT id, apelido FROM jogadores WHERE apelido = ?');
+    $st->execute([$apelidoDestino]);
+    $destino = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$destino) responder(['erro' => 'Não achamos ninguém com esse apelido.'], 404);
+    if ((int)$destino['id'] === $id) responder(['erro' => 'Você não pode presentear você mesmo :)'], 422);
+
+    $chave = $varianteId !== '' ? "{$itemId}__{$varianteId}" : $itemId;
+    $st = bd()->prepare('SELECT apelido, estado FROM jogadores WHERE id = ?');
+    $st->execute([$id]);
+    $linhaRemetente = $st->fetch(PDO::FETCH_ASSOC);
+    $estadoRemetente = json_decode((string)$linhaRemetente['estado'], true) ?: [];
+    if ((int)($estadoRemetente['inventario'][$chave] ?? 0) < 1) {
+      responder(['erro' => 'Você não tem esse item pra presentear.'], 422);
+    }
+    $estadoRemetente['inventario'][$chave]--;
+    bd()->prepare('UPDATE jogadores SET estado = ?, atualizado_em = NOW() WHERE id = ?')
+      ->execute([json_encode($estadoRemetente, JSON_UNESCAPED_UNICODE), $id]);
+    bd()->prepare('INSERT INTO presentes (destinatario_id, item_chave, remetente_apelido) VALUES (?, ?, ?)')
+      ->execute([(int)$destino['id'], $chave, $linhaRemetente['apelido']]);
+    responder(['ok' => true, 'apelidoDestino' => $destino['apelido']]);
   }
 
   if ($acao === 'salvar') {

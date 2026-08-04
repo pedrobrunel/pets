@@ -2664,7 +2664,10 @@ function cartaoMochilaLoja({chave, it, variante}){
     ${imagem ? `<img src="${esc(imagem)}" alt="" style="width:32px;height:32px;object-fit:contain">` : `<span class="emoji">${esc(it.emoji)}</span>`}
     <b>${esc(nome)}</b>
     <small style="font-weight:900;color:#7F8C8D">tem ${estado.inventario[chave]}</small>
-    ${temEfeito ? `<button class="btn pequeno laranja" onclick="consumirItemLoja('${chave}')">Dar pro bicho</button>` : ''}
+    <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
+      ${temEfeito ? `<button class="btn pequeno laranja" onclick="consumirItemLoja('${chave}')">Dar pro bicho</button>` : ''}
+      <button class="btn pequeno branco" onclick="abrirPresentear('${chave}')">🎁 Presentear</button>
+    </div>
   </div>`;
 }
 function consumirItemLoja(chave){
@@ -2677,6 +2680,43 @@ function consumirItemLoja(chave){
   brinde(it.emoji + ' Nhac! Fome em ' + lim(estado.fome) + '.');
   atualizarHud(); RENDER.loja();
   agendarSalvar();
+}
+// presentear: manda 1 unidade de um item da mochila pra outro jogador, pelo apelido —
+// transferência de verdade (soma pro destino, subtrai de quem manda), então só funciona
+// com conta salva dos dois lados (ver item_loja_comprar/presentear_item em estado.php)
+function abrirPresentear(chave){
+  modal(`
+    <h2 style="font-size:22px">🎁 Presentear</h2>
+    <p style="margin:6px 0 12px">Pra quem você quer mandar esse item?</p>
+    <input id="presente-apelido" type="text" maxlength="14" placeholder="apelido do amigo"
+      style="width:100%;font-family:'Nunito';font-weight:800;font-size:18px;padding:10px 14px;border:4px solid var(--contorno);border-radius:16px;background:#fff;color:inherit;box-sizing:border-box">
+    <p id="presente-aviso" class="aviso" style="margin-top:10px;display:none"></p>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn grande" onclick="enviarPresente('${chave}')">Enviar presente</button>
+      <button class="btn grande branco" onclick="fecharModal()">Cancelar</button>
+    </div>`);
+  setTimeout(() => $('#presente-apelido')?.focus(), 50);
+}
+async function enviarPresente(chave){
+  const apelidoDestino = ($('#presente-apelido')?.value || '').trim();
+  const aviso = $('#presente-aviso');
+  const mostrarErro = msg => { if(aviso){ aviso.textContent = msg; aviso.style.display = 'block'; } };
+  if(!logado) return mostrarErro('Só dá pra presentear com conta salva (usuário e senha) — jogando sem conta não tem como.');
+  if(!apelidoDestino) return mostrarErro('Digite o apelido de quem vai receber.');
+  const [itemId, varianteId] = chave.split('__');
+  try{
+    const r = await fetch('api/estado.php?acao=presentear_item', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({itemId, varianteId: varianteId || null, apelidoDestino}),
+    });
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) return mostrarErro(d.erro || 'Não deu pra presentear.');
+    estado.inventario[chave]--;
+    fecharModal();
+    atualizarHud(); RENDER.loja();
+    agendarSalvar();
+    brinde('🎁 Presente enviado pra ' + d.apelidoDestino + '!');
+  }catch(e){ mostrarErro('Sem conexão — tenta de novo.'); }
 }
 
 /* ---------- 9b. TELA: LOJA DE MÓVEIS (decorar a Casa, estilo Club Penguin) ----------
@@ -3041,7 +3081,13 @@ async function carregarDoServidor(){
   try{
     const r = await fetch('api/estado.php?acao=carregar', {cache:'no-store'});
     if(!r.ok) return false;
-    Object.assign(estado, await r.json());
+    const dados = await r.json();
+    // presentes entregues nessa carga (ver presentear_item/carregar em estado.php) —
+    // campo efêmero, só pra avisar o aluno; não pode ir pro próximo "salvar"
+    const presentesRecebidos = dados.presentesRecebidos || [];
+    delete dados.presentesRecebidos;
+    Object.assign(estado, dados);
+    presentesRecebidos.forEach(p => brinde('🎁 ' + p.de + ' te mandou um presente!'));
     return true;
   }catch(e){ return false; }
 }
