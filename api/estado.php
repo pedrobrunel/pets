@@ -10,6 +10,7 @@
      POST ?acao=salvar          {...estado}            -> grava o estado
      GET  ?acao=ver_casa        ?apelido=xx            -> casa (só isso) de outro jogador, pra visitar
      POST ?acao=completar_licao {licaoId, respostas}   -> confere gabarito e credita moedas/XP
+     POST ?acao=item_loja_comprar {itemId}             -> decremento atômico de estoque limitado
      GET  ?acao=resumo_responsavel                     -> painel de acompanhamento (mesmo login do jogador)
    ========================================================= */
 
@@ -82,6 +83,30 @@ try {
       'casaDesbloqueada' => (bool)($estadoAlheio['casaDesbloqueada'] ?? false),
       'casaMoveis' => $estadoAlheio['casaMoveis'] ?? [],
     ]);
+  }
+
+  /* estoque limitado por quantidade (aba Lojas, "estoqueTotal" > 0): decremento atômico
+     numa linha só, sem transação explícita — o UPDATE com a condição na cláusula WHERE
+     já serializa concorrência pelo lock de linha do InnoDB, então dois alunos comprando
+     ao mesmo tempo nunca vendem mais do que o limite. Preço/moedas continuam 100%
+     confiados ao cliente (igual ao resto da loja) — só o estoque global precisa dessa
+     garantia, porque é compartilhado entre todo mundo que joga. */
+  if ($acao === 'item_loja_comprar') {
+    $itemId = (string)(corpo()['itemId'] ?? '');
+    $st = bd()->prepare('UPDATE itens_loja SET estoque_vendido = estoque_vendido + 1
+      WHERE id = ? AND estoque_total > 0 AND estoque_vendido < estoque_total');
+    $st->execute([$itemId]);
+    if ($st->rowCount() === 0) {
+      $chk = bd()->prepare('SELECT estoque_total, estoque_vendido FROM itens_loja WHERE id = ?');
+      $chk->execute([$itemId]);
+      $linha = $chk->fetch(PDO::FETCH_ASSOC);
+      if (!$linha) responder(['erro' => 'Item não encontrado.'], 404);
+      if ((int)$linha['estoque_total'] === 0) responder(['ok' => true, 'estoqueRestante' => null]);
+      responder(['erro' => 'Esgotado! Não sobrou nenhuma unidade.'], 409);
+    }
+    $chk = bd()->prepare('SELECT estoque_total - estoque_vendido AS restante FROM itens_loja WHERE id = ?');
+    $chk->execute([$itemId]);
+    responder(['ok' => true, 'estoqueRestante' => (int)$chk->fetchColumn()]);
   }
 
   if ($acao === 'salvar') {

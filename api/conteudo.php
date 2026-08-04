@@ -147,6 +147,9 @@ try {
     'diasSemana' => $it['dias_semana'] === '' ? [] : array_map('intval', explode(',', $it['dias_semana'])),
     'horaInicio' => $it['hora_inicio'], 'horaFim' => $it['hora_fim'],
     'dataInicio' => $it['data_inicio'], 'dataFim' => $it['data_fim'],
+    // estoqueTotal 0 = sem limite (não expõe "vendido" pro cliente, só o que falta)
+    'estoqueTotal' => (int)$it['estoque_total'],
+    'estoqueRestante' => (int)$it['estoque_total'] > 0 ? max(0, (int)$it['estoque_total'] - (int)$it['estoque_vendido']) : null,
   ], $itensLojaLinhas);
 
   $existe = [

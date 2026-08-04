@@ -2688,20 +2688,28 @@ function cartaoItemLoja(it){
   const variantes = it.variantes || [];
   const imagemInicial = (variantes[0] && variantes[0].imagemUrl) || it.imagemUrl;
   const podePagar = estado.moedas >= it.preco;
+  const jaTem = it.tipo === 'acessorio' && estado.mochila.includes(it.id);
+  // estoque limitado (aba Lojas): estoqueTotal 0 = sem limite. Já possuído (acessório
+  // guardado) não conta esgotado — o aluno só está vestindo/tirando o que já é dele
+  const esgotado = !jaTem && it.estoqueTotal > 0 && it.estoqueRestante <= 0;
   let botao;
   // acessório: compra uma vez só, depois é veste/tira (sem custo) — comida: compra
   // repetida, cada uma vai pro inventário até ser dada pro bicho (ver seção 9/9c)
   if(it.tipo === 'acessorio'){
     const tem = estado.mochila.includes(it.id);
     const posto = estado.equipado.includes(it.id);
-    const rot = tem ? (posto ? 'Tirar' : 'Vestir') : ('🪙 ' + it.preco);
-    const cls = tem ? (posto ? 'roxo' : 'azul') : (podePagar ? '' : 'bloq');
-    botao = `<button class="btn pequeno ${cls}" onclick="usarItemLoja('${it.id}')">${rot}</button>`;
+    const rot = tem ? (posto ? 'Tirar' : 'Vestir') : (esgotado ? 'Esgotado' : '🪙 ' + it.preco);
+    const cls = tem ? (posto ? 'roxo' : 'azul') : ((podePagar && !esgotado) ? '' : 'bloq');
+    botao = `<button class="btn pequeno ${cls}" ${esgotado?'disabled':''} onclick="usarItemLoja('${it.id}')">${rot}</button>`;
   } else {
-    botao = `<button class="btn pequeno ${podePagar?'':'bloq'}" onclick="usarItemLoja('${it.id}')">🪙 ${it.preco}</button>`;
+    botao = `<button class="btn pequeno ${(podePagar && !esgotado)?'':'bloq'}" ${esgotado?'disabled':''} onclick="usarItemLoja('${it.id}')">${esgotado ? 'Esgotado' : '🪙 ' + it.preco}</button>`;
   }
+  const temChip = temAgenda(it) || (!jaTem && it.estoqueTotal > 0);
   return `<div class="item-loja">
-    ${temAgenda(it) ? `<span class="chip" style="display:block;font-size:9px;padding:2px 6px;margin:-4px auto 6px;width:fit-content">⏳ por tempo limitado</span>` : ''}
+    ${temChip ? `<div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;margin:-4px auto 6px">
+      ${temAgenda(it) ? `<span class="chip" style="font-size:9px;padding:2px 6px">⏳ por tempo limitado</span>` : ''}
+      ${!jaTem && it.estoqueTotal > 0 ? `<span class="chip" style="font-size:9px;padding:2px 6px">${esgotado ? '😢 esgotado' : '🔥 restam ' + it.estoqueRestante}</span>` : ''}
+    </div>` : ''}
     ${imagemInicial ? `<img id="img-item-loja-${it.id}" src="${esc(imagemInicial)}" alt="" style="width:48px;height:48px;object-fit:contain">` : `<span class="emoji">${esc(it.emoji)}</span>`}
     <b>${esc(it.nome)}</b>
     ${variantes.length ? `<select class="select-variante" id="sel-variante-${it.id}" onchange="trocarImagemItemLoja('${it.id}', this.value)">
@@ -2721,7 +2729,7 @@ function trocarImagemItemLoja(itemId, varianteId){
 function atualizarTelaDaLoja(lojaId){
   return telaAtual === 'loja' ? RENDER.loja() : RENDER.lojagenerica(lojaId);
 }
-function usarItemLoja(itemId){
+async function usarItemLoja(itemId){
   const it = ITENS_LOJA.find(x => x.id === itemId);
   if(!it) return;
   if(it.tipo === 'acessorio' && estado.mochila.includes(itemId)){
@@ -2732,6 +2740,22 @@ function usarItemLoja(itemId){
     return atualizarTelaDaLoja(it.lojaId);
   }
   if(estado.moedas < it.preco) return brinde('Faltam 🪙 ' + (it.preco-estado.moedas) + '. Bora jogar um minigame!');
+  // estoque limitado por quantidade: confirma com o servidor ANTES de cobrar — é a
+  // única parte da compra que não pode ficar 100% no cliente, porque o limite é
+  // compartilhado entre todo mundo que joga (ver item_loja_comprar em estado.php)
+  if(it.estoqueTotal > 0){
+    if(it.estoqueRestante <= 0) return brinde('😢 Esgotado! Não sobrou nenhuma unidade.');
+    try{
+      const r = await fetch('api/estado.php?acao=item_loja_comprar', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({itemId})});
+      const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+      if(!r.ok){
+        it.estoqueRestante = 0;
+        atualizarTelaDaLoja(it.lojaId);
+        return brinde('😢 ' + (d.erro || 'Esgotado! Alguém comprou antes de você.'));
+      }
+      if(typeof d.estoqueRestante === 'number') it.estoqueRestante = d.estoqueRestante;
+    }catch(e){ return brinde('📡 Sem conexão — tenta de novo.'); }
+  }
   estado.moedas -= it.preco;
   if(it.tipo === 'acessorio'){
     estado.mochila.push(itemId); estado.equipado.push(itemId);

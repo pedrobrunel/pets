@@ -765,6 +765,14 @@ body.conectando-fluxo{cursor:crosshair}
           <div><label style="margin-top:6px">até</label><input type="text" id="item-loja-data-fim" placeholder="AAAA-MM-DD" maxlength="10"></div>
         </div>
 
+        <label style="margin-top:14px">estoque limitado por quantidade <span style="font-weight:700;color:#7F8C8D">(opcional — 0 = sem limite)</span></label>
+        <p class="sub" style="margin-top:0">só essa quantidade total é vendida (somando todo mundo que joga) — depois disso o item aparece como "esgotado". Dá senso de exclusividade pra item raro.</p>
+        <div class="linha3">
+          <div><label>quantidade total à venda</label><input type="number" id="item-loja-estoque-total" value="0" min="0"></div>
+          <div><label>já vendido</label><input type="number" id="item-loja-estoque-vendido" value="0" disabled></div>
+          <div style="display:flex;align-items:flex-end"><button type="button" class="btn linha branco" id="btn-repor-estoque-item-loja" style="width:100%">Repor estoque (zerar vendido)</button></div>
+        </div>
+
         <div class="check" style="margin-top:10px"><input type="checkbox" id="item-loja-publicado" checked><label style="margin:0" for="item-loja-publicado">publicado (aparece pro aluno)</label></div>
 
         <div id="item-loja-aviso" class="aviso-form"></div>
@@ -2504,19 +2512,20 @@ async function carregarItensLoja(){
   itensLojaCache = d.itens;
   const nomeLoja = id => lojasCache.find(l => l.id === id)?.nome || id;
   $('#tabela-itens-loja').innerHTML = `
-    <tr><th>Ordem</th><th>Item</th><th>Loja</th><th>Preço</th><th>Status</th><th></th></tr>
+    <tr><th>Ordem</th><th>Item</th><th>Loja</th><th>Preço</th><th>Estoque</th><th>Status</th><th></th></tr>
     ${itensLojaCache.map(it => `<tr>
       <td>${it.ordem}</td>
       <td>${it.imagemUrl ? `<img class="npc-thumb" src="${esc(it.imagemUrl)}">` : ''}${it.emoji} ${esc(it.nome)} <small style="opacity:.6">(${it.tipo === 'acessorio' ? 'acessório' : 'comida'})</small>${it.variantes.length?` <small style="opacity:.6">— ${it.variantes.length} variante${it.variantes.length>1?'s':''}</small>`:''} <code style="opacity:.5">${it.id}</code></td>
       <td>${esc(nomeLoja(it.lojaId))}</td>
       <td>🪙 ${it.preco}</td>
+      <td>${it.estoqueTotal > 0 ? `${it.estoqueVendido}/${it.estoqueTotal}` : '—'}</td>
       <td><span class="selo ${it.publicado?'on':'off'}">${it.publicado?'publicado':'rascunho'}</span></td>
       <td class="acoes">
         <button class="btn linha branco" onclick="editarItemLoja('${it.id}')">Editar</button>
         <button class="btn linha branco" onclick="duplicarItemLoja('${it.id}','${esc(it.nome)}')">Duplicar</button>
         <button class="btn linha erro" onclick="excluirItemLoja('${it.id}','${esc(it.nome)}')">Excluir</button>
       </td>
-    </tr>`).join('') || '<tr><td colspan="6">Nenhum item ainda.</td></tr>'}`;
+    </tr>`).join('') || '<tr><td colspan="7">Nenhum item ainda.</td></tr>'}`;
 }
 function renderVariantes(){
   $('#lista-variantes').innerHTML = variantesEdit.map((v, i) => `<div class="linha-variante">
@@ -2583,6 +2592,8 @@ window.editarItemLoja = async (id) => {
   $('#item-loja-tipo').value = it.tipo || 'comida';
   $('#item-loja-preco').value = it.preco; $('#item-loja-fome').value = it.fome; $('#item-loja-alegria').value = it.alegria;
   $('#item-loja-ordem').value = it.ordem; $('#item-loja-publicado').checked = it.publicado;
+  $('#item-loja-estoque-total').value = it.estoqueTotal || 0;
+  $('#item-loja-estoque-vendido').value = it.estoqueVendido || 0;
   itemLojaImagem = it.imagem;
   $('#preview-item-loja').innerHTML = it.imagemUrl ? `<img class="movel-thumb" src="${esc(it.imagemUrl)}">` : '';
   variantesEdit = it.variantes.map(v => ({...v}));
@@ -2617,6 +2628,16 @@ $('#btn-excluir-item-loja').onclick = () => {
   const id = $('#item-loja-id').value;
   const it = itensLojaCache.find(x => x.id === id);
   if(it) excluirItemLoja(id, it.nome);
+};
+$('#btn-repor-estoque-item-loja').onclick = async () => {
+  const id = $('#item-loja-id').value;
+  if(!id || !$('#item-loja-id').disabled) return alert('Salve o item antes de repor o estoque.');
+  if(!confirm('Zerar a contagem de vendidos? O item volta a aparecer disponível pra todo mundo.')) return;
+  try{
+    await api('item_loja_estoque_resetar', {method:'POST', corpo:{id}});
+    $('#item-loja-estoque-vendido').value = 0;
+    carregarItensLoja();
+  }catch(e){ alert(e.message); }
 };
 $('#zona-upload-item-loja').onclick = () => $('#input-item-loja').click();
 $('#input-item-loja').onchange = e => { if(e.target.files[0]) enviarImagemItemLoja(e.target.files[0]); };
@@ -2658,6 +2679,7 @@ $('#form-item-loja').addEventListener('submit', async e => {
       diasSemana: itemLojaDiasSemanaSel.join(','), horaInicio: $('#item-loja-hora-inicio').value.trim(), horaFim: $('#item-loja-hora-fim').value.trim(),
       dataInicio: $('#item-loja-data-inicio').value.trim(), dataFim: $('#item-loja-data-fim').value.trim(),
       publicado: $('#item-loja-publicado').checked, ordem: Number($('#item-loja-ordem').value) || 0,
+      estoqueTotal: Number($('#item-loja-estoque-total').value) || 0,
     }});
     $('#form-item-loja').classList.add('oculto');
     carregarItensLoja();
