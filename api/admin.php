@@ -1453,6 +1453,62 @@ try {
     responder(['ok' => true]);
   }
 
+  /* ---------- Capas de cabeçalho de telas fixas (Loja de Móveis, Mural) ---------- */
+
+  $camposCapaValidos = ['lojamoveis', 'mural'];
+
+  if ($acao === 'capas_obter') {
+    $c = bd()->query('SELECT capa_lojamoveis_imagem, capa_lojamoveis_ativa, capa_mural_imagem, capa_mural_ativa FROM configuracoes WHERE id = 1')
+      ->fetch(PDO::FETCH_ASSOC) ?: ['capa_lojamoveis_imagem' => '', 'capa_lojamoveis_ativa' => 0, 'capa_mural_imagem' => '', 'capa_mural_ativa' => 0];
+    responder([
+      'lojamoveis' => ['imagem' => $c['capa_lojamoveis_imagem'], 'imagemUrl' => caminhoPublicoMovel($c['capa_lojamoveis_imagem']), 'ativa' => (bool)$c['capa_lojamoveis_ativa']],
+      'mural'      => ['imagem' => $c['capa_mural_imagem'], 'imagemUrl' => caminhoPublicoMovel($c['capa_mural_imagem']), 'ativa' => (bool)$c['capa_mural_ativa']],
+    ]);
+  }
+
+  if ($acao === 'capas_salvar') {
+    $d = corpo();
+    $campo = (string)($d['campo'] ?? '');
+    if (!in_array($campo, $camposCapaValidos, true)) {
+      responder(['erro' => '"campo" precisa ser lojamoveis ou mural.'], 422);
+    }
+    $ativa = !empty($d['ativa']) ? 1 : 0;
+    bd()->prepare("UPDATE configuracoes SET capa_{$campo}_ativa = ? WHERE id = 1")->execute([$ativa]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'capas_imagem') {
+    $campo = (string)($_POST['campo'] ?? '');
+    if (!in_array($campo, $camposCapaValidos, true)) {
+      responder(['erro' => '"campo" precisa ser lojamoveis ou mural.'], 422);
+    }
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || ($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+      $limite = ini_get('upload_max_filesize');
+      $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+        ? "A imagem passou do limite do servidor ($limite)."
+        : 'Nenhum arquivo recebido.';
+      responder(['erro' => $motivo], 422);
+    }
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_IMAGEM[$ext])) {
+      responder(['erro' => 'Formato não aceito. Use webp, png ou jpg (webp é o mais leve).'], 422);
+    }
+    $info = @getimagesize($arq['tmp_name']);
+    if (!$info || !in_array($info['mime'], EXTENSOES_IMAGEM, true)) {
+      responder(['erro' => 'O arquivo não é uma imagem válida.'], 422);
+    }
+    $nome = 'capa-' . $campo . '-' . bin2hex(random_bytes(3)) . '.' . $ext;
+    if (!is_dir(pastaMoveis()) && !@mkdir(pastaMoveis(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta assets/moveis no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaMoveis() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo em assets/moveis (confira a permissão da pasta).'], 500);
+    }
+    bd()->prepare("UPDATE configuracoes SET capa_{$campo}_imagem = ? WHERE id = 1")->execute([$nome]);
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => 'assets/moveis/' . $nome]);
+  }
+
   /* ---------- Lojas genéricas (Lanchonete, Mercado, e as que o Hostmaster criar) ---------- */
 
   if ($acao === 'lojas_listar') {

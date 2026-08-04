@@ -113,8 +113,13 @@ try {
 
   // fundo e preço de desbloqueio da Casa: um valor só, configurado no painel (aba Móveis)
   // — vale pra todo mundo. Desbloqueado (ou não) é que fica no estado de cada jogador.
-  $configCasa = bd()->query('SELECT casa_fundo, preco_casa FROM configuracoes WHERE id = 1')->fetch(PDO::FETCH_ASSOC) ?: ['casa_fundo' => '', 'preco_casa' => 5000];
+  $configCasa = bd()->query('SELECT casa_fundo, preco_casa, capa_lojamoveis_imagem, capa_lojamoveis_ativa, capa_mural_imagem, capa_mural_ativa FROM configuracoes WHERE id = 1')->fetch(PDO::FETCH_ASSOC)
+    ?: ['casa_fundo' => '', 'preco_casa' => 5000, 'capa_lojamoveis_imagem' => '', 'capa_lojamoveis_ativa' => 0, 'capa_mural_imagem' => '', 'capa_mural_ativa' => 0];
   $casaConfig = ['fundoUrl' => $urlMovel($configCasa['casa_fundo']), 'precoCasa' => (int)$configCasa['preco_casa']];
+  $capas = [
+    'lojamoveisImagemUrl' => $urlMovel($configCasa['capa_lojamoveis_imagem']), 'lojamoveisAtiva' => (bool)$configCasa['capa_lojamoveis_ativa'],
+    'muralImagemUrl' => $urlMovel($configCasa['capa_mural_imagem']), 'muralAtiva' => (bool)$configCasa['capa_mural_ativa'],
+  ];
 
   // lojas genéricas (Lanchonete, Mercado, e o que o Hostmaster criar depois) — cada uma
   // vira um destino de verdade no mapa (ponto tipo "loja"). Os itens ficam numa tabela à
@@ -203,11 +208,11 @@ try {
 
   echo json_encode([
     'mundos' => $saidaMundos, 'cenas' => $saidaCenas, 'npcs' => $saidaNpcs, 'missoes' => $saidaMissoes,
-    'itens' => $saidaItens, 'moveis' => $saidaMoveis, 'casaConfig' => $casaConfig,
+    'itens' => $saidaItens, 'moveis' => $saidaMoveis, 'casaConfig' => $casaConfig, 'capas' => $capas,
     'lojas' => $saidaLojas, 'itensLoja' => $saidaItensLoja,
   ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
   error_log('[bichoteca-conteudo] ' . $e->getMessage());
   http_response_code(500);
-  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => [], 'moveis' => [], 'casaConfig' => ['fundoUrl' => ''], 'lojas' => [], 'itensLoja' => []]);
+  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => [], 'moveis' => [], 'casaConfig' => ['fundoUrl' => ''], 'capas' => ['lojamoveisImagemUrl' => '', 'lojamoveisAtiva' => false, 'muralImagemUrl' => '', 'muralAtiva' => false], 'lojas' => [], 'itensLoja' => []]);
 }
