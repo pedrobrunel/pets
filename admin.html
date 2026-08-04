@@ -621,6 +621,18 @@ body.conectando-fluxo{cursor:crosshair}
         <p class="dica-editor">Capriche na imagem com "Mural da vila" já desenhado nela — o app não escreve o nome por cima, só sobrepõe o ícone do NPC marcado como "aparece em: Mural" na aba NPCs (se tiver um), no canto direito.</p>
       </div>
 
+      <div class="painel" style="padding:16px;margin-bottom:20px">
+        <h3 style="font-size:16px;margin-top:0">Música de fundo</h3>
+        <p class="sub" style="margin-top:0">opcional — toca em loop, baixinho, enquanto o aluno joga. Ele pode mutar tudo (música + efeitos) com o botão de som no topo do jogo.</p>
+        <div id="preview-musica" style="margin-bottom:10px"></div>
+        <div class="upload" id="zona-upload-musica">🎵 Arraste o áudio aqui, ou clique pra escolher — mp3, ogg, wav ou m4a</div>
+        <input type="file" id="input-musica" accept=".mp3,.ogg,.wav,.m4a,audio/*" class="oculto">
+        <div id="musica-aviso" class="aviso-form"></div>
+        <div class="check" style="margin-top:8px"><input type="checkbox" id="musica-ativa">
+          <label style="margin:0" for="musica-ativa">tocar a música pro aluno</label></div>
+        <button type="button" class="btn linha erro" id="btn-remover-musica" style="margin-top:10px">Remover música</button>
+      </div>
+
       <button class="btn" id="btn-novo-movel" style="margin-bottom:14px">+ Novo móvel</button>
 
       <form id="form-movel" class="oculto">
@@ -981,7 +993,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   if(b.dataset.aba === 'npcs') carregarNpcs();
   if(b.dataset.aba === 'missoes') carregarMissoes();
   if(b.dataset.aba === 'itens') carregarItens();
-  if(b.dataset.aba === 'moveis') { carregarMoveis(); carregarCasaFundo(); carregarCapasFixas(); }
+  if(b.dataset.aba === 'moveis') { carregarMoveis(); carregarCasaFundo(); carregarCapasFixas(); carregarMusica(); }
   if(b.dataset.aba === 'lojas') carregarLojas();
 });
 
@@ -2387,6 +2399,48 @@ async function enviarCapaFixa(campo, arquivo){
     aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
   }finally{ zona.textContent = textoOriginal; }
 }
+
+/* música de fundo opcional (um arquivo só, tocado em loop no cliente) */
+async function carregarMusica(){
+  const d = await api('musica_obter').catch(() => ({url:'', ativa:false}));
+  $('#preview-musica').innerHTML = d.url ? `<audio controls src="${esc(d.url)}" style="width:100%"></audio>` : '<p class="sub" style="margin:0">Nenhuma música enviada ainda.</p>';
+  $('#musica-ativa').checked = d.ativa;
+}
+$('#zona-upload-musica').onclick = () => $('#input-musica').click();
+$('#input-musica').onchange = e => { if(e.target.files[0]) enviarMusica(e.target.files[0]); };
+['dragover','drop'].forEach(ev => $('#zona-upload-musica').addEventListener(ev, e => e.preventDefault()));
+$('#zona-upload-musica').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarMusica(e.dataTransfer.files[0]); });
+async function enviarMusica(arquivo){
+  const aviso = $('#musica-aviso');
+  const zona = $('#zona-upload-musica');
+  const textoOriginal = zona.textContent;
+  zona.textContent = '⏳ Enviando…';
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    const r = await fetch('api/admin.php?acao=musica_upload', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    aviso.className = 'aviso-form ok'; aviso.textContent = 'Música atualizada!'; aviso.style.display = 'block';
+    carregarMusica();
+  }catch(e){
+    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
+  }finally{ zona.textContent = textoOriginal; }
+}
+$('#musica-ativa').onchange = async e => {
+  const aviso = $('#musica-aviso');
+  try{
+    await api('musica_ativa_salvar', {method:'POST', corpo:{ativa: e.target.checked}});
+  }catch(err){
+    e.target.checked = !e.target.checked;
+    aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block';
+  }
+};
+$('#btn-remover-musica').onclick = async () => {
+  if(!confirm('Remover a música de fundo?')) return;
+  await api('musica_remover', {method:'POST', corpo:{}});
+  carregarMusica();
+};
 
 /* ---------- Lojas genéricas (Lanchonete, Mercado, e as que forem criadas) ---------- */
 let lojasCache = [];
