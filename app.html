@@ -1535,7 +1535,10 @@ const acharMovel = id => MOVEIS.find(m => m.id === id);
 let CASA_CONFIG = {fundoUrl:'', precoCasa:5000};
 // capas de cabeçalho das telas fixas sem entidade própria no banco (Loja de Móveis, Mural)
 // — mesmo sistema visual dos mundos/lojas genéricas, configurado direto em "configuracoes"
-let CAPAS = {lojamoveisImagemUrl:'', lojamoveisAtiva:false, muralImagemUrl:'', muralAtiva:false};
+let CAPAS = {
+  lojamoveisImagemUrl:'', lojamoveisAtiva:false, lojamoveisDiasSemana:[], lojamoveisHoraInicio:'', lojamoveisHoraFim:'', lojamoveisDataInicio:'', lojamoveisDataFim:'',
+  muralImagemUrl:'', muralAtiva:false, muralDiasSemana:[], muralHoraInicio:'', muralHoraFim:'', muralDataInicio:'', muralDataFim:'',
+};
 // música de fundo (opcional, enviada no painel) — um Audio só, criado na hora que o
 // jogo entra de fato (login/onboarding), porque autoplay sem gesto do usuário é bloqueado
 let MUSICA = {url:'', ativa:false};
@@ -1583,6 +1586,15 @@ function dentroDaAgenda(a){
   return true;
 }
 const npcAtivoAgora = n => dentroDaAgenda(n);
+// agenda opcional das capas (evento por tempo limitado, ex.: banner de Natal) — os campos
+// vêm prefixados ("capaDiasSemana", "lojamoveisDiasSemana"...) pra conviver com os outros
+// campos do mundo/loja/CAPAS no mesmo objeto; aqui só remonta no formato que dentroDaAgenda espera
+function agendaCapa(prefixo, obj){
+  return {
+    diasSemana: obj[prefixo + 'DiasSemana'], horaInicio: obj[prefixo + 'HoraInicio'], horaFim: obj[prefixo + 'HoraFim'],
+    dataInicio: obj[prefixo + 'DataInicio'], dataFim: obj[prefixo + 'DataFim'],
+  };
+}
 
 /* ---------- missões (catálogo central; o NPC só referencia pelo diálogo) ----------
    estado.missoes: {missaoId: 'ativa'|'completa'}. "pronta" não é gravado — é calculado
@@ -1982,7 +1994,7 @@ function desenharMundo(t){
     .sort((a,b) => ORDEM_SERIES.indexOf(a) - ORDEM_SERIES.indexOf(b));
   const licoesVisiveis = t.licoes.filter(l => filtroSerie==='todos' || l.serie===filtroSerie);
   const outrosMundos = TRILHAS.filter(x => x.id !== t.id);
-  const temCapa = t.capaAtiva && t.capaImagemUrl;
+  const temCapa = t.capaAtiva && t.capaImagemUrl && dentroDaAgenda(agendaCapa('capa', t));
   $('#tela-mundo').innerHTML = `
     ${temCapa ? renderCapaCabecalho(t.capaImagemUrl, {
         tela: 'mundo:' + t.id, voltar: "ir('trilhas')", infoLinha: `${feitas}/${total} lições concluídas`,
@@ -2591,7 +2603,7 @@ RENDER.loja = () => {
   const comprasLoja = itensLojaNaMochila();
   const mochilaVazia = !acessoriosNaMochila.length && !itensEspeciais.length && !comprasLoja.length;
   const lojaVila = acharLoja('lojadavila');
-  const temCapaVila = lojaVila && lojaVila.capaAtiva && lojaVila.capaImagemUrl;
+  const temCapaVila = lojaVila && lojaVila.capaAtiva && lojaVila.capaImagemUrl && dentroDaAgenda(agendaCapa('capa', lojaVila));
   $('#tela-loja').innerHTML = `
     ${temCapaVila
       ? renderCapaCabecalho(lojaVila.capaImagemUrl, {tela: 'loja', infoLinha: `🪙 ${estado.moedas}`})
@@ -2675,7 +2687,7 @@ function consumirItemLoja(chave){
 const temAgenda = a => !!(a.horaInicio || a.dataInicio || (a.diasSemana && a.diasSemana.length));
 RENDER.lojamoveis = () => {
   const disponiveis = MOVEIS.filter(dentroDaAgenda);
-  const temCapaMoveis = CAPAS.lojamoveisAtiva && CAPAS.lojamoveisImagemUrl;
+  const temCapaMoveis = CAPAS.lojamoveisAtiva && CAPAS.lojamoveisImagemUrl && dentroDaAgenda(agendaCapa('lojamoveis', CAPAS));
   $('#tela-lojamoveis').innerHTML = `
     ${temCapaMoveis
       ? renderCapaCabecalho(CAPAS.lojamoveisImagemUrl, {tela: 'lojamoveis', infoLinha: `🪙 ${estado.moedas}`})
@@ -2720,7 +2732,7 @@ RENDER.lojagenerica = (lojaId) => {
     return;
   }
   const disponiveis = itensDaLoja(lojaId).filter(dentroDaAgenda);
-  const temCapa = loja.capaAtiva && loja.capaImagemUrl;
+  const temCapa = loja.capaAtiva && loja.capaImagemUrl && dentroDaAgenda(agendaCapa('capa', loja));
   $('#tela-lojagenerica').innerHTML = `
     ${temCapa
       ? renderCapaCabecalho(loja.capaImagemUrl, {tela: 'loja:' + lojaId, infoLinha: `🪙 ${estado.moedas}`})
@@ -2826,7 +2838,7 @@ RENDER.mural = () => {
   const previa = [recadoNovo.inicio, recadoNovo.meio, recadoNovo.fim].filter(Boolean).join(' ');
   const blocos = (chave) => BLOCOS[chave].map(t =>
     `<button class="bloco" aria-pressed="${recadoNovo[chave]===t}" onclick="escolherBloco('${chave}',this.textContent)">${t}</button>`).join('');
-  const temCapaMural = CAPAS.muralAtiva && CAPAS.muralImagemUrl;
+  const temCapaMural = CAPAS.muralAtiva && CAPAS.muralImagemUrl && dentroDaAgenda(agendaCapa('mural', CAPAS));
   $('#tela-mural').innerHTML = `
     ${temCapaMural
       ? renderCapaCabecalho(CAPAS.muralImagemUrl, {tela: 'mural'})

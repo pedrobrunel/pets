@@ -10,7 +10,8 @@
      POST ?acao=admin_sair
      GET  ?acao=admin_eu
      GET  ?acao=mundos_listar
-     POST ?acao=mundo_salvar          {id, nome, emoji, cor, ordem, publicado, capaImagem, capaAtiva}
+     POST ?acao=mundo_salvar          {id, nome, emoji, cor, ordem, publicado, capaImagem, capaAtiva,
+                                        capaDiasSemana, capaHoraInicio, capaHoraFim, capaDataInicio, capaDataFim}
      POST ?acao=mundo_excluir         {id}
      POST ?acao=mundo_imagem          (multipart: arquivo) -> sobe imagem de capa pra assets/mundos/
      GET  ?acao=licoes_listar         [?mundo=xx]
@@ -61,7 +62,7 @@
      POST ?acao=casa_fundo_remover    -> volta a Casa pro visual padrão (sem fundo)
      POST ?acao=casa_preco_salvar     {precoCasa} -> preço em moedas pra desbloquear a decoração
      GET  ?acao=capas_obter           -> capas de cabeçalho da Loja de Móveis e do Mural
-     POST ?acao=capas_salvar          {campo, ativa} -> campo = lojamoveis|mural
+     POST ?acao=capas_salvar          {campo, ativa, diasSemana, horaInicio, horaFim, dataInicio, dataFim} -> campo = lojamoveis|mural
      POST ?acao=capas_imagem          (multipart: arquivo, campo=lojamoveis|mural) -> sobe pra assets/moveis/
      GET  ?acao=musica_obter          -> música de fundo (opcional) atual
      POST ?acao=musica_ativa_salvar   {ativa}
@@ -69,7 +70,8 @@
      POST ?acao=musica_remover        -> remove a música (volta a não ter trilha sonora)
      GET  ?acao=lojas_listar
      GET  ?acao=loja_obter            ?id=xx
-     POST ?acao=loja_salvar           {id, nome, emoji, publicado, ordem, capaImagem, capaAtiva}
+     POST ?acao=loja_salvar           {id, nome, emoji, publicado, ordem, capaImagem, capaAtiva,
+                                        capaDiasSemana, capaHoraInicio, capaHoraFim, capaDataInicio, capaDataFim}
      POST ?acao=loja_excluir          {id}
      POST ?acao=loja_imagem           (multipart: arquivo) -> sobe imagem de capa pra assets/lojas/
      GET  ?acao=itens_loja_listar     [?loja=xx]
@@ -247,7 +249,10 @@ function validarLoja(array $l): ?string {
   if ($emoji === '' || mb_strlen($emoji) > 8) return '"emoji" é obrigatório.';
   $capaImagem = trim((string)($l['capaImagem'] ?? ''));
   if ($capaImagem !== '' && !validarNomeImagem($capaImagem)) return '"capaImagem" tem um nome de arquivo inválido.';
-  return null;
+  return validarAgenda([
+    'diasSemana' => $l['capaDiasSemana'] ?? '', 'horaInicio' => $l['capaHoraInicio'] ?? '', 'horaFim' => $l['capaHoraFim'] ?? '',
+    'dataInicio' => $l['capaDataInicio'] ?? '', 'dataFim' => $l['capaDataFim'] ?? '',
+  ]);
 }
 
 /* valida as variantes de um item de loja (JSON: [{id, nome, imagem}]) — sabores/tamanhos
@@ -543,12 +548,15 @@ try {
   if (!isset($_SESSION['admin_id'])) responder(['erro' => 'Entre no painel primeiro.'], 401);
 
   if ($acao === 'mundos_listar') {
-    $linhas = bd()->query('SELECT m.id, m.nome, m.emoji, m.cor, m.ordem, m.publicado, m.capa_imagem, m.capa_ativa, COUNT(l.id) AS licoes
+    $linhas = bd()->query('SELECT m.id, m.nome, m.emoji, m.cor, m.ordem, m.publicado, m.capa_imagem, m.capa_ativa,
+        m.capa_dias_semana, m.capa_hora_inicio, m.capa_hora_fim, m.capa_data_inicio, m.capa_data_fim, COUNT(l.id) AS licoes
       FROM mundos m LEFT JOIN licoes l ON l.mundo_id = m.id GROUP BY m.id ORDER BY m.ordem, m.nome')->fetchAll(PDO::FETCH_ASSOC);
     responder(['mundos' => array_map(fn($m) => [
       'id' => $m['id'], 'nome' => $m['nome'], 'emoji' => $m['emoji'], 'cor' => $m['cor'],
       'ordem' => (int)$m['ordem'], 'publicado' => (bool)$m['publicado'], 'licoes' => (int)$m['licoes'],
       'capaImagem' => $m['capa_imagem'], 'capaImagemUrl' => caminhoPublicoMundo($m['capa_imagem']), 'capaAtiva' => (bool)$m['capa_ativa'],
+      'capaDiasSemana' => $m['capa_dias_semana'], 'capaHoraInicio' => $m['capa_hora_inicio'], 'capaHoraFim' => $m['capa_hora_fim'],
+      'capaDataInicio' => $m['capa_data_inicio'], 'capaDataFim' => $m['capa_data_fim'],
     ], $linhas)]);
   }
 
@@ -567,10 +575,23 @@ try {
     $capaImagem = trim((string)($d['capaImagem'] ?? ''));
     if ($capaImagem !== '' && !validarNomeImagem($capaImagem)) responder(['erro' => '"capaImagem" tem um nome de arquivo inválido.'], 422);
     $capaAtiva = !empty($d['capaAtiva']) ? 1 : 0;
-    bd()->prepare('INSERT INTO mundos (id, nome, emoji, cor, ordem, publicado, capa_imagem, capa_ativa) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    $erroAgenda = validarAgenda([
+      'diasSemana' => $d['capaDiasSemana'] ?? '', 'horaInicio' => $d['capaHoraInicio'] ?? '', 'horaFim' => $d['capaHoraFim'] ?? '',
+      'dataInicio' => $d['capaDataInicio'] ?? '', 'dataFim' => $d['capaDataFim'] ?? '',
+    ]);
+    if ($erroAgenda) responder(['erro' => $erroAgenda], 422);
+    bd()->prepare('INSERT INTO mundos (id, nome, emoji, cor, ordem, publicado, capa_imagem, capa_ativa,
+        capa_dias_semana, capa_hora_inicio, capa_hora_fim, capa_data_inicio, capa_data_fim)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), cor=VALUES(cor), ordem=VALUES(ordem), publicado=VALUES(publicado),
-        capa_imagem=VALUES(capa_imagem), capa_ativa=VALUES(capa_ativa)')
-      ->execute([$id, $nome, $emoji, $cor, $ordem, $publicado, $capaImagem, $capaAtiva]);
+        capa_imagem=VALUES(capa_imagem), capa_ativa=VALUES(capa_ativa), capa_dias_semana=VALUES(capa_dias_semana),
+        capa_hora_inicio=VALUES(capa_hora_inicio), capa_hora_fim=VALUES(capa_hora_fim),
+        capa_data_inicio=VALUES(capa_data_inicio), capa_data_fim=VALUES(capa_data_fim)')
+      ->execute([
+        $id, $nome, $emoji, $cor, $ordem, $publicado, $capaImagem, $capaAtiva,
+        normalizarDiasSemana(trim((string)($d['capaDiasSemana'] ?? ''))), trim((string)($d['capaHoraInicio'] ?? '')), trim((string)($d['capaHoraFim'] ?? '')),
+        trim((string)($d['capaDataInicio'] ?? '')), trim((string)($d['capaDataFim'] ?? '')),
+      ]);
     responder(['ok' => true]);
   }
 
@@ -1472,12 +1493,20 @@ try {
   $camposCapaValidos = ['lojamoveis', 'mural'];
 
   if ($acao === 'capas_obter') {
-    $c = bd()->query('SELECT capa_lojamoveis_imagem, capa_lojamoveis_ativa, capa_mural_imagem, capa_mural_ativa FROM configuracoes WHERE id = 1')
-      ->fetch(PDO::FETCH_ASSOC) ?: ['capa_lojamoveis_imagem' => '', 'capa_lojamoveis_ativa' => 0, 'capa_mural_imagem' => '', 'capa_mural_ativa' => 0];
-    responder([
-      'lojamoveis' => ['imagem' => $c['capa_lojamoveis_imagem'], 'imagemUrl' => caminhoPublicoMovel($c['capa_lojamoveis_imagem']), 'ativa' => (bool)$c['capa_lojamoveis_ativa']],
-      'mural'      => ['imagem' => $c['capa_mural_imagem'], 'imagemUrl' => caminhoPublicoMovel($c['capa_mural_imagem']), 'ativa' => (bool)$c['capa_mural_ativa']],
-    ]);
+    $colunasCapaFixa = ['imagem', 'ativa', 'dias_semana', 'hora_inicio', 'hora_fim', 'data_inicio', 'data_fim'];
+    $c = bd()->query('SELECT capa_lojamoveis_imagem, capa_lojamoveis_ativa, capa_lojamoveis_dias_semana, capa_lojamoveis_hora_inicio, capa_lojamoveis_hora_fim, capa_lojamoveis_data_inicio, capa_lojamoveis_data_fim,
+        capa_mural_imagem, capa_mural_ativa, capa_mural_dias_semana, capa_mural_hora_inicio, capa_mural_hora_fim, capa_mural_data_inicio, capa_mural_data_fim
+      FROM configuracoes WHERE id = 1')->fetch(PDO::FETCH_ASSOC);
+    if (!$c) {
+      $c = [];
+      foreach (['lojamoveis', 'mural'] as $campo) foreach ($colunasCapaFixa as $sufixo) $c["capa_{$campo}_{$sufixo}"] = '';
+    }
+    $linhaCapa = fn($campo) => [
+      'imagem' => $c["capa_{$campo}_imagem"], 'imagemUrl' => caminhoPublicoMovel($c["capa_{$campo}_imagem"]), 'ativa' => (bool)$c["capa_{$campo}_ativa"],
+      'diasSemana' => $c["capa_{$campo}_dias_semana"], 'horaInicio' => $c["capa_{$campo}_hora_inicio"], 'horaFim' => $c["capa_{$campo}_hora_fim"],
+      'dataInicio' => $c["capa_{$campo}_data_inicio"], 'dataFim' => $c["capa_{$campo}_data_fim"],
+    ];
+    responder(['lojamoveis' => $linhaCapa('lojamoveis'), 'mural' => $linhaCapa('mural')]);
   }
 
   if ($acao === 'capas_salvar') {
@@ -1486,8 +1515,18 @@ try {
     if (!in_array($campo, $camposCapaValidos, true)) {
       responder(['erro' => '"campo" precisa ser lojamoveis ou mural.'], 422);
     }
+    $erroAgenda = validarAgenda([
+      'diasSemana' => $d['diasSemana'] ?? '', 'horaInicio' => $d['horaInicio'] ?? '', 'horaFim' => $d['horaFim'] ?? '',
+      'dataInicio' => $d['dataInicio'] ?? '', 'dataFim' => $d['dataFim'] ?? '',
+    ]);
+    if ($erroAgenda) responder(['erro' => $erroAgenda], 422);
     $ativa = !empty($d['ativa']) ? 1 : 0;
-    bd()->prepare("UPDATE configuracoes SET capa_{$campo}_ativa = ? WHERE id = 1")->execute([$ativa]);
+    bd()->prepare("UPDATE configuracoes SET capa_{$campo}_ativa = ?, capa_{$campo}_dias_semana = ?, capa_{$campo}_hora_inicio = ?,
+        capa_{$campo}_hora_fim = ?, capa_{$campo}_data_inicio = ?, capa_{$campo}_data_fim = ? WHERE id = 1")
+      ->execute([
+        $ativa, normalizarDiasSemana(trim((string)($d['diasSemana'] ?? ''))), trim((string)($d['horaInicio'] ?? '')),
+        trim((string)($d['horaFim'] ?? '')), trim((string)($d['dataInicio'] ?? '')), trim((string)($d['dataFim'] ?? '')),
+      ]);
     responder(['ok' => true]);
   }
 
@@ -1569,22 +1608,28 @@ try {
   /* ---------- Lojas genéricas (Lanchonete, Mercado, e as que o Hostmaster criar) ---------- */
 
   if ($acao === 'lojas_listar') {
-    $linhas = bd()->query('SELECT id, nome, emoji, publicado, ordem, capa_imagem, capa_ativa FROM lojas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    $linhas = bd()->query('SELECT id, nome, emoji, publicado, ordem, capa_imagem, capa_ativa,
+      capa_dias_semana, capa_hora_inicio, capa_hora_fim, capa_data_inicio, capa_data_fim FROM lojas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     responder(['lojas' => array_map(fn($l) => [
       'id' => $l['id'], 'nome' => $l['nome'], 'emoji' => $l['emoji'],
       'publicado' => (bool)$l['publicado'], 'ordem' => (int)$l['ordem'],
       'capaImagem' => $l['capa_imagem'], 'capaImagemUrl' => caminhoPublicoLoja($l['capa_imagem']), 'capaAtiva' => (bool)$l['capa_ativa'],
+      'capaDiasSemana' => $l['capa_dias_semana'], 'capaHoraInicio' => $l['capa_hora_inicio'], 'capaHoraFim' => $l['capa_hora_fim'],
+      'capaDataInicio' => $l['capa_data_inicio'], 'capaDataFim' => $l['capa_data_fim'],
     ], $linhas)]);
   }
 
   if ($acao === 'loja_obter') {
-    $st = bd()->prepare('SELECT id, nome, emoji, publicado, ordem, capa_imagem, capa_ativa FROM lojas WHERE id = ?');
+    $st = bd()->prepare('SELECT id, nome, emoji, publicado, ordem, capa_imagem, capa_ativa,
+      capa_dias_semana, capa_hora_inicio, capa_hora_fim, capa_data_inicio, capa_data_fim FROM lojas WHERE id = ?');
     $st->execute([(string)($_GET['id'] ?? '')]);
     $l = $st->fetch(PDO::FETCH_ASSOC);
     if (!$l) responder(['erro' => 'Loja não encontrada.'], 404);
     responder([
       'id' => $l['id'], 'nome' => $l['nome'], 'emoji' => $l['emoji'], 'publicado' => (bool)$l['publicado'], 'ordem' => (int)$l['ordem'],
       'capaImagem' => $l['capa_imagem'], 'capaImagemUrl' => caminhoPublicoLoja($l['capa_imagem']), 'capaAtiva' => (bool)$l['capa_ativa'],
+      'capaDiasSemana' => $l['capa_dias_semana'], 'capaHoraInicio' => $l['capa_hora_inicio'], 'capaHoraFim' => $l['capa_hora_fim'],
+      'capaDataInicio' => $l['capa_data_inicio'], 'capaDataFim' => $l['capa_data_fim'],
     ]);
   }
 
@@ -1594,12 +1639,18 @@ try {
     if (!validarId($id)) responder(['erro' => '"id" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
     $erro = validarLoja($d);
     if ($erro) responder(['erro' => $erro], 422);
-    bd()->prepare('INSERT INTO lojas (id, nome, emoji, publicado, ordem, capa_imagem, capa_ativa) VALUES (?, ?, ?, ?, ?, ?, ?)
+    bd()->prepare('INSERT INTO lojas (id, nome, emoji, publicado, ordem, capa_imagem, capa_ativa,
+        capa_dias_semana, capa_hora_inicio, capa_hora_fim, capa_data_inicio, capa_data_fim)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), publicado=VALUES(publicado), ordem=VALUES(ordem),
-        capa_imagem=VALUES(capa_imagem), capa_ativa=VALUES(capa_ativa)')
+        capa_imagem=VALUES(capa_imagem), capa_ativa=VALUES(capa_ativa), capa_dias_semana=VALUES(capa_dias_semana),
+        capa_hora_inicio=VALUES(capa_hora_inicio), capa_hora_fim=VALUES(capa_hora_fim),
+        capa_data_inicio=VALUES(capa_data_inicio), capa_data_fim=VALUES(capa_data_fim)')
       ->execute([
         $id, trim((string)$d['nome']), (string)($d['emoji'] ?? '🏪'), !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0),
         trim((string)($d['capaImagem'] ?? '')), !empty($d['capaAtiva']) ? 1 : 0,
+        normalizarDiasSemana(trim((string)($d['capaDiasSemana'] ?? ''))), trim((string)($d['capaHoraInicio'] ?? '')), trim((string)($d['capaHoraFim'] ?? '')),
+        trim((string)($d['capaDataInicio'] ?? '')), trim((string)($d['capaDataFim'] ?? '')),
       ]);
     responder(['ok' => true]);
   }

@@ -57,8 +57,15 @@ try {
     "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mundos'"
   )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
   foreach ([
-    'capa_imagem' => "VARCHAR(160) NOT NULL DEFAULT ''",
-    'capa_ativa'  => "TINYINT(1) NOT NULL DEFAULT 0",
+    'capa_imagem'        => "VARCHAR(160) NOT NULL DEFAULT ''",
+    'capa_ativa'         => "TINYINT(1) NOT NULL DEFAULT 0",
+    // agenda opcional da capa (evento por tempo limitado — ex.: banner de Natal), mesmo
+    // formato usado por NPCs/móveis/itens de loja; vazio = sempre visível enquanto ativa
+    'capa_dias_semana'   => "VARCHAR(20) NOT NULL DEFAULT ''",
+    'capa_hora_inicio'   => "VARCHAR(5) NOT NULL DEFAULT ''",
+    'capa_hora_fim'      => "VARCHAR(5) NOT NULL DEFAULT ''",
+    'capa_data_inicio'   => "VARCHAR(10) NOT NULL DEFAULT ''",
+    'capa_data_fim'      => "VARCHAR(10) NOT NULL DEFAULT ''",
   ] as $coluna => $definicao) {
     if (!in_array($coluna, $colunasMundos, true)) $pdo->exec("ALTER TABLE mundos ADD COLUMN $coluna $definicao");
   }
@@ -279,8 +286,13 @@ try {
     "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lojas'"
   )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
   foreach ([
-    'capa_imagem' => "VARCHAR(160) NOT NULL DEFAULT ''",
-    'capa_ativa'  => "TINYINT(1) NOT NULL DEFAULT 0",
+    'capa_imagem'      => "VARCHAR(160) NOT NULL DEFAULT ''",
+    'capa_ativa'       => "TINYINT(1) NOT NULL DEFAULT 0",
+    'capa_dias_semana' => "VARCHAR(20) NOT NULL DEFAULT ''",
+    'capa_hora_inicio' => "VARCHAR(5) NOT NULL DEFAULT ''",
+    'capa_hora_fim'    => "VARCHAR(5) NOT NULL DEFAULT ''",
+    'capa_data_inicio' => "VARCHAR(10) NOT NULL DEFAULT ''",
+    'capa_data_fim'    => "VARCHAR(10) NOT NULL DEFAULT ''",
   ] as $coluna => $definicao) {
     if (!in_array($coluna, $colunasLojas, true)) $pdo->exec("ALTER TABLE lojas ADD COLUMN $coluna $definicao");
   }
@@ -369,6 +381,20 @@ try {
   }
   if (!in_array('musica_ativa', $colunasConfig, true)) {
     $pdo->exec('ALTER TABLE configuracoes ADD COLUMN musica_ativa TINYINT(1) NOT NULL DEFAULT 0');
+  }
+  // agenda opcional das duas capas fixas (evento por tempo limitado, mesmo formato usado
+  // em mundos/lojas/NPCs/móveis/itens de loja) — vazio = sempre visível enquanto ativa
+  foreach (['lojamoveis', 'mural'] as $campoCapa) {
+    foreach ([
+      'dias_semana' => "VARCHAR(20) NOT NULL DEFAULT ''",
+      'hora_inicio' => "VARCHAR(5) NOT NULL DEFAULT ''",
+      'hora_fim'    => "VARCHAR(5) NOT NULL DEFAULT ''",
+      'data_inicio' => "VARCHAR(10) NOT NULL DEFAULT ''",
+      'data_fim'    => "VARCHAR(10) NOT NULL DEFAULT ''",
+    ] as $sufixo => $definicao) {
+      $coluna = "capa_{$campoCapa}_{$sufixo}";
+      if (!in_array($coluna, $colunasConfig, true)) $pdo->exec("ALTER TABLE configuracoes ADD COLUMN $coluna $definicao");
+    }
   }
   $pdo->exec('INSERT IGNORE INTO configuracoes (id, casa_fundo, preco_casa) VALUES (1, \'\', 5000)');
 
