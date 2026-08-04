@@ -338,7 +338,9 @@ try {
     capa_lojamoveis_imagem VARCHAR(160) NOT NULL DEFAULT \'\',
     capa_lojamoveis_ativa  TINYINT(1) NOT NULL DEFAULT 0,
     capa_mural_imagem      VARCHAR(160) NOT NULL DEFAULT \'\',
-    capa_mural_ativa       TINYINT(1) NOT NULL DEFAULT 0
+    capa_mural_ativa       TINYINT(1) NOT NULL DEFAULT 0,
+    musica_fundo           VARCHAR(160) NOT NULL DEFAULT \'\',
+    musica_ativa           TINYINT(1) NOT NULL DEFAULT 0
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
   // preco_casa e as colunas de capa chegaram depois de "configuracoes" já existir em
   // produção — mesma checagem por INFORMATION_SCHEMA usada nas outras colunas novas deste
@@ -361,6 +363,12 @@ try {
   }
   if (!in_array('capa_mural_ativa', $colunasConfig, true)) {
     $pdo->exec('ALTER TABLE configuracoes ADD COLUMN capa_mural_ativa TINYINT(1) NOT NULL DEFAULT 0');
+  }
+  if (!in_array('musica_fundo', $colunasConfig, true)) {
+    $pdo->exec('ALTER TABLE configuracoes ADD COLUMN musica_fundo VARCHAR(160) NOT NULL DEFAULT \'\'');
+  }
+  if (!in_array('musica_ativa', $colunasConfig, true)) {
+    $pdo->exec('ALTER TABLE configuracoes ADD COLUMN musica_ativa TINYINT(1) NOT NULL DEFAULT 0');
   }
   $pdo->exec('INSERT IGNORE INTO configuracoes (id, casa_fundo, preco_casa) VALUES (1, \'\', 5000)');
 

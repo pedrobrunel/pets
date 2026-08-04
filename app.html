@@ -106,6 +106,10 @@ input:focus-visible{outline:4px solid var(--jabuti);outline-offset:2px}
 .contador .bolha svg{width:14px;height:14px}
 .bolha.ouro{--bg:var(--moeda);--edge:var(--moeda-rim)}
 .bolha.xp{--bg:var(--ceu);--edge:var(--ceu-rim)}
+.btn-mudo{width:34px;height:34px;border-radius:50%;background:#fff;
+  border:3px solid var(--contorno);border-bottom-width:5px;
+  font-size:16px;display:grid;place-items:center;padding:0;flex-shrink:0}
+.btn-mudo.ativo{opacity:.55}
 
 /* ---------- navegação de baixo ---------- */
 nav.rodape{
@@ -722,6 +726,7 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
     <a class="marca" href="index.html" style="text-decoration:none;color:inherit">Bicho<span>teca</span></a>
     <div class="contador"><span class="bolha ouro"><svg viewBox="0 0 24 24"><path d="M12 5.5v13M8.5 8.6c0-1.6 1.5-2.4 3.5-2.4s3.3 1 3.3 2.3c0 2.9-6.8 1.5-6.8 4.6 0 1.4 1.5 2.4 3.5 2.4s3.5-1 3.5-2.6" stroke="var(--moeda-rim)" stroke-width="2.1" fill="none" stroke-linecap="round"/></svg></span><span id="hud-moedas">0</span></div>
     <div class="contador"><span class="bolha xp"><svg viewBox="0 0 24 24"><path d="M12 4l2.4 5.2L20 10l-4.2 3.8L17 19.5 12 16.6 7 19.5l1.2-5.7L4 10l5.6-.8z" fill="#fff"/></svg></span><span id="hud-nivel">1</span></div>
+    <button class="btn-mudo" id="btn-mudo" onclick="alternarMudo()" aria-label="Mutar som">🔊</button>
   </div>
 
   <!-- ====== CASA ====== -->
@@ -881,10 +886,30 @@ const $ = s => document.querySelector(s);
 // o apelido é digitado livremente pelo aluno — nunca interpolar em innerHTML sem escapar
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+/* botão de mutar (topo): silencia o clique, os efeitos sintetizados abaixo e a
+   música de fundo, tudo de uma vez. Persistido no localStorage — vale entre sessões,
+   sem precisar de conta/senha, igual ao resto das preferências só do aparelho */
+let mudo = localStorage.getItem('bichoteca-mudo') === '1';
+function atualizarBotaoMudo(){
+  const b = $('#btn-mudo');
+  if(!b) return;
+  b.textContent = mudo ? '🔇' : '🔊';
+  b.classList.toggle('ativo', mudo);
+  b.setAttribute('aria-label', mudo ? 'Ativar som' : 'Mutar som');
+}
+function alternarMudo(){
+  mudo = !mudo;
+  localStorage.setItem('bichoteca-mudo', mudo ? '1' : '0');
+  atualizarBotaoMudo();
+  if(elementoMusica){ if(mudo) elementoMusica.pause(); else elementoMusica.play().catch(()=>{}); }
+}
+atualizarBotaoMudo();
+
 /* som de clique global: qualquer botão do site (inclusive os prédios da ilha)
    toca o mesmo efeitinho — um Audio novo por clique, porque o som é curtinho
    (~60ms) e clique rápido repetido não pode ficar esperando o anterior acabar */
 document.addEventListener('click', e => {
+  if(mudo) return;
   if(e.target.closest('button, [role="button"], .clicavel')){
     new Audio('assets/clique.wav').play().catch(()=>{});
   }
@@ -897,6 +922,7 @@ document.addEventListener('click', e => {
 let audioCtx = null;
 function ctxAudio(){ return audioCtx ??= new (window.AudioContext || window.webkitAudioContext)(); }
 function tocarNota(freq, inicioSeg, duracaoSeg, tipo='sine', volume=0.18){
+  if(mudo) return;
   const ctx = ctxAudio();
   const osc = ctx.createOscillator(), gain = ctx.createGain();
   osc.type = tipo; osc.frequency.value = freq;
@@ -1510,6 +1536,24 @@ let CASA_CONFIG = {fundoUrl:'', precoCasa:5000};
 // capas de cabeçalho das telas fixas sem entidade própria no banco (Loja de Móveis, Mural)
 // — mesmo sistema visual dos mundos/lojas genéricas, configurado direto em "configuracoes"
 let CAPAS = {lojamoveisImagemUrl:'', lojamoveisAtiva:false, muralImagemUrl:'', muralAtiva:false};
+// música de fundo (opcional, enviada no painel) — um Audio só, criado na hora que o
+// jogo entra de fato (login/onboarding), porque autoplay sem gesto do usuário é bloqueado
+let MUSICA = {url:'', ativa:false};
+let elementoMusica = null;
+function iniciarMusicaFundo(){
+  if(!MUSICA.ativa || !MUSICA.url) return;
+  if(!elementoMusica){
+    elementoMusica = new Audio(MUSICA.url);
+    elementoMusica.loop = true;
+    elementoMusica.volume = 0.25;
+  }
+  if(mudo) return;
+  elementoMusica.play().catch(() => {
+    // sessão de retorno (sem clique ainda nesse carregamento) — autoplay bloqueado
+    // pelo navegador; tenta de novo no primeiro toque em qualquer lugar da página
+    document.addEventListener('click', () => { if(!mudo) elementoMusica.play().catch(()=>{}); }, {once:true});
+  });
+}
 // lojas genéricas (aba Lojas): cada ponto tipo "loja" num mapa aponta pro id de uma
 // loja daqui, e os itens (com variantes/agenda opcionais) ficam em ITENS_LOJA
 let LOJAS = [];
@@ -2933,6 +2977,7 @@ $('#btn-comecar').onclick = async () => {
   $('#topo').hidden = false; $('#rodape').hidden = false;
   atualizarHud();
   brinde('Bem-vindo à Bichoteca, ' + estado.apelido + '! 🐾');
+  iniciarMusicaFundo();
   ir('casa');
 };
 $('#campo-nome').addEventListener('keydown', e => { if(e.key==='Enter') $('#btn-comecar').click(); });
@@ -2963,6 +3008,7 @@ async function carregarConteudo(){
     if(Array.isArray(dados.moveis)) MOVEIS = dados.moveis;
     if(dados.casaConfig) CASA_CONFIG = dados.casaConfig;
     if(dados.capas) CAPAS = dados.capas;
+    if(dados.musica) MUSICA = dados.musica;
     if(Array.isArray(dados.lojas)) LOJAS = dados.lojas;
     if(Array.isArray(dados.itensLoja)) ITENS_LOJA = dados.itensLoja;
   }catch(e){ /* offline ou hospedagem sem PHP: fica com o conteúdo embutido */ }
@@ -3025,12 +3071,14 @@ async function salvarNoServidor(){
     atualizarStreak();
     $('#topo').hidden = false; $('#rodape').hidden = false;
     atualizarHud();
+    iniciarMusicaFundo();
     ir('casa');
   } else if(carregarLocal() && estado.apelido){
     salvandoLocal = true;
     atualizarStreak();
     $('#topo').hidden = false; $('#rodape').hidden = false;
     atualizarHud();
+    iniciarMusicaFundo();
     ir('casa');
   }
 })();

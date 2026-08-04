@@ -60,6 +60,13 @@
      POST ?acao=casa_fundo_imagem     (multipart: arquivo) -> sobe e já grava o fundo da Casa
      POST ?acao=casa_fundo_remover    -> volta a Casa pro visual padrão (sem fundo)
      POST ?acao=casa_preco_salvar     {precoCasa} -> preço em moedas pra desbloquear a decoração
+     GET  ?acao=capas_obter           -> capas de cabeçalho da Loja de Móveis e do Mural
+     POST ?acao=capas_salvar          {campo, ativa} -> campo = lojamoveis|mural
+     POST ?acao=capas_imagem          (multipart: arquivo, campo=lojamoveis|mural) -> sobe pra assets/moveis/
+     GET  ?acao=musica_obter          -> música de fundo (opcional) atual
+     POST ?acao=musica_ativa_salvar   {ativa}
+     POST ?acao=musica_upload         (multipart: arquivo) -> sobe e já grava a música de fundo
+     POST ?acao=musica_remover        -> remove a música (volta a não ter trilha sonora)
      GET  ?acao=lojas_listar
      GET  ?acao=loja_obter            ?id=xx
      POST ?acao=loja_salvar           {id, nome, emoji, publicado, ordem, capaImagem, capaAtiva}
@@ -120,6 +127,9 @@ function telaNpcValida(string $tela): bool {
 }
 const ROTULOS_TELA = ['lojamoveis' => 'Loja de Móveis', 'editarcasa' => 'Casa — editor de móveis'];
 const EXTENSOES_IMAGEM = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg'];
+// música de fundo: sem getimagesize() aqui, é áudio — só confere extensão (o navegador
+// do aluno decide se toca; nada crítico o suficiente pra validar o conteúdo do arquivo)
+const EXTENSOES_AUDIO = ['mp3' => true, 'ogg' => true, 'wav' => true, 'm4a' => true];
 
 /* catálogo de objetivos de missão — três tipos hoje, mas fechado e validado igual a
    TIPOS_BLOCO/TIPOS_PONTO, pra dar pra crescer sem virar bagunça de string livre. */
@@ -1511,6 +1521,49 @@ try {
     }
     bd()->prepare("UPDATE configuracoes SET capa_{$campo}_imagem = ? WHERE id = 1")->execute([$nome]);
     responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => 'assets/moveis/' . $nome]);
+  }
+
+  /* ---------- Música de fundo (opcional, um arquivo só, tocado em loop no cliente) ---------- */
+
+  if ($acao === 'musica_obter') {
+    $c = bd()->query('SELECT musica_fundo, musica_ativa FROM configuracoes WHERE id = 1')->fetch(PDO::FETCH_ASSOC)
+      ?: ['musica_fundo' => '', 'musica_ativa' => 0];
+    responder(['url' => caminhoPublicoMovel($c['musica_fundo']), 'ativa' => (bool)$c['musica_ativa']]);
+  }
+
+  if ($acao === 'musica_ativa_salvar') {
+    $d = corpo();
+    bd()->prepare('UPDATE configuracoes SET musica_ativa = ? WHERE id = 1')->execute([!empty($d['ativa']) ? 1 : 0]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'musica_upload') {
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || ($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+      $limite = ini_get('upload_max_filesize');
+      $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+        ? "O áudio passou do limite do servidor ($limite)."
+        : 'Nenhum arquivo recebido.';
+      responder(['erro' => $motivo], 422);
+    }
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_AUDIO[$ext])) {
+      responder(['erro' => 'Formato não aceito. Use mp3, ogg, wav ou m4a.'], 422);
+    }
+    $nome = 'musica-fundo-' . bin2hex(random_bytes(3)) . '.' . $ext;
+    if (!is_dir(pastaMoveis()) && !@mkdir(pastaMoveis(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta assets/moveis no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaMoveis() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo em assets/moveis (confira a permissão da pasta).'], 500);
+    }
+    bd()->prepare('UPDATE configuracoes SET musica_fundo = ? WHERE id = 1')->execute([$nome]);
+    responder(['ok' => true, 'url' => 'assets/moveis/' . $nome]);
+  }
+
+  if ($acao === 'musica_remover') {
+    bd()->prepare('UPDATE configuracoes SET musica_fundo = \'\', musica_ativa = 0 WHERE id = 1')->execute();
+    responder(['ok' => true]);
   }
 
   /* ---------- Lojas genéricas (Lanchonete, Mercado, e as que o Hostmaster criar) ---------- */
