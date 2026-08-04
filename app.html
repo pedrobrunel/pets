@@ -669,10 +669,22 @@ canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--cont
 .aba-loja{flex:1;background:#fff;border:3px solid var(--contorno);border-bottom-width:5px;border-radius:14px;padding:10px 8px;
   font-size:14px;font-weight:900}
 .aba-loja.ativa{background:var(--moeda);border-color:var(--moeda-rim)}
-.filtro-series{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 14px;-webkit-overflow-scrolling:touch}
+/* carrossel de séries: setas fixas nas pontas, a tira de chips rola por trás (arraste
+   ou toque nas setas) — sem barra de rolagem visível poluindo o visual */
+.filtro-series-wrap{display:flex;align-items:center;gap:6px;margin-bottom:18px}
+.filtro-series{display:flex;gap:8px;overflow-x:auto;padding:4px 2px;-webkit-overflow-scrolling:touch;
+  scroll-behavior:smooth;scrollbar-width:none}
+.filtro-series::-webkit-scrollbar{display:none}
 .chip-filtro{flex:0 0 auto;background:#fff;border:3px solid var(--contorno);border-bottom-width:5px;border-radius:999px;
   padding:7px 14px;font-size:13px;font-weight:900}
 .chip-filtro.ativo{background:var(--jabuti);color:#fff;border-color:var(--jabuti-rim)}
+.seta-filtro{
+  flex:none;width:30px;height:30px;border-radius:50%;padding:0;
+  background:#fff;border:3px solid var(--contorno);border-bottom-width:4px;
+  display:grid;place-items:center;font-size:16px;font-weight:900;color:var(--tinta);
+}
+.seta-filtro:active{transform:translateY(3px);border-bottom-width:1px}
+.seta-filtro:disabled{opacity:.3;pointer-events:none}
 .vazio .emoji{font-size:44px;display:block;margin-bottom:8px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -1935,10 +1947,14 @@ function desenharMundo(t){
         <div><h2>${t.nome}</h2><p>${feitas}/${total} lições concluídas</p></div>
       </div>
     </div>`}
-    <div class="filtro-series">
-      <button class="chip-filtro ${filtroSerie==='todos'?'ativo':''}" onclick="filtrarSerie('todos')">Todos os anos</button>
-      ${seriesUsadas.map(s=>
-        `<button class="chip-filtro ${filtroSerie===s?'ativo':''}" onclick="filtrarSerie('${s}')">${s}</button>`).join('')}
+    <div class="filtro-series-wrap">
+      <button class="seta-filtro" id="seta-serie-esq" onclick="rolarFiltroSerie(-1)" aria-label="Anos anteriores">‹</button>
+      <div class="filtro-series" id="filtro-series">
+        <button class="chip-filtro ${filtroSerie==='todos'?'ativo':''}" onclick="filtrarSerie('todos')">Todos os anos</button>
+        ${seriesUsadas.map(s=>
+          `<button class="chip-filtro ${filtroSerie===s?'ativo':''}" onclick="filtrarSerie('${s}')">${s}</button>`).join('')}
+      </div>
+      <button class="seta-filtro" id="seta-serie-dir" onclick="rolarFiltroSerie(1)" aria-label="Próximos anos">›</button>
     </div>
     <div class="grade">
     ${licoesVisiveis.length ? licoesVisiveis.map(l => {
@@ -1954,6 +1970,22 @@ function desenharMundo(t){
       ${outrosMundos.map(o => `<button class="mundo-atalho" style="--tc:${o.cor}" onclick="ir('mundo','${o.id}')">
         <span>${o.emoji}</span>${o.nome}</button>`).join('')}
     </div>`;
+  // adiado pro próximo frame: nesse ponto ir() ainda não pôs .ativa na tela (só faz isso
+  // depois que RENDER[tela] retorna), então #filtro-series mediria largura 0 agora mesmo
+  requestAnimationFrame(atualizarSetasFiltroSerie);
+  $('#filtro-series').addEventListener('scroll', atualizarSetasFiltroSerie, {passive:true});
+}
+// carrossel de séries: as setas rolam a tira (sem barra de rolagem visível) e ficam
+// meio apagadas/desativadas quando já não dá mais pra rolar pra aquele lado
+function rolarFiltroSerie(direcao){
+  $('#filtro-series')?.scrollBy({left: direcao * 160, behavior:'smooth'});
+}
+function atualizarSetasFiltroSerie(){
+  const el = $('#filtro-series');
+  if(!el) return;
+  const max = el.scrollWidth - el.clientWidth;
+  if($('#seta-serie-esq')) $('#seta-serie-esq').disabled = el.scrollLeft <= 2;
+  if($('#seta-serie-dir')) $('#seta-serie-dir').disabled = el.scrollLeft >= max - 2;
 }
 
 /* ---------- 7. TELA: LIÇÃO (blocos: texto, flashcard, vídeo, cloze, caça-palavras, pergunta) ---------- */
