@@ -302,19 +302,29 @@ try {
     data_fim      VARCHAR(10) NOT NULL DEFAULT \'\',
     publicado     TINYINT(1) NOT NULL DEFAULT 1,
     ordem         INT NOT NULL DEFAULT 0,
+    estoque_total   INT NOT NULL DEFAULT 0,
+    estoque_vendido INT NOT NULL DEFAULT 0,
     criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (loja_id) REFERENCES lojas(id) ON DELETE CASCADE,
     INDEX (loja_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
-  // "tipo" chegou depois de itens_loja já existir em produção (comida = consumível, dá
-  // fome/alegria; acessorio = veste/tira, sem efeito) — mesma checagem por
-  // INFORMATION_SCHEMA usada nas outras colunas novas deste arquivo.
+  // "tipo" e o estoque limitado chegaram depois de itens_loja já existir em produção
+  // (tipo: comida = consumível, dá fome/alegria; acessorio = veste/tira, sem efeito.
+  // estoque_total = 0 significa sem limite; estoque_vendido só é incrementado pelo
+  // endpoint atômico de compra em estado.php, nunca pelo formulário do painel) — mesma
+  // checagem por INFORMATION_SCHEMA usada nas outras colunas novas deste arquivo.
   $colunasItensLoja = array_column($pdo->query(
     "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'itens_loja'"
   )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
   if (!in_array('tipo', $colunasItensLoja, true)) {
     $pdo->exec("ALTER TABLE itens_loja ADD COLUMN tipo VARCHAR(12) NOT NULL DEFAULT 'comida'");
+  }
+  if (!in_array('estoque_total', $colunasItensLoja, true)) {
+    $pdo->exec('ALTER TABLE itens_loja ADD COLUMN estoque_total INT NOT NULL DEFAULT 0');
+  }
+  if (!in_array('estoque_vendido', $colunasItensLoja, true)) {
+    $pdo->exec('ALTER TABLE itens_loja ADD COLUMN estoque_vendido INT NOT NULL DEFAULT 0');
   }
   $pastaLojas = dirname(__DIR__) . '/assets/lojas';
   if (!is_dir($pastaLojas)) @mkdir($pastaLojas, 0755, true);

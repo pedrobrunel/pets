@@ -69,9 +69,10 @@
      GET  ?acao=item_loja_obter       ?id=xx
      POST ?acao=item_loja_salvar      {id, lojaId, nome, emoji, preco, imagem, fome, alegria,
                                         variantes:[{id,nome,imagem}], diasSemana, horaInicio, horaFim,
-                                        dataInicio, dataFim, publicado, ordem}
+                                        dataInicio, dataFim, publicado, ordem, estoqueTotal}
      POST ?acao=item_loja_excluir     {id}
-     POST ?acao=item_loja_duplicar    {id, novoId} -> clona um item (fica como rascunho)
+     POST ?acao=item_loja_duplicar    {id, novoId} -> clona um item (fica como rascunho, estoque_vendido zera)
+     POST ?acao=item_loja_estoque_resetar {id} -> zera estoque_vendido (repõe o estoque)
      POST ?acao=item_loja_imagem      (multipart: arquivo, slot=id da variante ou vazio p/ imagem base) -> sobe pra assets/lojas/
    ========================================================= */
 
@@ -279,6 +280,9 @@ function validarItemLoja(array $it): ?string {
   }
   $imagem = trim((string)($it['imagem'] ?? ''));
   if ($imagem !== '' && !validarNomeImagem($imagem)) return '"imagem" tem um nome de arquivo inválido.';
+  if (!is_numeric($it['estoqueTotal'] ?? 0) || (int)($it['estoqueTotal'] ?? 0) < 0 || (int)($it['estoqueTotal'] ?? 0) > 1000000) {
+    return '"estoqueTotal" precisa ser um número entre 0 e 1000000 (0 = sem limite).';
+  }
   $erroVariantes = validarVariantes($it['variantes'] ?? []);
   if ($erroVariantes) return $erroVariantes;
   return validarAgenda($it);
@@ -1586,6 +1590,7 @@ try {
       'diasSemana' => $it['dias_semana'], 'horaInicio' => $it['hora_inicio'], 'horaFim' => $it['hora_fim'],
       'dataInicio' => $it['data_inicio'], 'dataFim' => $it['data_fim'],
       'publicado' => (bool)$it['publicado'], 'ordem' => (int)$it['ordem'],
+      'estoqueTotal' => (int)$it['estoque_total'], 'estoqueVendido' => (int)$it['estoque_vendido'],
     ];
   }
 
@@ -1622,19 +1627,20 @@ try {
       'id' => (string)$v['id'], 'nome' => trim((string)$v['nome']), 'imagem' => trim((string)($v['imagem'] ?? '')),
     ], $d['variantes'] ?? []);
     bd()->prepare('INSERT INTO itens_loja (id, loja_id, nome, emoji, tipo, preco, imagem, fome, alegria, variantes,
-        dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, publicado, ordem)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, publicado, ordem, estoque_total)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE loja_id=VALUES(loja_id), nome=VALUES(nome), emoji=VALUES(emoji), tipo=VALUES(tipo), preco=VALUES(preco),
         imagem=VALUES(imagem), fome=VALUES(fome), alegria=VALUES(alegria), variantes=VALUES(variantes),
         dias_semana=VALUES(dias_semana), hora_inicio=VALUES(hora_inicio), hora_fim=VALUES(hora_fim),
-        data_inicio=VALUES(data_inicio), data_fim=VALUES(data_fim), publicado=VALUES(publicado), ordem=VALUES(ordem)')
+        data_inicio=VALUES(data_inicio), data_fim=VALUES(data_fim), publicado=VALUES(publicado), ordem=VALUES(ordem),
+        estoque_total=VALUES(estoque_total)')
       ->execute([
         $id, $lojaId, trim((string)$d['nome']), (string)($d['emoji'] ?? '🔹'), (string)($d['tipo'] ?? 'comida'), (int)$d['preco'],
         trim((string)($d['imagem'] ?? '')), (int)($d['fome'] ?? 0), (int)($d['alegria'] ?? 0),
         json_encode($variantes, JSON_UNESCAPED_UNICODE),
         normalizarDiasSemana(trim((string)($d['diasSemana'] ?? ''))), trim((string)($d['horaInicio'] ?? '')), trim((string)($d['horaFim'] ?? '')),
         trim((string)($d['dataInicio'] ?? '')), trim((string)($d['dataFim'] ?? '')),
-        !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0),
+        !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0), (int)($d['estoqueTotal'] ?? 0),
       ]);
     responder(['ok' => true]);
   }
@@ -1656,13 +1662,20 @@ try {
     $it = $st->fetch(PDO::FETCH_ASSOC);
     if (!$it) responder(['erro' => 'Item não encontrado.'], 404);
     bd()->prepare('INSERT INTO itens_loja (id, loja_id, nome, emoji, tipo, preco, imagem, fome, alegria, variantes,
-        dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, publicado, ordem)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)')
+        dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, publicado, ordem, estoque_total)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)')
       ->execute([
         $novoId, $it['loja_id'], $it['nome'] . ' (cópia)', $it['emoji'], $it['tipo'], $it['preco'], $it['imagem'], $it['fome'], $it['alegria'],
-        $it['variantes'], $it['dias_semana'], $it['hora_inicio'], $it['hora_fim'], $it['data_inicio'], $it['data_fim'], $it['ordem'],
+        $it['variantes'], $it['dias_semana'], $it['hora_inicio'], $it['hora_fim'], $it['data_inicio'], $it['data_fim'], $it['ordem'], $it['estoque_total'],
       ]);
     responder(['ok' => true, 'id' => $novoId]);
+  }
+
+  if ($acao === 'item_loja_estoque_resetar') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    bd()->prepare('UPDATE itens_loja SET estoque_vendido = 0 WHERE id = ?')->execute([$id]);
+    responder(['ok' => true]);
   }
 
   // upload de imagem pra um item de loja — "slot" opcional identifica QUAL variante recebe
