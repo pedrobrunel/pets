@@ -1545,6 +1545,9 @@ let CAPAS = {
 // música de fundo (opcional, enviada no painel) — um Audio só, criado na hora que o
 // jogo entra de fato (login/onboarding), porque autoplay sem gesto do usuário é bloqueado
 let MUSICA = {url:'', ativa:false};
+// lembrete de sequência (push) — a chave pública some (fica '') se o Hostmaster ainda não
+// gerou o par VAPID no config.php; o botão no Perfil só aparece quando ela existe de verdade
+let VAPID_PUBLIC_KEY = '';
 let elementoMusica = null;
 function iniciarMusicaFundo(){
   if(!MUSICA.ativa || !MUSICA.url) return;
@@ -2963,9 +2966,69 @@ RENDER.perfil = () => {
     <div class="perfil-rodape">
       <button class="btn branco pequeno" onclick="compartilhar()">🔗 Compartilhar</button>
       <button class="btn branco pequeno" onclick="abrirRanking()">🏆 Ranking</button>
+      <button class="btn branco pequeno" id="btn-lembrete" onclick="alternarLembrete()" hidden>🔔 Lembrete diário</button>
       <p class="aviso-mini">🔒 Mostra só apelido, bicho, nível e conquistas — nunca nome real, idade ou escola.</p>
     </div>`;
+  atualizarBotaoLembrete();
 };
+// lembrete de sequência: avisa às 19h se o aluno ainda não jogou hoje (ver
+// api/cron-lembrete-streak.php) — opcional, só aparece se o Hostmaster configurou o
+// VAPID_PUBLIC_KEY e o navegador suporta Push. Estado real é sempre consultado no
+// próprio navegador (Notification.permission + pushManager.getSubscription), nunca
+// guardado à parte — assim o botão nunca mente sobre o que está realmente ativo.
+async function atualizarBotaoLembrete(){
+  const b = $('#btn-lembrete');
+  if(!b) return;
+  if(!VAPID_PUBLIC_KEY || !('serviceWorker' in navigator) || !('PushManager' in window) || !logado){
+    b.hidden = true;
+    return;
+  }
+  b.hidden = false;
+  if(Notification.permission === 'denied'){
+    b.textContent = '🔕 Notificação bloqueada no navegador';
+    b.disabled = true;
+    return;
+  }
+  b.disabled = false;
+  try{
+    const registro = await navigator.serviceWorker.ready;
+    const inscricao = await registro.pushManager.getSubscription();
+    b.textContent = inscricao ? '🔔 Lembrete ativado' : '🔕 Ativar lembrete diário';
+    b.classList.toggle('roxo', !!inscricao);
+  }catch(e){ b.hidden = true; }
+}
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+async function alternarLembrete(){
+  try{
+    const registro = await navigator.serviceWorker.ready;
+    const inscricaoAtual = await registro.pushManager.getSubscription();
+    if(inscricaoAtual){
+      await fetch('api/estado.php?acao=push_desinscrever', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({endpoint: inscricaoAtual.endpoint}),
+      });
+      await inscricaoAtual.unsubscribe();
+      brinde('🔕 Lembrete desativado.');
+    } else {
+      const permissao = await Notification.requestPermission();
+      if(permissao !== 'granted'){ brinde('Sem permissão de notificação — não dá pra ativar.'); return atualizarBotaoLembrete(); }
+      const inscricao = await registro.pushManager.subscribe({
+        userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+      const chaves = inscricao.toJSON().keys;
+      await fetch('api/estado.php?acao=push_inscrever', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({endpoint: inscricao.endpoint, p256dh: chaves.p256dh, auth: chaves.auth}),
+      });
+      brinde('🔔 Lembrete ativado! Se você não jogar, avisamos às 19h.');
+    }
+  }catch(e){ brinde('Não deu pra mudar o lembrete agora. Tenta de novo?'); }
+  atualizarBotaoLembrete();
+}
 // ranking entre quem joga — só apelido, bicho e um número (nível ou sequência), nada
 // de dado sensível. Precisa de conta salva dos dois lados (é o servidor quem calcula)
 async function abrirRanking(){
@@ -3096,6 +3159,7 @@ async function carregarConteudo(){
     if(dados.casaConfig) CASA_CONFIG = dados.casaConfig;
     if(dados.capas) CAPAS = dados.capas;
     if(dados.musica) MUSICA = dados.musica;
+    if(dados.vapidPublicKey) VAPID_PUBLIC_KEY = dados.vapidPublicKey;
     if(Array.isArray(dados.lojas)) LOJAS = dados.lojas;
     if(Array.isArray(dados.itensLoja)) ITENS_LOJA = dados.itensLoja;
   }catch(e){ /* offline ou hospedagem sem PHP: fica com o conteúdo embutido */ }

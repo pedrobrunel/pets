@@ -190,6 +190,23 @@ Com o banco pronto:
 
 ---
 
+## Lembrete de sequência (notificação push, opcional)
+
+Botão "🔔 Lembrete diário" no Perfil — se o aluno ativar, um Cron Job avisa às 19h quando ele ainda não jogou hoje (e tem sequência pra perder). Requer três coisas, todas opcionais — sem elas o botão simplesmente não aparece:
+
+1. **Gerar as chaves VAPID uma vez**, localmente:
+   ```bash
+   composer install
+   php -r "require 'vendor/autoload.php'; print_r((new Minishlink\WebPush\VAPID)::createVapidKeys());"
+   ```
+   Cole o resultado em `api/config.php` (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` — ver `config.example.php`). Nunca commite essas chaves.
+2. **Defina `CRON_SECRET`** em `api/config.php` (qualquer string aleatória) — só é usado se o cron disparar via URL em vez de rodar o PHP direto.
+3. **Crie o Cron Job no hPanel** (Avançado → Cron Jobs), todo dia às 19h, rodando `api/cron-lembrete-streak.php` — o topo do próprio arquivo tem os dois formatos aceitos (comando PHP direto, ou URL com `?segredo=`).
+
+O deploy automático já cuida de instalar a dependência (`minishlink/web-push`, via `composer install` no workflow) — `vendor/` não vai pro Git, é gerado a cada publicação.
+
+---
+
 ## Próximos passos
 
 1. **Mais conteúdo, mais rápido** — agora que subir lição é upload de JSON validado pelo painel (sem editar código nem fazer deploy), o gargalo passa a ser só escrever o conteúdo. Ancorar nas habilidades da BNCC (`EF08HI01` e afins) no `titulo`/`serie` de cada lição organiza o currículo e vira argumento de venda

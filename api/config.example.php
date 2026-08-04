@@ -14,3 +14,18 @@ const BD_SENHA = 'SUA_SENHA';
    senha do painel, edite aqui e abra api/install.php de novo. */
 const ADMIN_USUARIO = 'hostmaster';
 const ADMIN_SENHA   = 'troque-esta-senha';
+
+/* Notificação push (lembrete de sequência) — opcional. Gere seu próprio par de chaves
+   rodando localmente, uma vez só:
+     composer install
+     php -r "require 'vendor/autoload.php'; print_r((new Minishlink\WebPush\VAPID)::createVapidKeys());"
+   Guarde as duas aqui, nunca no Git. VAPID_SUBJECT é um contato seu (mailto: ou site) —
+   os provedores de push (Chrome/Firefox) usam isso pra falar com você em caso de abuso. */
+const VAPID_PUBLIC_KEY  = 'SUA_CHAVE_PUBLICA';
+const VAPID_PRIVATE_KEY = 'SUA_CHAVE_PRIVADA';
+const VAPID_SUBJECT     = 'mailto:voce@exemplo.com';
+
+/* Segredo pro cron (api/cron-lembrete-streak.php) — só é checado se o Hostinger disparar
+   o cron via URL (em vez de rodar o PHP direto); protege o endpoint de ser chamado por
+   qualquer um na internet. Gere uma string aleatória qualquer, ex.: bin2hex(random_bytes(16)). */
+const CRON_SECRET = 'troque-por-uma-string-aleatoria';

@@ -241,6 +241,9 @@ try {
   echo json_encode([
     'mundos' => $saidaMundos, 'cenas' => $saidaCenas, 'npcs' => $saidaNpcs, 'missoes' => $saidaMissoes,
     'itens' => $saidaItens, 'moveis' => $saidaMoveis, 'casaConfig' => $casaConfig, 'capas' => $capas, 'musica' => $musica,
+    // chave pública do lembrete de sequência (push) — só existe se o Hostmaster já gerou
+    // o par VAPID no api/config.php; sem isso, o botão de lembrete some sozinho no cliente
+    'vapidPublicKey' => defined('VAPID_PUBLIC_KEY') ? VAPID_PUBLIC_KEY : '',
     'lojas' => $saidaLojas, 'itensLoja' => $saidaItensLoja,
   ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {

@@ -20,3 +20,26 @@ self.addEventListener('fetch', e => {
     }).catch(() => caches.match('./app.html')))
   );
 });
+
+/* lembrete de sequência (opcional, ativado no Perfil) — o payload já vem pronto (título +
+   corpo) do cron em api/cron-lembrete-streak.php, o service worker só precisa exibir */
+self.addEventListener('push', e => {
+  let dados = {titulo: 'Bichoteca', corpo: 'Seu bicho sentiu sua falta hoje!'};
+  try { dados = {...dados, ...e.data.json()}; } catch (err) {}
+  e.waitUntil(self.registration.showNotification(dados.titulo, {
+    body: dados.corpo,
+    icon: './icone-192.png',
+    badge: './icone-192.png',
+    tag: 'bichoteca-lembrete', // uma notificação por vez, não empilha
+  }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(lista => {
+      const aberta = lista.find(c => c.url.includes('app.html'));
+      if (aberta) return aberta.focus();
+      return self.clients.openWindow('./app.html');
+    })
+  );
+});
