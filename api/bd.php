@@ -36,3 +36,38 @@ function iniciarSessaoSegura(): void {
   ]);
   session_start();
 }
+/** minúsculo + sem acento, pra comparar texto de forma tolerante a maiúscula/acento
+    (ex.: "É", "e", "È" comparam igual) — usado tanto pra gravar a lista de palavras
+    proibidas quanto pra checar mensagem/post contra ela */
+function normalizarTexto(string $s): string {
+  $s = mb_strtolower($s, 'UTF-8');
+  static $mapa = [
+    'á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a',
+    'é'=>'e','è'=>'e','ê'=>'e','ë'=>'e',
+    'í'=>'i','ì'=>'i','î'=>'i','ï'=>'i',
+    'ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o',
+    'ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u',
+    'ç'=>'c','ñ'=>'n',
+  ];
+  return strtr($s, $mapa);
+}
+/** barra palavrão (lista da tabela palavras_proibidas), link e número de telefone/celular —
+    link e telefone são o clássico "vamos continuar a conversa em outro lugar" que um filtro
+    de palavra sozinho nunca pega. @return string|null motivo da recusa, ou null se passou */
+function textoProibido(string $texto): ?string {
+  if (preg_match('/(https?:\/\/|www\.|\.com\b|\.br\b)/i', $texto)) {
+    return 'Não dá pra mandar link aqui.';
+  }
+  if (preg_match('/(?:\d[\s.\-]*){8,}/', $texto)) {
+    return 'Não dá pra mandar número de telefone aqui.';
+  }
+  $normalizado = normalizarTexto($texto);
+  $normalizadoSemEspaco = preg_replace('/[^a-z0-9]/', '', $normalizado);
+  $st = bd()->query('SELECT normalizada FROM palavras_proibidas');
+  foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $proibida) {
+    if ($proibida !== '' && (str_contains($normalizado, $proibida) || str_contains($normalizadoSemEspaco, $proibida))) {
+      return 'Essa mensagem tem uma palavra que não é permitida aqui.';
+    }
+  }
+  return null;
+}

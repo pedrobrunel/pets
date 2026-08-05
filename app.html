@@ -531,6 +531,37 @@ body.tela-cheia #app{padding:0;max-width:none}
 .bloco[aria-pressed="true"]{background:var(--ceu);color:#fff;border-color:var(--ceu-rim)}
 .previa{background:var(--papel);border:3px dashed var(--tinta);border-radius:14px;padding:12px;font-size:16px;min-height:52px}
 
+/* ---------- amigos / mensagens ---------- */
+.linha-amigo{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;font-weight:800}
+.linha-amigo+.linha-amigo{border-top:2px dashed var(--contorno)}
+.linha-conversa{display:flex;align-items:center;gap:12px;width:100%;background:#fff;border:var(--borda) solid var(--contorno);
+  border-bottom-width:6px;border-radius:18px;padding:10px 14px;margin-bottom:10px;text-align:left;cursor:pointer;font-family:inherit}
+.av-conversa{width:42px;height:42px;flex:none;border:3px solid var(--contorno);border-radius:50%;
+  display:grid;place-items:center;font-size:20px;background:var(--papel)}
+.previa-conversa{font-size:13px;margin:2px 0 0;opacity:.8;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.bolha-nao-lida{background:var(--erro);color:#fff;font-size:12px;font-weight:900;border-radius:50%;
+  width:22px;height:22px;flex:none;display:grid;place-items:center}
+.corpo-conversa{display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto;padding:6px 2px}
+.bolha-msg{max-width:75%;padding:8px 12px;border-radius:16px;font-size:14px;font-weight:700;position:relative}
+.bolha-msg.minha{align-self:flex-end;background:var(--ceu);color:#fff;border-bottom-right-radius:4px}
+.bolha-msg.dele{align-self:flex-start;background:#fff;border:2px solid var(--contorno);border-bottom-left-radius:4px;padding-right:30px}
+.bolha-msg p{margin:0}
+.btn-denunciar-msg{position:absolute;right:4px;top:4px;background:none;border:none;font-size:12px;opacity:.4;cursor:pointer;padding:2px}
+.btn-denunciar-msg:hover{opacity:1}
+
+/* ---------- fórum de dúvidas (por lição) ---------- */
+.post-forum{background:#fff;border:var(--borda) solid var(--contorno);border-bottom-width:6px;border-radius:16px;
+  padding:10px 14px;margin-bottom:10px}
+.post-forum.resposta-forum{margin-left:24px;border-bottom-width:4px;background:var(--papel)}
+.autor-post-forum{margin:0;font-size:13px;font-weight:800}
+.quando-post-forum{font-weight:700;opacity:.6;font-size:11px}
+.texto-post-forum{margin:4px 0 0;font-size:14px}
+.acoes-post-forum{display:flex;gap:12px;margin-top:6px}
+.btn-link-forum{background:none;border:none;font-size:12px;font-weight:800;color:var(--tinta);opacity:.7;cursor:pointer;padding:0}
+.btn-link-forum:hover{opacity:1;text-decoration:underline}
+.campo-resposta-forum{display:flex;gap:6px;margin-top:8px}
+.campo-resposta-forum input{flex:1;padding:8px 10px;border:2px solid var(--contorno);border-radius:10px;font-weight:700;font-size:13px}
+
 /* ---------- minigames ----------
    os 4 tabuleiros têm max-width fixo — sem isso, no PC (onde a tela de Arcade fica em
    modo "tela-cheia" e o #app perde o limite de 520px), os quadrados esticam até ocupar
@@ -762,6 +793,12 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
   <section id="tela-lojagenerica" class="tela"></section>
   <!-- ====== MURAL ====== -->
   <section id="tela-mural" class="tela"></section>
+  <!-- ====== AMIGOS ====== -->
+  <section id="tela-amigos" class="tela"></section>
+  <!-- ====== MENSAGENS (lista de conversas) ====== -->
+  <section id="tela-mensagens" class="tela"></section>
+  <!-- ====== CONVERSA (chat 1:1, só entre amigos aceitos) ====== -->
+  <section id="tela-conversa" class="tela"></section>
   <!-- ====== PERFIL ====== -->
   <section id="tela-perfil" class="tela"></section>
 </div>
@@ -2173,7 +2210,19 @@ function mostrarResumoLicao(licao, total, acertos, moedas, xp){
       </div>
       <button class="btn grande" onclick="ir('licao','${licao.id}')">Refazer</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="ir('mundo','${acharMundoDaLicao(licao.id).id}')">Voltar pro mundo</button>
-    </div>`;
+    </div>
+    <div class="titulo-secao" style="margin-top:20px"><h2 style="font-size:19px">💬 Dúvidas e comentários</h2></div>
+    <div class="sticker">
+      <div style="display:flex;gap:8px">
+        <input id="campo-forum-novo" maxlength="500" placeholder="Tire uma dúvida ou deixe um comentário sobre essa aula..."
+          style="flex:1;padding:10px 12px;border:3px solid var(--contorno);border-radius:12px;font-weight:700">
+        <button class="btn pequeno" onclick="postarForumNovo('${esc(licao.id)}')">Publicar</button>
+      </div>
+      <p id="aviso-forum" class="aviso" style="display:none;margin-top:8px"></p>
+      <p class="aviso-mini" style="margin-top:8px">🔒 Sem link, sem telefone e sem palavrão. Qualquer comentário pode ser denunciado pro professor.</p>
+    </div>
+    <div id="lista-forum"><p class="aviso">Carregando...</p></div>`;
+  carregarForum(licao.id);
 }
 
 /* --- bloco: texto (leitura) com termo clicável --- */
@@ -3005,6 +3054,239 @@ function publicarRecado(){
   RENDER.mural();
 }
 
+/* ---------- Amigos e mensagens privadas — só entre quem já é amigo dos dois lados ----------
+   Mensagem passa pelo filtro de palavra/link/telefone no servidor antes de gravar (ver
+   textoProibido() em api/bd.php); qualquer mensagem dá pra denunciar, o que a deixa
+   visível pro Hostmaster revisar na aba Moderação do painel admin. */
+function emojiDoTipo(tipo){ return {capivara:'🦫', salsicha:'🐶', gato:'🐱'}[tipo] || '🐾'; }
+async function chamarSocial(acao, dados, metodo){
+  const qs = metodo === 'GET' && dados ? '&' + new URLSearchParams(dados).toString() : '';
+  const opcoes = metodo === 'GET' ? {cache:'no-store'} : {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(dados || {})};
+  const r = await fetch('api/estado.php?acao=' + acao + qs, opcoes);
+  const corpo = await r.json().catch(() => ({}));
+  if(!r.ok) throw new Error(corpo.erro || 'Não deu certo. Tente de novo.');
+  return corpo;
+}
+
+let amizadesCache = {amigos:[], pedidosRecebidos:[], pedidosEnviados:[]};
+RENDER.amigos = async () => {
+  $('#tela-amigos').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('perfil')">Voltar</button>
+    <div class="titulo-secao"><h2>👥 Amigos</h2></div>
+    <p class="aviso" style="margin-top:12px">Carregando...</p>`;
+  try{ amizadesCache = await chamarSocial('amizades_listar', null, 'GET'); }
+  catch(e){ amizadesCache = {amigos:[], pedidosRecebidos:[], pedidosEnviados:[]}; }
+  pintarAmigos();
+};
+function pintarAmigos(){
+  const a = amizadesCache;
+  $('#tela-amigos').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('perfil')">Voltar</button>
+    <div class="titulo-secao"><h2>👥 Amigos</h2></div>
+    <div class="sticker">
+      <label style="display:block;font-weight:800;margin-bottom:6px">Pedir amizade</label>
+      <div style="display:flex;gap:8px">
+        <input id="campo-pedir-amigo" placeholder="apelido do seu amigo" maxlength="14"
+          style="flex:1;padding:10px 12px;border:3px solid var(--contorno);border-radius:12px;font-weight:800">
+        <button class="btn" onclick="pedirAmizade()">Pedir</button>
+      </div>
+      <p id="aviso-amigo" class="aviso" style="display:none;margin-top:8px"></p>
+      <p class="aviso-mini" style="margin-top:8px">Só dá pra conversar depois que os dois aceitarem.</p>
+    </div>
+    ${a.pedidosRecebidos.length ? `
+      <div class="titulo-secao" style="margin-top:16px"><h2 style="font-size:18px">Pedidos recebidos</h2></div>
+      <div class="sticker">${a.pedidosRecebidos.map(ap => `
+        <div class="linha-amigo"><span>${esc(ap)}</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn pequeno" onclick="responderAmizade('${esc(ap)}', true)">Aceitar</button>
+            <button class="btn branco pequeno" onclick="responderAmizade('${esc(ap)}', false)">Recusar</button>
+          </div>
+        </div>`).join('')}</div>` : ''}
+    ${a.pedidosEnviados.length ? `
+      <div class="titulo-secao" style="margin-top:16px"><h2 style="font-size:18px">Aguardando resposta</h2></div>
+      <div class="sticker">${a.pedidosEnviados.map(ap => `<div class="linha-amigo"><span>${esc(ap)}</span><small>pendente</small></div>`).join('')}</div>` : ''}
+    <div class="titulo-secao" style="margin-top:16px"><h2 style="font-size:18px">Meus amigos</h2></div>
+    ${a.amigos.length ? `<div class="sticker">${a.amigos.map(am => `
+      <div class="linha-amigo">
+        <span>${emojiDoTipo(am.tipo)} ${esc(am.apelido)}</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn pequeno" onclick="ir('conversa','${esc(am.apelido)}')">💬 Conversar</button>
+          <button class="btn branco pequeno" onclick="removerAmizade('${esc(am.apelido)}')">Desfazer</button>
+        </div>
+      </div>`).join('')}</div>`
+      : '<p class="sub" style="margin:0 4px">Você ainda não tem amigos adicionados. Peça pra alguém acima!</p>'}`;
+}
+async function pedirAmizade(){
+  const campo = $('#campo-pedir-amigo');
+  const aviso = $('#aviso-amigo');
+  const apelidoDestino = campo.value.trim();
+  if(!apelidoDestino) return;
+  try{
+    const r = await chamarSocial('amizade_solicitar', {apelidoDestino});
+    aviso.style.display = 'none';
+    brinde(r.status === 'aceita' ? 'Agora vocês são amigos! 🎉' : 'Pedido enviado!');
+    RENDER.amigos();
+  }catch(e){
+    aviso.textContent = e.message;
+    aviso.style.display = 'block';
+  }
+}
+async function responderAmizade(apelido, aceitar){
+  try{ await chamarSocial('amizade_responder', {solicitanteApelido: apelido, aceitar}); }catch(e){ alert(e.message); }
+  RENDER.amigos();
+}
+async function removerAmizade(apelido){
+  if(!confirm(`Desfazer amizade com ${apelido}?`)) return;
+  try{ await chamarSocial('amizade_remover', {apelido}); }catch(e){ alert(e.message); }
+  RENDER.amigos();
+}
+
+RENDER.mensagens = async () => {
+  $('#tela-mensagens').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('perfil')">Voltar</button>
+    <div class="titulo-secao"><h2>💬 Mensagens</h2></div>
+    <p class="aviso" style="margin-top:12px">Carregando...</p>`;
+  let conversas = [];
+  try{ conversas = (await chamarSocial('conversas_listar', null, 'GET')).conversas; }catch(e){ /* segue vazio */ }
+  $('#tela-mensagens').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('perfil')">Voltar</button>
+    <div class="titulo-secao"><h2>💬 Mensagens</h2></div>
+    ${conversas.length ? conversas.map(c => `
+      <button class="linha-conversa" onclick="ir('conversa','${esc(c.apelido)}')">
+        <span class="av-conversa">${emojiDoTipo(c.tipo)}</span>
+        <div style="flex:1;min-width:0">
+          <b>${esc(c.apelido)}</b>
+          <p class="previa-conversa">${c.ultimaMensagem ? esc((c.ultimaDeMim ? 'Você: ' : '') + c.ultimaMensagem) : 'Nenhuma mensagem ainda — diga oi!'}</p>
+        </div>
+        ${c.naoLidas ? `<span class="bolha-nao-lida">${c.naoLidas}</span>` : ''}
+      </button>`).join('')
+      : `<p class="sub" style="margin:0 4px 12px">Adicione um amigo pra começar a conversar.</p>
+         <button class="btn branco" onclick="ir('amigos')">👥 Ver amigos</button>`}`;
+};
+
+let conversaAtual = null;
+RENDER.conversa = async (apelido) => {
+  conversaAtual = apelido;
+  $('#tela-conversa').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('mensagens')">Voltar</button>
+    <div class="titulo-secao"><h2>💬 ${esc(apelido)}</h2></div>
+    <p class="aviso" style="margin-top:12px">Carregando...</p>`;
+  let mensagens = [];
+  try{ mensagens = (await chamarSocial('conversa_obter', {apelido}, 'GET')).mensagens; }
+  catch(e){ /* amizade pode ter sido desfeita nesse meio-tempo — segue vazio */ }
+  pintarConversa(apelido, mensagens);
+};
+function pintarConversa(apelido, mensagens){
+  $('#tela-conversa').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('mensagens')">Voltar</button>
+    <div class="titulo-secao"><h2>💬 ${esc(apelido)}</h2></div>
+    <div class="corpo-conversa" id="corpo-conversa">
+      ${mensagens.length ? mensagens.map(m => `
+        <div class="bolha-msg ${m.deMim?'minha':'dele'}">
+          <p>${esc(m.texto)}</p>
+          ${!m.deMim ? `<button class="btn-denunciar-msg" onclick="denunciarMensagem(${m.id})" title="Denunciar">🚩</button>` : ''}
+        </div>`).join('') : '<p class="sub" style="text-align:center">Nenhuma mensagem ainda. Diga oi! 👋</p>'}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <input id="campo-mensagem" placeholder="Escreva algo legal..." maxlength="300" onkeydown="if(event.key==='Enter') enviarMensagem()"
+        style="flex:1;padding:10px 12px;border:3px solid var(--contorno);border-radius:12px;font-weight:700">
+      <button class="btn" onclick="enviarMensagem()">Enviar</button>
+    </div>
+    <p id="aviso-mensagem" class="aviso" style="display:none;margin-top:8px"></p>
+    <p class="aviso-mini" style="margin-top:10px">🔒 Sem link, sem telefone e sem palavrão — a mensagem não é enviada se tiver isso.</p>`;
+  const corpo = $('#corpo-conversa');
+  if(corpo) corpo.scrollTop = corpo.scrollHeight;
+}
+async function enviarMensagem(){
+  const campo = $('#campo-mensagem');
+  const aviso = $('#aviso-mensagem');
+  const texto = campo.value.trim();
+  if(!texto || !conversaAtual) return;
+  try{
+    await chamarSocial('mensagem_enviar', {apelidoDestino: conversaAtual, texto});
+    aviso.style.display = 'none';
+    const mensagens = (await chamarSocial('conversa_obter', {apelido: conversaAtual}, 'GET')).mensagens;
+    pintarConversa(conversaAtual, mensagens);
+  }catch(e){
+    aviso.textContent = e.message;
+    aviso.style.display = 'block';
+  }
+}
+async function denunciarMensagem(id){
+  if(!confirm('Denunciar essa mensagem pro professor revisar?')) return;
+  try{ await chamarSocial('mensagem_denunciar', {id}); brinde('Denúncia enviada. Obrigado por ajudar a manter a vila segura! 🛡️'); }
+  catch(e){ alert(e.message); }
+}
+
+/* ---------- Fórum de dúvidas/comentários — sempre atrelado a uma lição ---------- */
+function horaCurta(dataHora){
+  try{ return new Date(dataHora.replace(' ', 'T')).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}); }
+  catch(e){ return ''; }
+}
+let forumLicaoAtual = null;
+async function carregarForum(licaoId){
+  forumLicaoAtual = licaoId;
+  let posts = [];
+  try{ posts = (await chamarSocial('forum_listar', {licaoId}, 'GET')).posts; }catch(e){ /* segue vazio */ }
+  pintarForum(posts);
+}
+function pintarForum(posts){
+  const lista = $('#lista-forum');
+  if(!lista) return;
+  if(!posts.length){ lista.innerHTML = '<p class="sub" style="margin:0 4px">Nenhum comentário ainda. Seja o primeiro a perguntar ou comentar!</p>'; return; }
+  const respostasPorPai = {};
+  posts.filter(p => p.respostaA).forEach(p => { (respostasPorPai[p.respostaA] ??= []).push(p); });
+  const cartaoPost = (p, resposta) => `
+    <div class="post-forum ${resposta?'resposta-forum':''}">
+      <p class="autor-post-forum">${emojiDoTipo(p.tipo)} <b>${esc(p.autor)}</b> <span class="quando-post-forum">${horaCurta(p.quando)}</span></p>
+      <p class="texto-post-forum">${esc(p.texto)}</p>
+      <div class="acoes-post-forum">
+        ${!resposta ? `<button class="btn-link-forum" onclick="alternarRespostaForum(${p.id})">Responder</button>` : ''}
+        ${!p.deMim ? `<button class="btn-link-forum" onclick="denunciarForumPost(${p.id})">🚩 Denunciar</button>` : ''}
+      </div>
+      ${!resposta ? `<div class="campo-resposta-forum oculto" id="caixa-resposta-forum-${p.id}">
+        <input id="campo-resposta-forum-${p.id}" maxlength="500" placeholder="Escreva sua resposta..." onkeydown="if(event.key==='Enter') enviarRespostaForum(${p.id})">
+        <button class="btn pequeno" onclick="enviarRespostaForum(${p.id})">Enviar</button>
+      </div>` : ''}
+    </div>`;
+  lista.innerHTML = posts.filter(p => !p.respostaA).map(p =>
+    cartaoPost(p, false) + (respostasPorPai[p.id] || []).map(r => cartaoPost(r, true)).join('')
+  ).join('');
+}
+function alternarRespostaForum(id){
+  const caixa = $('#caixa-resposta-forum-' + id);
+  if(caixa) caixa.classList.toggle('oculto');
+}
+async function postarForumNovo(licaoId){
+  const campo = $('#campo-forum-novo');
+  const aviso = $('#aviso-forum');
+  const texto = campo.value.trim();
+  if(!texto) return;
+  try{
+    await chamarSocial('forum_postar', {licaoId, texto});
+    campo.value = '';
+    aviso.style.display = 'none';
+    carregarForum(licaoId);
+  }catch(e){
+    aviso.textContent = e.message;
+    aviso.style.display = 'block';
+  }
+}
+async function enviarRespostaForum(respostaA){
+  const campo = $('#campo-resposta-forum-' + respostaA);
+  const texto = campo.value.trim();
+  if(!texto || !forumLicaoAtual) return;
+  try{
+    await chamarSocial('forum_postar', {licaoId: forumLicaoAtual, texto, respostaA});
+    carregarForum(forumLicaoAtual);
+  }catch(e){ alert(e.message); }
+}
+async function denunciarForumPost(id){
+  if(!confirm('Denunciar esse comentário pro professor revisar?')) return;
+  try{ await chamarSocial('forum_denunciar', {id}); brinde('Denúncia enviada. Obrigado por ajudar a manter a vila segura! 🛡️'); }
+  catch(e){ alert(e.message); }
+}
+
 /* ---------- 11. TELA: PERFIL ---------- */
 const MEDALHAS = [
   {id:'primeira', emoji:'🌱', nome:'Primeira lição', ok:()=>estado.licoesFeitas.length>=1},
@@ -3049,6 +3331,8 @@ RENDER.perfil = () => {
     }).join('')}</div>
 
     <div class="perfil-rodape">
+      <button class="btn branco pequeno" onclick="ir('amigos')">👥 Amigos</button>
+      <button class="btn branco pequeno" onclick="ir('mensagens')">💬 Mensagens</button>
       <button class="btn branco pequeno" onclick="compartilhar()">🔗 Compartilhar</button>
       <button class="btn branco pequeno" onclick="abrirRanking()">🏆 Ranking</button>
       <button class="btn branco pequeno" id="btn-lembrete" onclick="alternarLembrete()" hidden>🔔 Lembrete diário</button>

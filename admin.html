@@ -287,6 +287,7 @@ body.conectando-fluxo{cursor:crosshair}
       <button data-aba="mundos">🎒 Mundos</button>
       <button data-aba="licoes">📚 Lições</button>
       <button data-aba="jogadores">🧒 Jogadores</button>
+      <button data-aba="moderacao">🛡️ Moderação</button>
       <button data-aba="backup">💾 Backup</button>
     </nav>
     <div class="rodape-lateral">
@@ -1027,6 +1028,22 @@ pergunta     { p: "...", alts: [string,...], certa: índice numérico da alterna
       <div class="painel"><table id="tabela-jogadores"></table></div>
     </section>
 
+    <section id="aba-moderacao" class="oculto">
+      <h2>Moderação</h2>
+      <p class="sub">mensagens privadas e comentários do fórum denunciados por algum aluno, mais a lista de palavras bloqueadas pro filtro.</p>
+
+      <h3 style="font-size:16px">🚩 Denúncias pendentes</h3>
+      <div id="lista-denuncias"><p class="sub">Carregando...</p></div>
+
+      <h3 style="font-size:16px;margin-top:26px">🛡️ Palavras proibidas</h3>
+      <p class="sub" style="margin-top:0">barra mensagem privada e comentário do fórum que contiver qualquer uma dessas (sem diferenciar maiúscula/acento).</p>
+      <div style="display:flex;gap:8px;margin-bottom:14px;max-width:400px">
+        <input type="text" id="campo-nova-palavra" placeholder="nova palavra" style="flex:1">
+        <button class="btn" id="btn-add-palavra">Adicionar</button>
+      </div>
+      <div id="lista-palavras-proibidas"></div>
+    </section>
+
     <section id="aba-backup" class="oculto">
       <h2>Backup</h2>
       <p class="sub">exporte tudo (mundos + lições) como um JSON, ou restaure a partir de um</p>
@@ -1115,6 +1132,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   $('#aba-' + b.dataset.aba).classList.remove('oculto');
   if(b.dataset.aba === 'licoes') carregarLicoes();
   if(b.dataset.aba === 'jogadores') carregarJogadores();
+  if(b.dataset.aba === 'moderacao') carregarModeracao();
   if(b.dataset.aba === 'painel') carregarPainel();
   if(b.dataset.aba === 'mapas') carregarCenas();
   if(b.dataset.aba === 'npcs') carregarNpcs();
@@ -3615,6 +3633,64 @@ window.excluirJogador = async (id, apelido) => {
   if(!confirm(`Excluir a conta de "${apelido}"? Isso apaga o progresso salvo dela para sempre.`)) return;
   await api('jogador_excluir', {method:'POST', corpo:{id}});
   carregarJogadores();
+};
+
+/* ---------- Moderação: denúncias (mensagens + fórum) e lista de palavras proibidas ---------- */
+async function carregarModeracao(){
+  await Promise.all([carregarDenuncias(), carregarPalavrasProibidas()]);
+}
+async function carregarDenuncias(){
+  const d = await api('moderacao_listar').catch(() => ({mensagens: [], posts: []}));
+  const cartaoMensagem = m => `<div class="bloco-preview">
+    <b class="tag">mensagem privada</b>
+    <p style="margin:6px 0">${esc(m.remetente)} → ${esc(m.destinatario)}: "${esc(m.texto)}"</p>
+    <p class="sub" style="margin:0 0 8px">${esc(m.quando)}</p>
+    <div class="acoes">
+      <button class="btn linha erro" onclick="moderarMensagem(${m.id},'remover')">Remover mensagem</button>
+      <button class="btn linha branco" onclick="moderarMensagem(${m.id},'ignorar')">Ignorar denúncia</button>
+    </div>
+  </div>`;
+  const cartaoPost = p => `<div class="bloco-preview">
+    <b class="tag">comentário do fórum — ${esc(p.licao)}</b>
+    <p style="margin:6px 0">${esc(p.autor)}: "${esc(p.texto)}"</p>
+    <p class="sub" style="margin:0 0 8px">${esc(p.quando)}</p>
+    <div class="acoes">
+      <button class="btn linha erro" onclick="moderarPost(${p.id},'remover')">Remover comentário</button>
+      <button class="btn linha branco" onclick="moderarPost(${p.id},'ignorar')">Ignorar denúncia</button>
+    </div>
+  </div>`;
+  const tudo = d.mensagens.map(cartaoMensagem).join('') + d.posts.map(cartaoPost).join('');
+  $('#lista-denuncias').innerHTML = tudo || '<p class="sub">Nenhuma denúncia pendente. 🎉</p>';
+}
+window.moderarMensagem = async (id, acao) => {
+  await api('moderacao_mensagem_' + acao, {method:'POST', corpo:{id}}).catch(e => alert(e.message));
+  carregarDenuncias();
+};
+window.moderarPost = async (id, acao) => {
+  await api('moderacao_post_' + acao, {method:'POST', corpo:{id}}).catch(e => alert(e.message));
+  carregarDenuncias();
+};
+async function carregarPalavrasProibidas(){
+  const d = await api('palavras_proibidas_listar').catch(() => ({palavras: []}));
+  $('#lista-palavras-proibidas').innerHTML = d.palavras.length
+    ? `<div style="display:flex;flex-wrap:wrap;gap:8px">${d.palavras.map(p =>
+        `<span class="selo off" style="display:inline-flex;align-items:center;gap:6px">${esc(p)}
+          <button type="button" onclick="removerPalavraProibida('${esc(p)}')" style="background:none;border:none;cursor:pointer;font-weight:900;color:inherit">×</button>
+        </span>`).join('')}</div>`
+    : '<p class="sub">Nenhuma palavra cadastrada.</p>';
+}
+$('#btn-add-palavra').onclick = async () => {
+  const campo = $('#campo-nova-palavra');
+  const palavra = campo.value.trim();
+  if(!palavra) return;
+  await api('palavra_proibida_adicionar', {method:'POST', corpo:{palavra}}).catch(e => alert(e.message));
+  campo.value = '';
+  carregarPalavrasProibidas();
+};
+$('#campo-nova-palavra').addEventListener('keydown', e => { if(e.key === 'Enter') $('#btn-add-palavra').click(); });
+window.removerPalavraProibida = async (palavra) => {
+  await api('palavra_proibida_remover', {method:'POST', corpo:{palavra}}).catch(e => alert(e.message));
+  carregarPalavrasProibidas();
 };
 
 /* ---------- backup ---------- */

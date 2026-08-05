@@ -15,6 +15,7 @@ if (!is_file(__DIR__ . '/config.php')) {
   exit('<p>Falta o api/config.php. Copie o config.example.php, preencha com os dados do hPanel e recarregue esta página.</p>');
 }
 require __DIR__ . '/config.php';
+require_once __DIR__ . '/bd.php'; // só pra normalizarTexto() no seed da lista de palavras proibidas, abaixo
 
 try {
   $pdo = new PDO(
@@ -61,6 +62,70 @@ try {
     criado_em         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (destinatario_id) REFERENCES jogadores(id) ON DELETE CASCADE,
     INDEX (destinatario_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+  // lista de palavras proibidas (editável pelo Hostmaster no painel, aba Moderação) — usada
+  // pra barrar mensagens/posts do fórum antes de gravar. "normalizada" já vem sem acento e
+  // em minúsculo, pra comparar rápido sem reprocessar a lista toda em toda mensagem
+  $pdo->exec('CREATE TABLE IF NOT EXISTS palavras_proibidas (
+    palavra      VARCHAR(60) PRIMARY KEY,
+    normalizada  VARCHAR(60) NOT NULL,
+    criado_em    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX (normalizada)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+  // amizade só vale depois que os DOIS lados aceitam — sem isso não dá pra mandar mensagem
+  // privada (ver "mensagens" abaixo). "pendente" é o pedido esperando resposta; vira "aceita"
+  // quando o destinatário aceita, ou a linha some se ele recusar/desfizer depois
+  $pdo->exec('CREATE TABLE IF NOT EXISTS amizades (
+    id               INT AUTO_INCREMENT PRIMARY KEY,
+    solicitante_id   INT NOT NULL,
+    destinatario_id  INT NOT NULL,
+    status           ENUM(\'pendente\',\'aceita\') NOT NULL DEFAULT \'pendente\',
+    criado_em        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY par_unico (solicitante_id, destinatario_id),
+    FOREIGN KEY (solicitante_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    FOREIGN KEY (destinatario_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    INDEX (destinatario_id, status)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+  // mensagem privada: só entre quem já é amigo aceito dos dois lados (checado na aplicação
+  // antes de gravar, não aqui no banco). "denunciada" fica visível na aba Moderação do
+  // painel pro Hostmaster revisar e remover se for o caso — nenhuma mensagem é
+  // verdadeiramente privada de um adulto responsável quando denunciada.
+  $pdo->exec('CREATE TABLE IF NOT EXISTS mensagens (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    remetente_id    INT NOT NULL,
+    destinatario_id INT NOT NULL,
+    texto           VARCHAR(300) NOT NULL,
+    lida            TINYINT(1) NOT NULL DEFAULT 0,
+    denunciada      TINYINT(1) NOT NULL DEFAULT 0,
+    removida        TINYINT(1) NOT NULL DEFAULT 0,
+    criado_em       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (remetente_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    FOREIGN KEY (destinatario_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    INDEX (remetente_id, destinatario_id),
+    INDEX (destinatario_id, lida),
+    INDEX (denunciada)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+  // fórum de dúvidas/comentários, sempre atrelado a uma lição (não é um fórum geral solto —
+  // é "tirar dúvida sobre ESSA atividade"). resposta_a permite 1 nível de resposta (thread
+  // simples); "removido" é soft-delete quando o Hostmaster apaga por denúncia, mantendo o
+  // registro pra auditoria em vez de sumir sem rastro
+  $pdo->exec('CREATE TABLE IF NOT EXISTS forum_posts (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    autor_id     INT NOT NULL,
+    licao_id     VARCHAR(24) NOT NULL,
+    texto        VARCHAR(500) NOT NULL,
+    resposta_a   INT NULL,
+    denunciado   TINYINT(1) NOT NULL DEFAULT 0,
+    removido     TINYINT(1) NOT NULL DEFAULT 0,
+    criado_em    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (autor_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    FOREIGN KEY (resposta_a) REFERENCES forum_posts(id) ON DELETE CASCADE,
+    INDEX (licao_id, removido),
+    INDEX (denunciado)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
   // inscrições de notificação push (lembrete de sequência) — um jogador pode ter mais de
@@ -687,6 +752,20 @@ try {
     $lojaVilaSemeada = true;
   }
 
+  /* lista mínima de partida pra Moderação > Palavras proibidas (mensagens/fórum) — só
+     palavrão comum e inequívoco, sem gíria regional nem termo ligado a identidade/grupo
+     (isso exige julgamento humano de quem conhece a turma). O Hostmaster expande a lista
+     no painel; aqui é só pra o filtro já sair funcionando, não vazio. */
+  $palavrasExistentes = (int)$pdo->query('SELECT COUNT(*) FROM palavras_proibidas')->fetchColumn();
+  $palavrasSemeadas = 0;
+  if ($palavrasExistentes === 0) {
+    $inserirPalavra = $pdo->prepare('INSERT INTO palavras_proibidas (palavra, normalizada) VALUES (?, ?)');
+    foreach (['bosta', 'caralho', 'cuzão', 'merda', 'porra', 'puta', 'putaria', 'foder', 'fdp', 'arrombado'] as $p) {
+      $inserirPalavra->execute([$p, normalizarTexto($p)]);
+      $palavrasSemeadas++;
+    }
+  }
+
   echo '<p>✅ Banco pronto! Tabelas criadas (ou já existiam — rodar de novo não faz mal).</p>'
      . ($pontosSemeados
         ? '<p>🗺️ Cena "Ilha do saber" criada com ' . $pontosSemeados . ' pontos clicáveis — edite em <code>/admin.html</code>, aba Mapas.</p>'
@@ -710,6 +789,9 @@ try {
      . ($lojaVilaSemeada
         ? '<p>🎒 A "Loja da vila" (comida e acessórios da aba Loja, no rodapé do jogo) agora também é uma loja normal, editável em <code>/admin.html</code> → Lojas. Os itens têm os mesmos ids de sempre, então quem já tinha algo guardado continua com tudo certinho.</p>'
         : '<p>🎒 A "Loja da vila" já tinha sido migrada — nada foi trocado.</p>')
+     . ($palavrasSemeadas
+        ? '<p>🛡️ ' . $palavrasSemeadas . ' palavras proibidas de partida cadastradas (Moderação > Palavras proibidas) — é só uma base mínima, complete com o que fizer sentido pra sua turma.</p>'
+        : '<p>🛡️ A lista de palavras proibidas já existia — nada foi trocado.</p>')
      . '<p>Acesse <code>/admin.html</code> para entrar no painel. Depois é só apagar este arquivo (api/install.php) do servidor, ou deixá-lo — ele nunca sobrescreve conteúdo já existente.</p>';
 } catch (Throwable $e) {
   http_response_code(500);
