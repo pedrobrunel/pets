@@ -137,22 +137,33 @@ nav.rodape .aba[aria-current="true"] .icone{
 nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 nav.rodape .aba-menu{position:relative;flex:1;max-width:96px;display:flex}
 nav.rodape .aba-menu .aba{width:100%}
-/* popup que sobe do botão Casa com as opções Perfil/Pet/Casa/Inventário — nasce "dentro"
-   do botão (opacidade 0, um pouco mais baixo) e sobe com uma leve "molinha" no final,
-   dando a sensação de sair de baixo pra cima. Alinhado pela esquerda (não centralizado):
-   esse botão é o primeiro da barra, e centralizar cortava o popup na borda da tela nos
-   celulares mais estreitos. Largura fixa (não auto por conteúdo) pra todo botão ficar do
-   mesmo tamanho, em vez de cada um encolher pro texto dele. pointer-events:none evita
-   cliques quando fechado, sem precisar de position:fixed nem de um backdrop cobrindo a
-   tela inteira. */
+/* popup que sobe do botão Casa com as opções Perfil/Pet/Casa/Inventário — cada botão
+   "pipoca" na sua vez (escala + gira de lado, com uma molinha exagerada no final),
+   em vez do popup inteiro deslizar junto como um bloco só. O de baixo (mais perto do
+   botão) nasce primeiro, e o atraso cresce pra cada um acima — dá a sensação de saírem
+   em cascata de dentro do botão, um efeito mais brincalhão. Ao fechar, a mesma
+   defasagem roda ao contrário: quem nasceu por último some primeiro. Alinhado pela
+   esquerda (não centralizado): esse botão é o primeiro da barra, e centralizar cortava
+   o popup na borda da tela nos celulares mais estreitos. Largura fixa (não auto por
+   conteúdo) pra todo botão ficar do mesmo tamanho. pointer-events:none evita cliques
+   quando fechado, sem precisar de position:fixed nem de um backdrop cobrindo a tela
+   inteira. */
 .popup-casa{
   position:absolute;left:0;bottom:calc(100% + 10px);width:150px;
   display:flex;flex-direction:column;gap:8px;
-  opacity:0;pointer-events:none;transform:translateY(14px);
-  transition:transform .22s cubic-bezier(.34,1.4,.4,1), opacity .16s ease;
+  pointer-events:none;
 }
-.popup-casa.aberto{opacity:1;pointer-events:auto;transform:translateY(0)}
-.popup-casa-item{width:100%;justify-content:flex-start;box-shadow:0 6px 14px rgba(0,0,0,.18)}
+.popup-casa-item{
+  width:100%;justify-content:flex-start;box-shadow:0 6px 14px rgba(0,0,0,.18);
+  transform-origin:14px 100%;
+  opacity:0;transform:scale(.4) rotate(-10deg) translateY(6px);
+  transition:transform .38s cubic-bezier(.34,1.76,.64,1), opacity .18s ease;
+}
+.popup-casa.aberto .popup-casa-item{opacity:1;pointer-events:auto;transform:scale(1) rotate(0) translateY(0)}
+.popup-casa-item:nth-child(1){transition-delay:.12s}
+.popup-casa-item:nth-child(2){transition-delay:.08s}
+.popup-casa-item:nth-child(3){transition-delay:.04s}
+.popup-casa-item:nth-child(4){transition-delay:0s}
 
 /* ---------- telas ---------- */
 .tela{display:none;animation:entra .22s ease-out}
@@ -843,7 +854,6 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
   </div>
   <button class="aba" data-ir="trilhas"><span class="icone"><svg viewBox="0 0 24 24"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5A1.5 1.5 0 014 18.5z" fill="currentColor" opacity=".9"/><path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H13v16h5.5a1.5 1.5 0 001.5-1.5z" fill="currentColor" opacity=".55"/></svg></span>Trilhas</button>
   <button class="aba" data-ir="arcade"><span class="icone"><svg viewBox="0 0 24 24"><rect x="2.5" y="8.5" width="19" height="10" rx="5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M7 11v4M5 13h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="15.5" cy="12" r="1.1" fill="currentColor"/><circle cx="18" cy="14.5" r="1.1" fill="currentColor"/></svg></span>Arcade</button>
-  <button class="aba" data-ir="loja"><span class="icone"><svg viewBox="0 0 24 24"><path d="M5 9h14l-1.2 10.2a1.5 1.5 0 01-1.5 1.3H7.7a1.5 1.5 0 01-1.5-1.3z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M8.5 9V7a3.5 3.5 0 017 0v2" stroke="currentColor" stroke-width="2.1" fill="none" stroke-linecap="round"/></svg></span>Loja</button>
   <button class="aba" data-ir="mural"><span class="icone"><svg viewBox="0 0 24 24"><path d="M4 5.5C4 4.7 4.7 4 5.5 4h13c.8 0 1.5.7 1.5 1.5v9c0 .8-.7 1.5-1.5 1.5H10l-4 3.5V16H5.5A1.5 1.5 0 014 14.5z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/></svg></span>Mural</button>
 </nav>
 
@@ -1871,7 +1881,9 @@ function abrirPonto(i, el){
   if(p.tipo === 'npc')   return abrirNpc(p.destino);
   if(p.tipo === 'gatilho') return ativarGatilho(p.destino);
   if(p.tipo === 'item') return coletarItem(p.destino);
-  if(p.tipo === 'loja') return ir('lojagenerica', p.destino);
+  // "Loja da vila" tem tela própria (com o mini-widget de fome/alegria do bicho) — as
+  // demais lojas genéricas usam a tela compartilhada
+  if(p.tipo === 'loja') return p.destino === 'lojadavila' ? ir('loja') : ir('lojagenerica', p.destino);
   if(p.tipo === 'cena'){
     const proxima = acharCena(p.destino);
     if(!proxima) return brinde('Esse caminho ainda não leva a nenhum lugar. 🚧');
