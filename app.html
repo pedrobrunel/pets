@@ -135,6 +135,20 @@ nav.rodape .aba[aria-current="true"] .icone{
   transform:translateY(-3px)
 }
 nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
+nav.rodape .aba-menu{position:relative;flex:1;max-width:96px;display:flex}
+nav.rodape .aba-menu .aba{width:100%}
+/* popup que sobe do botão Casa com as opções Perfil/Casa — nasce "dentro" do botão
+   (opacidade 0, um pouco mais baixo) e sobe com uma leve "molinha" no final, dando a
+   sensação de sair de baixo pra cima. display:none evita cliques quando fechado, sem
+   precisar de position:fixed nem de um backdrop cobrindo a tela inteira. */
+.popup-casa{
+  position:absolute;left:50%;bottom:calc(100% + 10px);
+  display:flex;flex-direction:column;gap:8px;
+  opacity:0;pointer-events:none;transform:translate(-50%, 14px);
+  transition:transform .22s cubic-bezier(.34,1.4,.4,1), opacity .16s ease;
+}
+.popup-casa.aberto{opacity:1;pointer-events:auto;transform:translate(-50%, 0)}
+.popup-casa-item{white-space:nowrap;box-shadow:0 6px 14px rgba(0,0,0,.18)}
 
 /* ---------- telas ---------- */
 .tela{display:none;animation:entra .22s ease-out}
@@ -613,6 +627,9 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .stat-card .stat-valor{font-family:'Nunito';font-weight:900;font-size:19px;display:block;margin-top:2px}
 .stat-card .stat-rotulo{font-size:11px;text-transform:uppercase;letter-spacing:.4px;opacity:.65;font-weight:900}
 .perfil-rodape{display:flex;flex-direction:column;align-items:center;gap:8px;margin:18px 0 4px}
+.rotulo-grupo-perfil{width:100%;max-width:280px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.4px;opacity:.55;margin:10px 0 -2px;text-align:left}
+.rotulo-grupo-perfil:first-child{margin-top:0}
+.btn.vermelho{--bg:var(--erro);--edge:color-mix(in srgb, var(--erro) 75%, black)}
 .missao-item{display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #ECF0F1;font-size:13px}
 .missao-item:last-child{border-bottom:none}
 .missao-status{font-size:16px;line-height:1.3}
@@ -813,7 +830,13 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 </div>
 
 <nav class="rodape" id="rodape" hidden>
-  <button class="aba" data-ir="casa"><span class="icone"><svg viewBox="0 0 24 24"><path d="M4 11.5L12 4l8 7.5" stroke="currentColor" stroke-width="2.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 10v8.5a1 1 0 001 1h9a1 1 0 001-1V10" stroke="currentColor" stroke-width="2.3" fill="none" stroke-linejoin="round"/></svg></span>Casa</button>
+  <div class="aba-menu" id="menu-casa">
+    <div class="popup-casa" id="popup-casa">
+      <button class="btn branco pequeno popup-casa-item" onclick="irDoMenuCasa('perfil')">🪪 Perfil</button>
+      <button class="btn branco pequeno popup-casa-item" onclick="irDoMenuCasa('casa')">🏠 Casa</button>
+    </div>
+    <button class="aba" id="botao-casa" data-ir="casa"><span class="icone"><svg viewBox="0 0 24 24"><path d="M4 11.5L12 4l8 7.5" stroke="currentColor" stroke-width="2.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 10v8.5a1 1 0 001 1h9a1 1 0 001-1V10" stroke="currentColor" stroke-width="2.3" fill="none" stroke-linejoin="round"/></svg></span>Casa</button>
+  </div>
   <button class="aba" data-ir="trilhas"><span class="icone"><svg viewBox="0 0 24 24"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5A1.5 1.5 0 014 18.5z" fill="currentColor" opacity=".9"/><path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H13v16h5.5a1.5 1.5 0 001.5-1.5z" fill="currentColor" opacity=".55"/></svg></span>Trilhas</button>
   <button class="aba" data-ir="arcade"><span class="icone"><svg viewBox="0 0 24 24"><rect x="2.5" y="8.5" width="19" height="10" rx="5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M7 11v4M5 13h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="15.5" cy="12" r="1.1" fill="currentColor"/><circle cx="18" cy="14.5" r="1.1" fill="currentColor"/></svg></span>Arcade</button>
   <button class="aba" data-ir="loja"><span class="icone"><svg viewBox="0 0 24 24"><path d="M5 9h14l-1.2 10.2a1.5 1.5 0 01-1.5 1.3H7.7a1.5 1.5 0 01-1.5-1.3z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M8.5 9V7a3.5 3.5 0 017 0v2" stroke="currentColor" stroke-width="2.1" fill="none" stroke-linecap="round"/></svg></span>Loja</button>
@@ -1062,6 +1085,7 @@ let telaAtual = 'inicio';
 const RENDER = {}; // preenchido abaixo por cada tela
 
 function ir(tela, dados){
+  fecharMenuCasa();
   if(pararLoops) pararLoops();
   telaAtual = tela;
   if(RENDER[tela]) RENDER[tela](dados);
@@ -1069,7 +1093,7 @@ function ir(tela, dados){
   const secao = $('#tela-'+tela);
   secao.classList.add('ativa');
   document.querySelectorAll('.aba').forEach(a =>
-    a.setAttribute('aria-current', String(a.dataset.ir === tela)));
+    a.setAttribute('aria-current', String(a.dataset.ir === tela || (a.dataset.ir === 'casa' && tela === 'perfil'))));
   window.scrollTo({top:0, behavior:'instant'});
   // ilha, arcade e lição são imersivas: ocupam a tela toda, sem topo/rodapé — só o
   // botão de voltar. O CSS (#tela-arcade.ativa etc) cuida do tamanho, sem cálculo em JS.
@@ -1077,6 +1101,24 @@ function ir(tela, dados){
 }
 document.querySelectorAll('.aba').forEach(a => a.onclick = () => ir(a.dataset.ir));
 let pararLoops = null;
+
+// botão Casa abre um popup (Perfil/Casa) em vez de navegar direto — as duas telas
+// deixaram de ser a mesma coisa (Casa cuida do bicho, Perfil é a "carteirinha" do
+// jogador), então o botão de baixo agora escolhe qual das duas abrir
+$('#botao-casa').onclick = (e) => {
+  e.stopPropagation();
+  $('#popup-casa').classList.toggle('aberto');
+};
+function irDoMenuCasa(tela){
+  fecharMenuCasa();
+  ir(tela);
+}
+function fecharMenuCasa(){
+  $('#popup-casa').classList.remove('aberto');
+}
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('#menu-casa')) fecharMenuCasa();
+});
 
 /* ---------- 4. TELA: CASA ---------- */
 const HUMORES = [
@@ -1242,8 +1284,7 @@ RENDER.casa = () => {
     <div class="grade" style="margin-top:14px">
       <button class="btn azul grande" onclick="ir('arcade')">🎮 Jogar</button>
       <button class="btn roxo grande" onclick="ir('loja')">🍉 Alimentar</button>
-    </div>
-    <div style="margin-top:12px"><button class="btn branco grande" onclick="ir('perfil')">🪪 Ver minha carteirinha</button></div>`;
+    </div>`;
   if(casaAtiva) renderCamadaMoveis(false, 'casa'); // só pra ver — quem edita é a tela "Editar minha casa"
 };
 function desbloquearCasa(){
@@ -3502,13 +3543,17 @@ RENDER.perfil = () => {
     }).join('')}</div>
 
     <div class="perfil-rodape">
+      <p class="rotulo-grupo-perfil">Social</p>
       <button class="btn branco pequeno" onclick="ir('amigos')">👥 Amigos</button>
       <button class="btn branco pequeno" onclick="ir('mensagens')">💬 Mensagens</button>
-      <button class="btn branco pequeno" onclick="compartilhar()">🔗 Compartilhar</button>
       <button class="btn branco pequeno" onclick="abrirRanking()">🏆 Ranking</button>
+      <button class="btn branco pequeno" onclick="compartilhar()">🔗 Compartilhar</button>
+      <p class="rotulo-grupo-perfil">Ajustes</p>
       <button class="btn branco pequeno" id="btn-lembrete" onclick="alternarLembrete()" hidden>🔔 Lembrete diário</button>
+      <button class="btn branco pequeno" id="btn-sair-conta" onclick="sairDaConta()" hidden>🚪 Sair da conta</button>
       <p class="aviso-mini">🔒 Mostra só apelido, bicho, nível e conquistas — nunca nome real, idade ou escola.</p>
     </div>`;
+  $('#btn-sair-conta').hidden = !logado;
   atualizarBotaoLembrete();
 };
 // lembrete de sequência: avisa às 19h se o aluno ainda não jogou hoje (ver
@@ -3623,6 +3668,12 @@ function compartilhar(){
   const texto = `Meu bicho ${estado.apelido} está no nível ${nivel()} na Bichoteca! 🐾`;
   if(navigator.share) navigator.share({title:'Bichoteca', text:texto}).catch(()=>{});
   else brinde('Link copiado! (no protótipo é só demonstração)');
+}
+async function sairDaConta(){
+  if(!confirm('Sair da sua conta? Seu progresso já está salvo — é só entrar de novo com seu usuário e senha na próxima vez.')) return;
+  try{ await fetch('api/estado.php?acao=sair', {method:'POST'}); }
+  catch(e){ /* mesmo se a chamada falhar, recarregar já esquece a sessão local */ }
+  location.reload();
 }
 
 /* ---------- 12. ONBOARDING ---------- */
