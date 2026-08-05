@@ -137,17 +137,19 @@ nav.rodape .aba[aria-current="true"] .icone{
 nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 nav.rodape .aba-menu{position:relative;flex:1;max-width:96px;display:flex}
 nav.rodape .aba-menu .aba{width:100%}
-/* popup que sobe do botão Casa com as opções Perfil/Casa — nasce "dentro" do botão
+/* popup que sobe do botão Casa com as opções Perfil/Pet/Casa — nasce "dentro" do botão
    (opacidade 0, um pouco mais baixo) e sobe com uma leve "molinha" no final, dando a
-   sensação de sair de baixo pra cima. display:none evita cliques quando fechado, sem
+   sensação de sair de baixo pra cima. Alinhado pela esquerda (não centralizado): esse
+   botão é o primeiro da barra, e centralizar cortava o popup na borda da tela nos
+   celulares mais estreitos. pointer-events:none evita cliques quando fechado, sem
    precisar de position:fixed nem de um backdrop cobrindo a tela inteira. */
 .popup-casa{
-  position:absolute;left:50%;bottom:calc(100% + 10px);
-  display:flex;flex-direction:column;gap:8px;
-  opacity:0;pointer-events:none;transform:translate(-50%, 14px);
+  position:absolute;left:0;bottom:calc(100% + 10px);
+  display:flex;flex-direction:column;gap:8px;align-items:flex-start;
+  opacity:0;pointer-events:none;transform:translateY(14px);
   transition:transform .22s cubic-bezier(.34,1.4,.4,1), opacity .16s ease;
 }
-.popup-casa.aberto{opacity:1;pointer-events:auto;transform:translate(-50%, 0)}
+.popup-casa.aberto{opacity:1;pointer-events:auto;transform:translateY(0)}
 .popup-casa-item{white-space:nowrap;box-shadow:0 6px 14px rgba(0,0,0,.18)}
 
 /* ---------- telas ---------- */
@@ -833,7 +835,8 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
   <div class="aba-menu" id="menu-casa">
     <div class="popup-casa" id="popup-casa">
       <button class="btn branco pequeno popup-casa-item" onclick="irDoMenuCasa('perfil')">🪪 Perfil</button>
-      <button class="btn branco pequeno popup-casa-item" onclick="irDoMenuCasa('casa')">🏠 Casa</button>
+      <button class="btn branco pequeno popup-casa-item" onclick="irDoMenuCasa('casa')">🐾 Pet</button>
+      <button class="btn branco pequeno popup-casa-item" onclick="irDoMenuCasa('editarcasa')">🏠 Casa</button>
     </div>
     <button class="aba" id="botao-casa" data-ir="casa"><span class="icone"><svg viewBox="0 0 24 24"><path d="M4 11.5L12 4l8 7.5" stroke="currentColor" stroke-width="2.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 10v8.5a1 1 0 001 1h9a1 1 0 001-1V10" stroke="currentColor" stroke-width="2.3" fill="none" stroke-linejoin="round"/></svg></span>Casa</button>
   </div>
@@ -1092,8 +1095,9 @@ function ir(tela, dados){
   document.querySelectorAll('.tela').forEach(s => { s.classList.remove('ativa'); s.style.height = ''; s.style.overflowY = ''; });
   const secao = $('#tela-'+tela);
   secao.classList.add('ativa');
+  const naGuardaCasa = tela === 'casa' || tela === 'perfil' || tela === 'editarcasa';
   document.querySelectorAll('.aba').forEach(a =>
-    a.setAttribute('aria-current', String(a.dataset.ir === tela || (a.dataset.ir === 'casa' && tela === 'perfil'))));
+    a.setAttribute('aria-current', String(a.dataset.ir === tela || (a.dataset.ir === 'casa' && naGuardaCasa))));
   window.scrollTo({top:0, behavior:'instant'});
   // ilha, arcade e lição são imersivas: ocupam a tela toda, sem topo/rodapé — só o
   // botão de voltar. O CSS (#tela-arcade.ativa etc) cuida do tamanho, sem cálculo em JS.
@@ -2931,7 +2935,7 @@ RENDER.lojamoveis = () => {
       : `<div class="titulo-secao"><h2>Loja de Móveis</h2><small>você tem 🪙 ${estado.moedas}</small></div>`}
     ${blocoNpcsDaTela('lojamoveis')}
     <div class="grade-3">${disponiveis.map(cartaoMovel).join('') || '<p class="vazio">Nenhum móvel à venda no momento — volte mais tarde!</p>'}</div>
-    <p style="font-size:12px;font-weight:700;opacity:.75;margin:14px 4px 0">Comprou? Vá pra Casa e toque em "Editar minha casa" pra colocar o móvel no seu quarto.</p>`;
+    <p style="font-size:12px;font-weight:700;opacity:.75;margin:14px 4px 0">Comprou? Toque no ícone da Casa (menu de baixo) e escolha "🏠 Casa" pra colocar o móvel no seu quarto.</p>`;
 };
 function cartaoMovel(m){
   const tem = estado.moveisComprados.includes(m.id);
