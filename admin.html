@@ -102,6 +102,13 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
 .upload{border:2px dashed var(--contorno);border-radius:10px;padding:14px;text-align:center;font-size:12px;color:#7F8C8D;font-weight:800;cursor:pointer}
 .upload:hover{border-color:var(--ceu)}
 
+.grade-sprites-minigame{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.cartao-sprite-minigame{border:1px solid var(--contorno);border-radius:10px;padding:10px;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center}
+.preview-sprite-minigame{width:56px;height:56px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--contorno);border-radius:8px;background:#FAFAFA}
+.preview-sprite-minigame img{max-width:100%;max-height:100%;object-fit:contain}
+.emoji-sprite-minigame{font-size:28px}
+.rotulo-sprite-minigame{font-size:11px;font-weight:700;color:#555;margin:0;min-height:28px}
+
 #form-mundo, #form-licao{background:#fff;border:1px solid var(--contorno);border-radius:12px;padding:18px;margin-bottom:18px}
 
 /* --- editor visual de mapas --- */
@@ -250,6 +257,7 @@ body.conectando-fluxo{cursor:crosshair}
       <button data-aba="missoes">🎯 Missões</button>
       <button data-aba="itens">🔭 Itens</button>
       <button data-aba="moveis">🛋️ Móveis</button>
+      <button data-aba="arcade">🕹️ Arcade</button>
       <button data-aba="lojas">🏪 Lojas</button>
       <button data-aba="mundos">🎒 Mundos</button>
       <button data-aba="licoes">📚 Lições</button>
@@ -719,6 +727,12 @@ body.conectando-fluxo{cursor:crosshair}
       <div class="painel"><table id="tabela-moveis"></table></div>
     </section>
 
+    <section id="aba-arcade" class="oculto">
+      <h2>Arcade — sprites dos minigames</h2>
+      <p class="sub">cada minigame já vem com um emoji padrão (o jogo funciona sem você mexer em nada). Suba uma imagem quadrada pra trocar por um desenho seu — sem imagem, continua no emoji.</p>
+      <div id="grupos-sprites-minigame"></div>
+    </section>
+
     <section id="aba-lojas" class="oculto">
       <h2>Lojas</h2>
       <p class="sub">crie quantas lojas quiser (Lanchonete, Mercado...) — cada uma vira um destino de verdade: coloque um ponto tipo "Visitar uma loja" apontando pra ela num mapa (aba Mapas).</p>
@@ -1042,6 +1056,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   if(b.dataset.aba === 'missoes') carregarMissoes();
   if(b.dataset.aba === 'itens') carregarItens();
   if(b.dataset.aba === 'moveis') { carregarMoveis(); carregarCasaFundo(); carregarCapasFixas(); carregarMusica(); }
+  if(b.dataset.aba === 'arcade') carregarSpritesMinigame();
   if(b.dataset.aba === 'lojas') carregarLojas();
 });
 
@@ -2513,6 +2528,52 @@ $('#btn-remover-musica').onclick = async () => {
   await api('musica_remover', {method:'POST', corpo:{}});
   carregarMusica();
 };
+
+/* ---------- Sprites dos minigames do Arcade (opcional — cada slot cai pro emoji padrão) ---------- */
+const GRUPOS_SPRITES_MINIGAME = [
+  {titulo: '🃏 Memória do Bicho', prefixo: 'memoria'},
+  {titulo: '🍉 Chuva de Frutas', prefixo: 'chuva'},
+  {titulo: '🕳️ Toca do Bicho', prefixo: 'toca'},
+  {titulo: '🎵 Sequência do Bicho', prefixo: 'sequencia'},
+];
+let spritesMinigameCache = [];
+async function carregarSpritesMinigame(){
+  const d = await api('minigame_sprites_listar').catch(() => ({sprites: []}));
+  spritesMinigameCache = d.sprites;
+  $('#grupos-sprites-minigame').innerHTML = GRUPOS_SPRITES_MINIGAME.map(g => {
+    const itens = spritesMinigameCache.filter(s => s.chave.startsWith(g.prefixo));
+    return `<div class="painel" style="padding:16px;margin-bottom:20px">
+      <h3 style="font-size:16px;margin-top:0">${g.titulo}</h3>
+      <div class="grade-sprites-minigame">${itens.map(cartaoSpriteMinigame).join('')}</div>
+    </div>`;
+  }).join('');
+}
+function cartaoSpriteMinigame(s){
+  return `<div class="cartao-sprite-minigame">
+    <div class="preview-sprite-minigame">${s.imagemUrl ? `<img src="${esc(s.imagemUrl)}">` : `<span class="emoji-sprite-minigame">${s.emoji || '—'}</span>`}</div>
+    <p class="rotulo-sprite-minigame">${esc(s.rotulo)}</p>
+    <input type="file" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto" id="input-sprite-${s.chave}" onchange="enviarSpriteMinigame('${s.chave}', this.files[0])">
+    <button type="button" class="btn linha branco" onclick="$('#input-sprite-${s.chave}').click()">Trocar</button>
+    ${s.imagem ? `<button type="button" class="btn linha erro" onclick="removerSpriteMinigame('${s.chave}')">Usar emoji</button>` : ''}
+  </div>`;
+}
+async function enviarSpriteMinigame(chave, arquivo){
+  if(!arquivo) return;
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    fd.append('chave', chave);
+    const r = await fetch('api/admin.php?acao=minigame_sprite_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    carregarSpritesMinigame();
+  }catch(e){ alert(e.message); }
+}
+async function removerSpriteMinigame(chave){
+  if(!confirm('Voltar esse slot pro emoji padrão?')) return;
+  await api('minigame_sprite_remover', {method:'POST', corpo:{chave}});
+  carregarSpritesMinigame();
+}
 
 /* ---------- Lojas genéricas (Lanchonete, Mercado, e as que forem criadas) ---------- */
 let lojasCache = [];

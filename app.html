@@ -1548,6 +1548,15 @@ let MUSICA = {url:'', ativa:false};
 // lembrete de sequência (push) — a chave pública some (fica '') se o Hostmaster ainda não
 // gerou o par VAPID no config.php; o botão no Perfil só aparece quando ela existe de verdade
 let VAPID_PUBLIC_KEY = '';
+// sprites dos minigames do Arcade (opcional, painel > aba Arcade) — só os slots com
+// imagem enviada aparecem aqui; o resto continua no emoji padrão embutido em cada jogo
+let SPRITES_MINIGAME = {};
+// devolve <img> se o Hostmaster subiu uma imagem pra esse slot, senão o emoji padrão —
+// usado nos 3 minigames que renderizam em HTML (a Chuva de Frutas usa canvas, à parte)
+function spriteOuEmoji(chave, emojiPadrao, tamanho = 30){
+  const url = SPRITES_MINIGAME[chave];
+  return url ? `<img src="${esc(url)}" alt="" style="width:${tamanho}px;height:${tamanho}px;object-fit:contain;vertical-align:middle">` : emojiPadrao;
+}
 let elementoMusica = null;
 function iniciarMusicaFundo(){
   if(!MUSICA.ativa || !MUSICA.url) return;
@@ -2332,11 +2341,11 @@ RENDER.arcade = () => {
 function jogoMemoria(){
   const naipes = ['🍉','🐟','🦴','🧀','🍎','🍪'];
   const cartas = [...naipes, ...naipes].sort(()=>Math.random()-.5)
-    .map((e,i)=>({i, e, aberta:false, feita:false}));
+    .map((e,i)=>({i, e, chaveSprite:'memoria'+(naipes.indexOf(e)+1), aberta:false, feita:false}));
   let a=null, b=null, jogadas=0, travado=false;
   const pinta = () => {
     $('#tabuleiro-memoria').innerHTML = cartas.map(c=>
-      `<button class="carta ${c.feita?'par':c.aberta?'virada':''}" onclick="window._vira(${c.i})">${c.e}</button>`).join('');
+      `<button class="carta ${c.feita?'par':c.aberta?'virada':''}" onclick="window._vira(${c.i})">${spriteOuEmoji(c.chaveSprite, c.e)}</button>`).join('');
     $('#placar-mem').textContent = jogadas;
   };
   window._vira = i => {
@@ -2392,7 +2401,17 @@ function jogoChuva(){
   cv.height = Math.max(200, Math.min(420, alturaDisponivel));
   const L = cv.width, A = cv.height;
   let cesta = {x:L/2, l:74}, itens=[], pontos=0, t0=Date.now(), rodando=true, spawn=0, esq=false, dir=false;
-  const TIPOS = [{e:'🍉',v:1},{e:'🍎',v:1},{e:'🍌',v:1},{e:'🍓',v:2},{e:'🥫',v:-2}];
+  const TIPOS = [{e:'🍉',v:1,chave:'chuva1'},{e:'🍎',v:1,chave:'chuva2'},{e:'🍌',v:1,chave:'chuva3'},{e:'🍓',v:2,chave:'chuva4'},{e:'🥫',v:-2,chave:'chuva5'}];
+  // pré-carrega as imagens configuradas no painel (se houver) — cai pro emoji/retângulo
+  // padrão se não tiver, não carregar a tempo, ou dar erro (offline, arquivo removido...)
+  const imgs = {};
+  [...TIPOS.map(t=>t.chave), 'chuvacesta'].forEach(chave => {
+    const url = SPRITES_MINIGAME[chave];
+    if(!url) return;
+    const img = new Image();
+    img.onload = () => { imgs[chave] = img; };
+    img.src = url;
+  });
 
   const px = ev => {
     const r = cv.getBoundingClientRect();
@@ -2440,7 +2459,12 @@ function jogoChuva(){
     ctx.fillStyle = '#7DCEA0'; ctx.fillRect(0, A-40, L, 40);
     ctx.strokeStyle = '#2C3E50'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(0,A-40); ctx.lineTo(L,A-40); ctx.stroke();
 
-    itens.forEach(it => { it.y += it.vy; ctx.font='30px serif'; ctx.textAlign='center'; ctx.fillText(it.e, it.x, it.y); });
+    itens.forEach(it => {
+      it.y += it.vy;
+      const img = imgs[it.chave];
+      if(img) ctx.drawImage(img, it.x-18, it.y-18, 36, 36);
+      else { ctx.font='30px serif'; ctx.textAlign='center'; ctx.fillText(it.e, it.x, it.y); }
+    });
     itens = itens.filter(it => {
       if(it.y > A-58 && it.y < A-18 && Math.abs(it.x - cesta.x) < cesta.l/2 + 10){
         pontos += it.v; return false;
@@ -2448,8 +2472,12 @@ function jogoChuva(){
       return it.y < A+30;
     });
     // cesta
-    ctx.fillStyle = '#C98A4B'; ctx.strokeStyle = '#2C3E50'; ctx.lineWidth = 6;
-    ctx.beginPath(); ctx.roundRect(cesta.x-cesta.l/2, A-64, cesta.l, 30, 10); ctx.fill(); ctx.stroke();
+    if(imgs.chuvacesta){
+      ctx.drawImage(imgs.chuvacesta, cesta.x-cesta.l/2, A-66, cesta.l, 34);
+    } else {
+      ctx.fillStyle = '#C98A4B'; ctx.strokeStyle = '#2C3E50'; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.roundRect(cesta.x-cesta.l/2, A-64, cesta.l, 30, 10); ctx.fill(); ctx.stroke();
+    }
     ctx.fillStyle = '#2C3E50'; ctx.font = '900 20px Nunito, sans-serif'; ctx.textAlign = 'left';
     ctx.fillText('Pontos: '+pontos, 14, 32);
     requestAnimationFrame(laco);
@@ -2459,6 +2487,7 @@ function jogoChuva(){
 /* --- minigame 3: toca do bicho (whack-a-mole) --- */
 function jogoToca(){
   const emojiAlvo = {capivara:'🦫', salsicha:'🐶', gato:'🐱'}[estado.tipo];
+  const chaveAlvo = {capivara:'tocacapivara', salsicha:'tocasalsicha', gato:'tocagato'}[estado.tipo];
   const N = 9, DURACAO = 25;
   let buracos = Array(N).fill(null); // null | 'alvo' | 'decoy'
   let sumiTimers = Array(N).fill(null);
@@ -2466,7 +2495,7 @@ function jogoToca(){
 
   const pinta = () => {
     $('#buracos-toca').innerHTML = buracos.map((b,i) =>
-      `<button class="buraco ${b?'ativo':''}" onclick="window._toca(${i})">${b==='alvo'?emojiAlvo:b==='decoy'?'⚡':''}</button>`).join('');
+      `<button class="buraco ${b?'ativo':''}" onclick="window._toca(${i})">${b==='alvo'?spriteOuEmoji(chaveAlvo,emojiAlvo,36):b==='decoy'?spriteOuEmoji('tocaraio','⚡',36):''}</button>`).join('');
     $('#placar-toca').textContent = pontos;
   };
   window._toca = i => {
@@ -2589,7 +2618,7 @@ function jogoSequencia(){
     <div class="titulo-secao"><h2>🎵 Sequência do Bicho</h2></div>
     <div class="placar-simon">Rodadas: <span id="placar-sequencia">0</span></div>
     <div class="grade-simon">
-      ${EMOJIS.map((e,i) => `<button class="pad-simon p${i}" data-i="${i}" onclick="window._padSimon(${i})">${e}</button>`).join('')}
+      ${EMOJIS.map((e,i) => `<button class="pad-simon p${i}" data-i="${i}" onclick="window._padSimon(${i})">${spriteOuEmoji('sequencia'+(i+1), e, 34)}</button>`).join('')}
     </div>
     <p class="aviso" style="margin-top:14px">Observe a ordem que acende e repita tocando nos mesmos quadrados.</p>`;
   proximaRodada();
@@ -3160,6 +3189,7 @@ async function carregarConteudo(){
     if(dados.capas) CAPAS = dados.capas;
     if(dados.musica) MUSICA = dados.musica;
     if(dados.vapidPublicKey) VAPID_PUBLIC_KEY = dados.vapidPublicKey;
+    if(dados.spritesMinigame) SPRITES_MINIGAME = dados.spritesMinigame;
     if(Array.isArray(dados.lojas)) LOJAS = dados.lojas;
     if(Array.isArray(dados.itensLoja)) ITENS_LOJA = dados.itensLoja;
   }catch(e){ /* offline ou hospedagem sem PHP: fica com o conteúdo embutido */ }
