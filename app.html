@@ -799,6 +799,8 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
   <section id="tela-mensagens" class="tela"></section>
   <!-- ====== CONVERSA (chat 1:1, só entre amigos aceitos) ====== -->
   <section id="tela-conversa" class="tela"></section>
+  <!-- ====== GRUPO (chat em grupo) ====== -->
+  <section id="tela-grupoconversa" class="tela"></section>
   <!-- ====== PERFIL ====== -->
   <section id="tela-perfil" class="tela"></section>
 </div>
@@ -3146,8 +3148,9 @@ RENDER.mensagens = async () => {
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('perfil')">Voltar</button>
     <div class="titulo-secao"><h2>💬 Mensagens</h2></div>
     <p class="aviso" style="margin-top:12px">Carregando...</p>`;
-  let conversas = [];
+  let conversas = [], grupos = [];
   try{ conversas = (await chamarSocial('conversas_listar', null, 'GET')).conversas; }catch(e){ /* segue vazio */ }
+  try{ grupos = (await chamarSocial('grupos_listar', null, 'GET')).grupos; }catch(e){ /* segue vazio */ }
   $('#tela-mensagens').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('perfil')">Voltar</button>
     <div class="titulo-secao"><h2>💬 Mensagens</h2></div>
@@ -3161,8 +3164,62 @@ RENDER.mensagens = async () => {
         ${c.naoLidas ? `<span class="bolha-nao-lida">${c.naoLidas}</span>` : ''}
       </button>`).join('')
       : `<p class="sub" style="margin:0 4px 12px">Adicione um amigo pra começar a conversar.</p>
-         <button class="btn branco" onclick="ir('amigos')">👥 Ver amigos</button>`}`;
+         <button class="btn branco" onclick="ir('amigos')">👥 Ver amigos</button>`}
+    <div class="titulo-secao" style="margin-top:18px">
+      <h2 style="font-size:18px">👥 Grupos</h2>
+      <button class="btn pequeno" onclick="abrirCriarGrupo()">+ Novo grupo</button>
+    </div>
+    ${grupos.length ? grupos.map(g => `
+      <button class="linha-conversa" onclick="ir('grupoconversa',${g.id})">
+        <span class="av-conversa">👥</span>
+        <div style="flex:1;min-width:0">
+          <b>${esc(g.nome)}</b>
+          <p class="previa-conversa">${g.ultimaMensagem ? esc(g.ultimaMensagem) : `${g.totalMembros} pessoas no grupo`}</p>
+        </div>
+        ${g.naoLidas ? `<span class="bolha-nao-lida">${g.naoLidas}</span>` : ''}
+      </button>`).join('')
+      : `<p class="sub" style="margin:0 4px">Crie um grupo com seus amigos pra conversar junto.</p>`}`;
 };
+async function abrirCriarGrupo(){
+  let amigos = [];
+  try{ amigos = (await chamarSocial('amizades_listar', null, 'GET')).amigos; }catch(e){ amigos = []; }
+  if(!amigos.length){
+    modal(`<h2>👥 Novo grupo</h2><p class="sub">Você precisa ter pelo menos um amigo aceito pra criar um grupo.</p>
+      <button class="btn" onclick="fecharModal()">Ok</button>`);
+    return;
+  }
+  modal(`<h2>👥 Novo grupo</h2>
+    <label style="display:block;font-weight:800;margin:10px 0 6px">Nome do grupo</label>
+    <input id="campo-nome-grupo" maxlength="40" placeholder="Ex.: Turma da tarefa"
+      style="width:100%;padding:10px 12px;border:3px solid var(--contorno);border-radius:12px;font-weight:800;box-sizing:border-box">
+    <label style="display:block;font-weight:800;margin:14px 0 6px">Quem vai participar?</label>
+    <div style="max-height:180px;overflow-y:auto">${amigos.map(am => `
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-weight:700">
+        <input type="checkbox" value="${esc(am.apelido)}" class="check-membro-grupo">
+        ${emojiDoTipo(am.tipo)} ${esc(am.apelido)}
+      </label>`).join('')}</div>
+    <p id="aviso-criar-grupo" class="aviso" style="display:none;margin-top:8px"></p>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn branco" onclick="fecharModal()">Cancelar</button>
+      <button class="btn" onclick="criarGrupoConfirmar()">Criar grupo</button>
+    </div>`);
+}
+async function criarGrupoConfirmar(){
+  const nome = $('#campo-nome-grupo').value.trim();
+  const aviso = $('#aviso-criar-grupo');
+  const apelidos = Array.from(document.querySelectorAll('.check-membro-grupo:checked')).map(c => c.value);
+  if(!nome){ aviso.textContent = 'Dá um nome pro grupo.'; aviso.style.display = 'block'; return; }
+  if(!apelidos.length){ aviso.textContent = 'Escolha pelo menos um amigo.'; aviso.style.display = 'block'; return; }
+  try{
+    const r = await chamarSocial('grupo_criar', {nome, apelidos});
+    fecharModal();
+    brinde('Grupo criado! 🎉');
+    ir('grupoconversa', r.grupoId);
+  }catch(e){
+    aviso.textContent = e.message;
+    aviso.style.display = 'block';
+  }
+}
 
 let conversaAtual = null;
 RENDER.conversa = async (apelido) => {
@@ -3216,6 +3273,106 @@ async function denunciarMensagem(id){
   if(!confirm('Denunciar essa mensagem pro professor revisar?')) return;
   try{ await chamarSocial('mensagem_denunciar', {id}); brinde('Denúncia enviada. Obrigado por ajudar a manter a vila segura! 🛡️'); }
   catch(e){ alert(e.message); }
+}
+
+/* ---------- GRUPO (chat em grupo, mesma UI da conversa 1:1) ---------- */
+let grupoAtual = null;
+RENDER.grupoconversa = async (grupoId) => {
+  grupoAtual = grupoId;
+  $('#tela-grupoconversa').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('mensagens')">Voltar</button>
+    <p class="aviso" style="margin-top:12px">Carregando...</p>`;
+  let dados = null;
+  try{ dados = await chamarSocial('grupo_conversa_obter', {grupoId}, 'GET'); }
+  catch(e){ /* pode ter saído do grupo nesse meio-tempo — segue vazio */ }
+  pintarGrupoConversa(grupoId, dados);
+};
+function pintarGrupoConversa(grupoId, dados){
+  if(!dados){
+    $('#tela-grupoconversa').innerHTML = `
+      <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('mensagens')">Voltar</button>
+      <p class="sub" style="margin-top:12px">Esse grupo não existe mais ou você não faz mais parte dele.</p>`;
+    return;
+  }
+  const mensagens = dados.mensagens || [];
+  $('#tela-grupoconversa').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('mensagens')">Voltar</button>
+    <div class="titulo-secao"><h2>👥 ${esc(dados.nome)}</h2></div>
+    <p class="sub" style="margin:-6px 0 10px">${dados.membros.map(esc).join(', ')}</p>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn branco pequeno" onclick="abrirAdicionarMembroGrupo()">+ Adicionar amigo</button>
+      <button class="btn branco pequeno" onclick="sairDoGrupo()">Sair do grupo</button>
+    </div>
+    <div class="corpo-conversa" id="corpo-grupo-conversa">
+      ${mensagens.length ? mensagens.map(m => `
+        <div class="bolha-msg ${m.deMim?'minha':'dele'}">
+          ${!m.deMim ? `<p style="margin:0 0 2px;font-size:11px;opacity:.7">${esc(m.autor)}</p>` : ''}
+          <p>${esc(m.texto)}</p>
+          ${!m.deMim ? `<button class="btn-denunciar-msg" onclick="denunciarMensagemGrupo(${m.id})" title="Denunciar">🚩</button>` : ''}
+        </div>`).join('') : '<p class="sub" style="text-align:center">Nenhuma mensagem ainda. Diga oi! 👋</p>'}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <input id="campo-mensagem-grupo" placeholder="Escreva algo legal..." maxlength="300" onkeydown="if(event.key==='Enter') enviarMensagemGrupo()"
+        style="flex:1;padding:10px 12px;border:3px solid var(--contorno);border-radius:12px;font-weight:700">
+      <button class="btn" onclick="enviarMensagemGrupo()">Enviar</button>
+    </div>
+    <p id="aviso-mensagem-grupo" class="aviso" style="display:none;margin-top:8px"></p>
+    <p class="aviso-mini" style="margin-top:10px">🔒 Sem link, sem telefone e sem palavrão — a mensagem não é enviada se tiver isso.</p>`;
+  const corpo = $('#corpo-grupo-conversa');
+  if(corpo) corpo.scrollTop = corpo.scrollHeight;
+}
+async function enviarMensagemGrupo(){
+  const campo = $('#campo-mensagem-grupo');
+  const aviso = $('#aviso-mensagem-grupo');
+  const texto = campo.value.trim();
+  if(!texto || !grupoAtual) return;
+  try{
+    await chamarSocial('grupo_mensagem_enviar', {grupoId: grupoAtual, texto});
+    aviso.style.display = 'none';
+    const dados = await chamarSocial('grupo_conversa_obter', {grupoId: grupoAtual}, 'GET');
+    pintarGrupoConversa(grupoAtual, dados);
+  }catch(e){
+    aviso.textContent = e.message;
+    aviso.style.display = 'block';
+  }
+}
+async function denunciarMensagemGrupo(id){
+  if(!confirm('Denunciar essa mensagem pro professor revisar?')) return;
+  try{ await chamarSocial('grupo_mensagem_denunciar', {id}); brinde('Denúncia enviada. Obrigado por ajudar a manter a vila segura! 🛡️'); }
+  catch(e){ alert(e.message); }
+}
+async function sairDoGrupo(){
+  if(!confirm('Sair desse grupo? Você não vai poder mais ver as mensagens.')) return;
+  try{ await chamarSocial('grupo_sair', {grupoId: grupoAtual}); }catch(e){ alert(e.message); return; }
+  ir('mensagens');
+}
+async function abrirAdicionarMembroGrupo(){
+  let amigos = [];
+  try{ amigos = (await chamarSocial('amizades_listar', null, 'GET')).amigos; }catch(e){ amigos = []; }
+  if(!amigos.length){
+    modal(`<h2>+ Adicionar amigo</h2><p class="sub">Você não tem amigos aceitos pra adicionar.</p>
+      <button class="btn" onclick="fecharModal()">Ok</button>`);
+    return;
+  }
+  modal(`<h2>+ Adicionar amigo ao grupo</h2>
+    <div style="max-height:220px;overflow-y:auto">${amigos.map(am => `
+      <button class="linha-amigo" style="width:100%;background:none;border:none;cursor:pointer" onclick="adicionarMembroGrupoConfirmar('${esc(am.apelido)}')">
+        <span>${emojiDoTipo(am.tipo)} ${esc(am.apelido)}</span><span>+</span>
+      </button>`).join('')}</div>
+    <p id="aviso-add-membro" class="aviso" style="display:none;margin-top:8px"></p>
+    <button class="btn branco" style="margin-top:12px" onclick="fecharModal()">Fechar</button>`);
+}
+async function adicionarMembroGrupoConfirmar(apelido){
+  try{
+    await chamarSocial('grupo_membro_adicionar', {grupoId: grupoAtual, apelido});
+    fecharModal();
+    brinde(`${apelido} entrou no grupo!`);
+    const dados = await chamarSocial('grupo_conversa_obter', {grupoId: grupoAtual}, 'GET');
+    pintarGrupoConversa(grupoAtual, dados);
+  }catch(e){
+    const aviso = $('#aviso-add-membro');
+    if(aviso){ aviso.textContent = e.message; aviso.style.display = 'block'; }
+  }
 }
 
 /* ---------- Fórum de dúvidas/comentários — sempre atrelado a uma lição ---------- */

@@ -71,3 +71,37 @@ function textoProibido(string $texto): ?string {
   }
   return null;
 }
+/** notificação push em tempo real (mensagem nova, pedido de amizade aceito etc.) pra todos
+    os aparelhos inscritos desse jogador — nunca deixa a ação principal falhar por causa
+    disso: qualquer erro aqui (VAPID não configurado, biblioteca, rede) é engolido, é só
+    melhor-esforço. $tag agrupa por TIPO de aviso (ex.: "social"), pra um não substituir o
+    lembrete de sequência (tag "lembrete") nem outros tipos de notificação. */
+function enviarPush(int $jogadorId, string $titulo, string $corpo, string $tag = 'social'): void {
+  if (!defined('VAPID_PUBLIC_KEY') || !defined('VAPID_PRIVATE_KEY') || VAPID_PUBLIC_KEY === '' || VAPID_PRIVATE_KEY === '') return;
+  try {
+    $st = bd()->prepare('SELECT endpoint, chave_p256dh, chave_auth FROM push_inscricoes WHERE jogador_id = ?');
+    $st->execute([$jogadorId]);
+    $inscricoes = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$inscricoes) return;
+
+    require_once dirname(__DIR__) . '/vendor/autoload.php';
+    $webPush = new \Minishlink\WebPush\WebPush(['VAPID' => [
+      'subject' => VAPID_SUBJECT, 'publicKey' => VAPID_PUBLIC_KEY, 'privateKey' => VAPID_PRIVATE_KEY,
+    ]]);
+    $payload = json_encode(['titulo' => $titulo, 'corpo' => $corpo, 'tag' => 'bichoteca-' . $tag], JSON_UNESCAPED_UNICODE);
+    foreach ($inscricoes as $i) {
+      $sub = \Minishlink\WebPush\Subscription::create([
+        'endpoint' => $i['endpoint'], 'publicKey' => $i['chave_p256dh'], 'authToken' => $i['chave_auth'],
+      ]);
+      $webPush->queueNotification($sub, $payload);
+    }
+    foreach ($webPush->flush() as $relatorio) {
+      if ($relatorio->isSuccess()) continue;
+      if ($relatorio->isSubscriptionExpired()) {
+        bd()->prepare('DELETE FROM push_inscricoes WHERE endpoint = ?')->execute([$relatorio->getEndpoint()]);
+      }
+    }
+  } catch (Throwable $e) {
+    error_log('[bichoteca-push] ' . $e->getMessage());
+  }
+}

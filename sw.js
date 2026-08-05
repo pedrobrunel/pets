@@ -21,16 +21,18 @@ self.addEventListener('fetch', e => {
   );
 });
 
-/* lembrete de sequência (opcional, ativado no Perfil) — o payload já vem pronto (título +
-   corpo) do cron em api/cron-lembrete-streak.php, o service worker só precisa exibir */
+/* notificação push — o payload já vem pronto (título + corpo + tag) de quem disparou:
+   lembrete de sequência (cron em api/cron-lembrete-streak.php) ou eventos em tempo real
+   (mensagem nova, pedido de amizade aceito, em api/estado.php). A tag vem do remetente pra
+   cada TIPO de aviso substituir só o anterior do mesmo tipo, sem apagar os outros. */
 self.addEventListener('push', e => {
-  let dados = {titulo: 'Bichoteca', corpo: 'Seu bicho sentiu sua falta hoje!'};
+  let dados = {titulo: 'Bichoteca', corpo: 'Seu bicho sentiu sua falta hoje!', tag: 'bichoteca-lembrete'};
   try { dados = {...dados, ...e.data.json()}; } catch (err) {}
   e.waitUntil(self.registration.showNotification(dados.titulo, {
     body: dados.corpo,
     icon: './icone-192.png',
     badge: './icone-192.png',
-    tag: 'bichoteca-lembrete', // uma notificação por vez, não empilha
+    tag: dados.tag,
   }));
 });
 self.addEventListener('notificationclick', e => {

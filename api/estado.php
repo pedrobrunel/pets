@@ -24,6 +24,13 @@
      POST ?acao=forum_postar   {licaoId, texto, respostaA} -> comenta/responde numa lição, publica na hora
      GET  ?acao=forum_listar   ?licaoId=xx              -> comentários dessa lição
      POST ?acao=forum_denunciar {id}                   -> qualquer um pode denunciar, vai pra Moderação
+     POST ?acao=grupo_criar     {nome, apelidos:[...]} -> cada apelido precisa já ser seu amigo aceito
+     POST ?acao=grupo_membro_adicionar {grupoId, apelido} -> só amigo aceito de quem convida
+     POST ?acao=grupo_sair      {grupoId}              -> sai a qualquer momento; some se ficar vazio
+     POST ?acao=grupo_mensagem_enviar {grupoId, texto} -> só membro, passa pelo filtro
+     GET  ?acao=grupo_conversa_obter ?grupoId=xx        -> mensagens + lista de membros
+     GET  ?acao=grupos_listar                          -> grupos que você faz parte, com prévia
+     POST ?acao=grupo_mensagem_denunciar {id}          -> vai pra Moderação
      GET  ?acao=ranking                                -> top 10 por nível e por sequência (só apelido/bicho/número)
      POST ?acao=push_inscrever  {endpoint, p256dh, auth} -> ativa lembrete de sequência nesse aparelho
      POST ?acao=push_desinscrever {endpoint}            -> desativa nesse aparelho
@@ -299,6 +306,11 @@ try {
     $st->execute([$apelido]);
     return $st->fetch(PDO::FETCH_ASSOC) ?: null;
   }
+  function apelidoDoId(int $id): string {
+    $st = bd()->prepare('SELECT apelido FROM jogadores WHERE id = ?');
+    $st->execute([$id]);
+    return (string)$st->fetchColumn();
+  }
 
   if ($acao === 'amizade_solicitar') {
     $apelidoDestino = trim((string)(corpo()['apelidoDestino'] ?? ''));
@@ -317,6 +329,7 @@ try {
       if ((int)$existente['solicitante_id'] === $id) responder(['erro' => 'Você já mandou um pedido — espere ele(a) aceitar.'], 422);
       // o outro lado já tinha pedido pra mim: aceita na hora, os dois queriam mesmo
       bd()->prepare('UPDATE amizades SET status = \'aceita\' WHERE id = ?')->execute([$existente['id']]);
+      enviarPush($destinoId, '🎉 Vocês agora são amigos', apelidoDoId($id) . ' aceitou seu pedido de amizade!');
       responder(['ok' => true, 'status' => 'aceita']);
     }
     bd()->prepare('INSERT INTO amizades (solicitante_id, destinatario_id) VALUES (?, ?)')->execute([$id, $destinoId]);
@@ -333,6 +346,7 @@ try {
     if (!$pedidoId) responder(['erro' => 'Pedido não encontrado.'], 404);
     if (!empty($d['aceitar'])) {
       bd()->prepare('UPDATE amizades SET status = \'aceita\' WHERE id = ?')->execute([$pedidoId]);
+      enviarPush((int)$solicitante['id'], '🎉 Vocês agora são amigos', apelidoDoId($id) . ' aceitou seu pedido de amizade!');
     } else {
       bd()->prepare('DELETE FROM amizades WHERE id = ?')->execute([$pedidoId]);
     }
@@ -393,6 +407,7 @@ try {
 
     bd()->prepare('INSERT INTO mensagens (remetente_id, destinatario_id, texto) VALUES (?, ?, ?)')
       ->execute([$id, $destinoId, $texto]);
+    enviarPush($destinoId, '💬 Nova mensagem de ' . apelidoDoId($id), $texto);
     responder(['ok' => true]);
   }
 
@@ -504,6 +519,154 @@ try {
     $st = bd()->prepare('UPDATE forum_posts SET denunciado = 1 WHERE id = ? AND removido = 0');
     $st->execute([$postId]);
     if ($st->rowCount() === 0) responder(['erro' => 'Comentário não encontrado.'], 404);
+    responder(['ok' => true]);
+  }
+
+  /* ---------- Mensagem em grupo ----------
+     Só entra no grupo quem já é amigo mútuo aceito de quem convida — nunca junta gente que
+     não se conhece, mesma garantia da mensagem 1:1. Qualquer membro pode convidar outro
+     amigo seu (não só o criador) e qualquer um pode sair a qualquer momento. */
+
+  function souMembroDoGrupo(int $id, int $grupoId): bool {
+    $st = bd()->prepare('SELECT 1 FROM grupo_membros WHERE grupo_id = ? AND jogador_id = ?');
+    $st->execute([$grupoId, $id]);
+    return (bool)$st->fetchColumn();
+  }
+
+  if ($acao === 'grupo_criar') {
+    $d = corpo();
+    $nome = trim((string)($d['nome'] ?? ''));
+    if ($nome === '' || mb_strlen($nome) > 40) responder(['erro' => 'O nome do grupo precisa ter de 1 a 40 caracteres.'], 422);
+    $apelidos = array_values(array_unique(array_filter((array)($d['apelidos'] ?? []), 'is_string')));
+    if (!$apelidos) responder(['erro' => 'Escolha ao menos 1 amigo pra colocar no grupo.'], 422);
+    if (count($apelidos) > 19) responder(['erro' => 'No máximo 19 amigos por grupo (+ você = 20).'], 422);
+
+    $membrosIds = [];
+    foreach ($apelidos as $apelido) {
+      $amigo = buscarJogadorPorApelido($apelido);
+      if (!$amigo || !saoAmigos($id, (int)$amigo['id'])) {
+        responder(['erro' => "\"$apelido\" precisa ser seu amigo (pedido aceito) pra entrar no grupo."], 422);
+      }
+      $membrosIds[] = (int)$amigo['id'];
+    }
+
+    bd()->prepare('INSERT INTO grupos (nome, criador_id) VALUES (?, ?)')->execute([$nome, $id]);
+    $grupoId = (int)bd()->lastInsertId();
+    $inserirMembro = bd()->prepare('INSERT INTO grupo_membros (grupo_id, jogador_id, ultima_leitura) VALUES (?, ?, NOW())');
+    $inserirMembro->execute([$grupoId, $id]);
+    foreach ($membrosIds as $membroId) {
+      $inserirMembro->execute([$grupoId, $membroId]);
+      enviarPush($membroId, '👥 Novo grupo', apelidoDoId($id) . ' te colocou no grupo "' . $nome . '"');
+    }
+    responder(['ok' => true, 'grupoId' => $grupoId]);
+  }
+
+  if ($acao === 'grupo_membro_adicionar') {
+    $d = corpo();
+    $grupoId = (int)($d['grupoId'] ?? 0);
+    if (!souMembroDoGrupo($id, $grupoId)) responder(['erro' => 'Grupo não encontrado.'], 404);
+    $amigo = buscarJogadorPorApelido(trim((string)($d['apelido'] ?? '')));
+    if (!$amigo || !saoAmigos($id, (int)$amigo['id'])) {
+      responder(['erro' => 'Essa pessoa precisa ser sua amiga (pedido aceito) pra entrar no grupo.'], 422);
+    }
+    if (souMembroDoGrupo((int)$amigo['id'], $grupoId)) responder(['erro' => 'Essa pessoa já está no grupo.'], 422);
+    bd()->prepare('INSERT INTO grupo_membros (grupo_id, jogador_id, ultima_leitura) VALUES (?, ?, NOW())')
+      ->execute([$grupoId, (int)$amigo['id']]);
+    enviarPush((int)$amigo['id'], '👥 Novo grupo', apelidoDoId($id) . ' te colocou num grupo');
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'grupo_sair') {
+    $grupoId = (int)(corpo()['grupoId'] ?? 0);
+    bd()->prepare('DELETE FROM grupo_membros WHERE grupo_id = ? AND jogador_id = ?')->execute([$grupoId, $id]);
+    $st = bd()->prepare('SELECT COUNT(*) FROM grupo_membros WHERE grupo_id = ?');
+    $st->execute([$grupoId]);
+    if ((int)$st->fetchColumn() === 0) bd()->prepare('DELETE FROM grupos WHERE id = ?')->execute([$grupoId]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'grupo_mensagem_enviar') {
+    $d = corpo();
+    $grupoId = (int)($d['grupoId'] ?? 0);
+    if (!souMembroDoGrupo($id, $grupoId)) responder(['erro' => 'Você não faz parte desse grupo.'], 403);
+    $texto = trim((string)($d['texto'] ?? ''));
+    if ($texto === '' || mb_strlen($texto) > 300) responder(['erro' => 'A mensagem precisa ter de 1 a 300 caracteres.'], 422);
+    $motivo = textoProibido($texto);
+    if ($motivo) responder(['erro' => $motivo], 422);
+
+    bd()->prepare('INSERT INTO grupo_mensagens (grupo_id, remetente_id, texto) VALUES (?, ?, ?)')
+      ->execute([$grupoId, $id, $texto]);
+    $st = bd()->prepare('SELECT g.nome, m.jogador_id FROM grupo_membros m JOIN grupos g ON g.id = m.grupo_id WHERE m.grupo_id = ? AND m.jogador_id != ?');
+    $st->execute([$grupoId, $id]);
+    $meuApelido = apelidoDoId($id);
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $membro) {
+      enviarPush((int)$membro['jogador_id'], '💬 ' . $membro['nome'], $meuApelido . ': ' . $texto);
+    }
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'grupo_conversa_obter') {
+    $grupoId = (int)($_GET['grupoId'] ?? 0);
+    if (!souMembroDoGrupo($id, $grupoId)) responder(['erro' => 'Você não faz parte desse grupo.'], 403);
+
+    bd()->prepare('UPDATE grupo_membros SET ultima_leitura = NOW() WHERE grupo_id = ? AND jogador_id = ?')->execute([$grupoId, $id]);
+
+    $st = bd()->prepare('SELECT nome FROM grupos WHERE id = ?');
+    $st->execute([$grupoId]);
+    $nomeGrupo = (string)$st->fetchColumn();
+
+    $st = bd()->prepare('SELECT j.apelido FROM grupo_membros m JOIN jogadores j ON j.id = m.jogador_id WHERE m.grupo_id = ? ORDER BY j.apelido');
+    $st->execute([$grupoId]);
+    $membros = $st->fetchAll(PDO::FETCH_COLUMN);
+
+    $st = bd()->prepare('SELECT gm.id, gm.remetente_id, gm.texto, gm.criado_em, gm.removida, j.apelido
+      FROM grupo_mensagens gm JOIN jogadores j ON j.id = gm.remetente_id
+      WHERE gm.grupo_id = ? ORDER BY gm.id DESC LIMIT 100');
+    $st->execute([$grupoId]);
+    $mensagens = array_reverse($st->fetchAll(PDO::FETCH_ASSOC));
+
+    responder([
+      'nome' => $nomeGrupo, 'membros' => $membros,
+      'mensagens' => array_map(fn($m) => [
+        'id' => (int)$m['id'], 'deMim' => (int)$m['remetente_id'] === $id, 'autor' => $m['apelido'],
+        'texto' => $m['removida'] ? '[mensagem removida pelo professor]' : $m['texto'], 'quando' => $m['criado_em'],
+      ], $mensagens),
+    ]);
+  }
+
+  if ($acao === 'grupos_listar') {
+    $st = bd()->prepare('SELECT g.id, g.nome, m.ultima_leitura FROM grupo_membros m JOIN grupos g ON g.id = m.grupo_id WHERE m.jogador_id = ?');
+    $st->execute([$id]);
+    $meusGrupos = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    $grupos = [];
+    foreach ($meusGrupos as $g) {
+      $grupoId = (int)$g['id'];
+      $st = bd()->prepare('SELECT texto, criado_em, removida FROM grupo_mensagens WHERE grupo_id = ? ORDER BY id DESC LIMIT 1');
+      $st->execute([$grupoId]);
+      $ultima = $st->fetch(PDO::FETCH_ASSOC);
+      $st = bd()->prepare('SELECT COUNT(*) FROM grupo_mensagens WHERE grupo_id = ? AND criado_em > ?');
+      $st->execute([$grupoId, $g['ultima_leitura'] ?? '1970-01-01']);
+      $naoLidas = (int)$st->fetchColumn();
+      $st = bd()->prepare('SELECT COUNT(*) FROM grupo_membros WHERE grupo_id = ?');
+      $st->execute([$grupoId]);
+      $grupos[] = [
+        'id' => $grupoId, 'nome' => $g['nome'], 'totalMembros' => (int)$st->fetchColumn(),
+        'ultimaMensagem' => $ultima ? ($ultima['removida'] ? '[mensagem removida]' : $ultima['texto']) : null,
+        'quando' => $ultima['criado_em'] ?? null, 'naoLidas' => $naoLidas,
+      ];
+    }
+    usort($grupos, fn($a, $b) => strcmp((string)$b['quando'], (string)$a['quando']));
+    responder(['grupos' => $grupos]);
+  }
+
+  if ($acao === 'grupo_mensagem_denunciar') {
+    $mensagemId = (int)(corpo()['id'] ?? 0);
+    $st = bd()->prepare('SELECT grupo_id FROM grupo_mensagens WHERE id = ?');
+    $st->execute([$mensagemId]);
+    $grupoId = $st->fetchColumn();
+    if (!$grupoId || !souMembroDoGrupo($id, (int)$grupoId)) responder(['erro' => 'Mensagem não encontrada.'], 404);
+    bd()->prepare('UPDATE grupo_mensagens SET denunciada = 1 WHERE id = ?')->execute([$mensagemId]);
     responder(['ok' => true]);
   }
 
