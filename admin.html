@@ -647,7 +647,13 @@ body.conectando-fluxo{cursor:crosshair}
         <input type="file" id="input-capa-lojamoveis" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="capa-lojamoveis-aviso" class="aviso-form"></div>
         <div class="check" style="margin-top:8px"><input type="checkbox" id="capa-lojamoveis-ativa"><label style="margin:0" for="capa-lojamoveis-ativa">mostrar esse cabeçalho pro aluno</label></div>
-        <p class="dica-editor">Capriche na imagem com "Loja de Móveis" já desenhado nela — o app não escreve o nome por cima, só sobrepõe quanto de moeda o aluno tem e o ícone do NPC marcado como "aparece em: Loja de Móveis" na aba NPCs (se tiver um), no canto direito.</p>
+        <label style="margin-top:8px">ponto de ancoragem da imagem</label>
+        <select id="capa-lojamoveis-ancora">
+          <option value="top">Topo</option>
+          <option value="center" selected>Centro</option>
+          <option value="bottom">Base</option>
+        </select>
+        <p class="dica-editor">Capriche na imagem com "Loja de Móveis" já desenhado nela — o app não escreve o nome por cima, só sobrepõe quanto de moeda o aluno tem e o ícone do NPC marcado como "aparece em: Loja de Móveis" na aba NPCs (se tiver um), no canto direito. Se a parte importante da imagem for cortada no celular, ajuste o ponto de ancoragem pra Topo ou Base.</p>
 
         <label style="margin-top:10px">evento por tempo limitado <span style="font-weight:700;color:#7F8C8D">(opcional)</span></label>
         <div class="dias-semana" id="capa-lojamoveis-dias-semana"></div>
@@ -670,7 +676,13 @@ body.conectando-fluxo{cursor:crosshair}
         <input type="file" id="input-capa-mural" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="capa-mural-aviso" class="aviso-form"></div>
         <div class="check" style="margin-top:8px"><input type="checkbox" id="capa-mural-ativa"><label style="margin:0" for="capa-mural-ativa">mostrar esse cabeçalho pro aluno</label></div>
-        <p class="dica-editor">Capriche na imagem com "Mural da vila" já desenhado nela — o app não escreve o nome por cima, só sobrepõe o ícone do NPC marcado como "aparece em: Mural" na aba NPCs (se tiver um), no canto direito.</p>
+        <label style="margin-top:8px">ponto de ancoragem da imagem</label>
+        <select id="capa-mural-ancora">
+          <option value="top">Topo</option>
+          <option value="center" selected>Centro</option>
+          <option value="bottom">Base</option>
+        </select>
+        <p class="dica-editor">Capriche na imagem com "Mural da vila" já desenhado nela — o app não escreve o nome por cima, só sobrepõe o ícone do NPC marcado como "aparece em: Mural" na aba NPCs (se tiver um), no canto direito. Se a parte importante da imagem for cortada no celular, ajuste o ponto de ancoragem pra Topo ou Base.</p>
 
         <label style="margin-top:10px">evento por tempo limitado <span style="font-weight:700;color:#7F8C8D">(opcional)</span></label>
         <div class="dias-semana" id="capa-mural-dias-semana"></div>
@@ -826,7 +838,13 @@ body.conectando-fluxo{cursor:crosshair}
         <input type="file" id="input-loja" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="preview-loja"></div>
         <div class="check" style="margin-top:8px"><input type="checkbox" id="loja-capa-ativa"><label style="margin:0" for="loja-capa-ativa">mostrar esse cabeçalho pro aluno</label></div>
-        <p class="dica-editor">Capriche na imagem com o nome da loja já desenhado nela — o app não escreve o nome por cima, só sobrepõe o que é dinâmico: quanto de moeda o aluno tem, e o ícone do NPC marcado como "aparece em: Loja: &lt;essa loja&gt;" na aba NPCs (se tiver um), no canto direito.</p>
+        <label style="margin-top:8px">ponto de ancoragem da imagem</label>
+        <select id="loja-capa-ancora">
+          <option value="top">Topo</option>
+          <option value="center" selected>Centro</option>
+          <option value="bottom">Base</option>
+        </select>
+        <p class="dica-editor">Capriche na imagem com o nome da loja já desenhado nela — o app não escreve o nome por cima, só sobrepõe o que é dinâmico: quanto de moeda o aluno tem, e o ícone do NPC marcado como "aparece em: Loja: &lt;essa loja&gt;" na aba NPCs (se tiver um), no canto direito. Se a parte importante da imagem for cortada no celular, ajuste o ponto de ancoragem pra Topo ou Base.</p>
 
         <label style="margin-top:10px">evento por tempo limitado <span style="font-weight:700;color:#7F8C8D">(opcional — vazio = cabeçalho sempre visível enquanto ativo)</span></label>
         <div class="dias-semana" id="loja-capa-dias-semana"></div>
@@ -942,7 +960,13 @@ body.conectando-fluxo{cursor:crosshair}
         <input type="file" id="input-mundo" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="preview-mundo"></div>
         <div class="check" style="margin-top:8px"><input type="checkbox" id="mundo-capa-ativa"><label style="margin:0" for="mundo-capa-ativa">mostrar esse cabeçalho pro aluno</label></div>
-        <p class="dica-editor">Capriche na imagem com o nome da matéria já desenhado nela — o app não escreve o nome por cima, só sobrepõe o que é dinâmico: o botão de voltar, o progresso de lições, e o ícone do NPC marcado como "aparece em: Mundo: &lt;essa matéria&gt;" na aba NPCs (se tiver um), no canto direito. Tem um efeito sutil de parallax ao rolar a tela.</p>
+        <label style="margin-top:8px">ponto de ancoragem da imagem</label>
+        <select id="mundo-capa-ancora">
+          <option value="top">Topo</option>
+          <option value="center" selected>Centro</option>
+          <option value="bottom">Base</option>
+        </select>
+        <p class="dica-editor">Capriche na imagem com o nome da matéria já desenhado nela — o app não escreve o nome por cima, só sobrepõe o que é dinâmico: o botão de voltar, o progresso de lições, e o ícone do NPC marcado como "aparece em: Mundo: &lt;essa matéria&gt;" na aba NPCs (se tiver um), no canto direito. Tem um efeito sutil de parallax ao rolar a tela. Se a parte importante da imagem for cortada no celular (a faixa é mais estreita que no computador), ajuste o ponto de ancoragem pra Topo ou Base.</p>
 
         <label style="margin-top:10px">evento por tempo limitado <span style="font-weight:700;color:#7F8C8D">(opcional — vazio = cabeçalho sempre visível enquanto ativo)</span></label>
         <div class="dias-semana" id="mundo-capa-dias-semana"></div>
@@ -2531,6 +2555,7 @@ async function carregarCapasFixas(){
     $('#capa-' + campo + '-hora-fim').value = c.horaFim || '';
     $('#capa-' + campo + '-data-inicio').value = c.dataInicio || '';
     $('#capa-' + campo + '-data-fim').value = c.dataFim || '';
+    $('#capa-' + campo + '-ancora').value = c.ancora || 'center';
   });
 }
 function pintarCapaFixaDiasSemana(campo){
@@ -2543,7 +2568,7 @@ async function salvarCapaFixa(campo){
       campo, ativa: $('#capa-' + campo + '-ativa').checked,
       diasSemana: capaFixaDiasSemanaSel[campo].join(','), horaInicio: $('#capa-' + campo + '-hora-inicio').value.trim(),
       horaFim: $('#capa-' + campo + '-hora-fim').value.trim(), dataInicio: $('#capa-' + campo + '-data-inicio').value.trim(),
-      dataFim: $('#capa-' + campo + '-data-fim').value.trim(),
+      dataFim: $('#capa-' + campo + '-data-fim').value.trim(), ancora: $('#capa-' + campo + '-ancora').value,
     }});
     aviso.className = 'aviso-form ok'; aviso.textContent = 'Salvo!'; aviso.style.display = 'block';
   }catch(err){
@@ -2556,6 +2581,7 @@ async function salvarCapaFixa(campo){
   ['dragover','drop'].forEach(ev => $('#zona-upload-capa-' + campo).addEventListener(ev, e => e.preventDefault()));
   $('#zona-upload-capa-' + campo).addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarCapaFixa(campo, e.dataTransfer.files[0]); });
   $('#capa-' + campo + '-ativa').onchange = () => salvarCapaFixa(campo);
+  $('#capa-' + campo + '-ancora').onchange = () => salvarCapaFixa(campo);
   $('#capa-' + campo + '-dias-semana').innerHTML = DIAS_SEMANA.map(d => `<button type="button" data-dia="${d.v}">${d.rotulo}</button>`).join('');
   $$('#capa-' + campo + '-dias-semana button').forEach(b => b.onclick = () => {
     const dia = Number(b.dataset.dia);
@@ -3087,6 +3113,7 @@ window.editarLoja = async (id) => {
   $('#loja-capa-hora-fim').value = l.capaHoraFim || '';
   $('#loja-capa-data-inicio').value = l.capaDataInicio || '';
   $('#loja-capa-data-fim').value = l.capaDataFim || '';
+  $('#loja-capa-ancora').value = l.capaAncora || 'center';
   $('#btn-excluir-loja').classList.remove('oculto');
   $('#titulo-form-loja').textContent = 'Editar loja';
   $('#form-loja').classList.remove('oculto');
@@ -3137,7 +3164,7 @@ $('#form-loja').addEventListener('submit', async e => {
       publicado: $('#loja-publicado').checked, ordem: Number($('#loja-ordem').value) || 0,
       capaImagem: lojaCapaImagem, capaAtiva: $('#loja-capa-ativa').checked,
       capaDiasSemana: lojaCapaDiasSemanaSel.join(','), capaHoraInicio: $('#loja-capa-hora-inicio').value.trim(), capaHoraFim: $('#loja-capa-hora-fim').value.trim(),
-      capaDataInicio: $('#loja-capa-data-inicio').value.trim(), capaDataFim: $('#loja-capa-data-fim').value.trim(),
+      capaDataInicio: $('#loja-capa-data-inicio').value.trim(), capaDataFim: $('#loja-capa-data-fim').value.trim(), capaAncora: $('#loja-capa-ancora').value,
     }});
     $('#form-loja').classList.add('oculto');
     carregarLojas();
@@ -3407,6 +3434,7 @@ window.editarMundo = (id) => {
   $('#mundo-capa-hora-fim').value = m.capaHoraFim || '';
   $('#mundo-capa-data-inicio').value = m.capaDataInicio || '';
   $('#mundo-capa-data-fim').value = m.capaDataFim || '';
+  $('#mundo-capa-ancora').value = m.capaAncora || 'center';
   $('#titulo-form-mundo').textContent = 'Editar mundo';
   $('#mundo-aviso').style.display = 'none';
   $('#form-mundo').classList.remove('oculto');
@@ -3448,7 +3476,7 @@ $('#form-mundo').addEventListener('submit', async (e) => {
       cor: $('#mundo-cor').value, ordem: Number($('#mundo-ordem').value) || 0, publicado: $('#mundo-publicado').checked,
       capaImagem: mundoCapaImagem, capaAtiva: $('#mundo-capa-ativa').checked,
       capaDiasSemana: mundoCapaDiasSemanaSel.join(','), capaHoraInicio: $('#mundo-capa-hora-inicio').value.trim(), capaHoraFim: $('#mundo-capa-hora-fim').value.trim(),
-      capaDataInicio: $('#mundo-capa-data-inicio').value.trim(), capaDataFim: $('#mundo-capa-data-fim').value.trim(),
+      capaDataInicio: $('#mundo-capa-data-inicio').value.trim(), capaDataFim: $('#mundo-capa-data-fim').value.trim(), capaAncora: $('#mundo-capa-ancora').value,
     }});
     $('#form-mundo').classList.add('oculto');
     carregarMundos();

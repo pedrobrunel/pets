@@ -13,7 +13,7 @@ require __DIR__ . '/bd.php';
 
 try {
   $mundos = bd()->query('SELECT id, nome, emoji, cor, capa_imagem, capa_ativa,
-      capa_dias_semana, capa_hora_inicio, capa_hora_fim, capa_data_inicio, capa_data_fim
+      capa_dias_semana, capa_hora_inicio, capa_hora_fim, capa_data_inicio, capa_data_fim, capa_ancora
     FROM mundos WHERE publicado = 1 ORDER BY ordem, nome')
     ->fetchAll(PDO::FETCH_ASSOC);
   $st = bd()->prepare('SELECT id, emoji, titulo, serie, blocos FROM licoes WHERE mundo_id = ? AND publicado = 1 ORDER BY ordem, titulo');
@@ -38,7 +38,7 @@ try {
       'capaImagemUrl' => $urlMundo($m['capa_imagem']), 'capaAtiva' => (bool)$m['capa_ativa'],
       'capaDiasSemana' => $m['capa_dias_semana'] === '' ? [] : array_map('intval', explode(',', $m['capa_dias_semana'])),
       'capaHoraInicio' => $m['capa_hora_inicio'], 'capaHoraFim' => $m['capa_hora_fim'],
-      'capaDataInicio' => $m['capa_data_inicio'], 'capaDataFim' => $m['capa_data_fim'],
+      'capaDataInicio' => $m['capa_data_inicio'], 'capaDataFim' => $m['capa_data_fim'], 'capaAncora' => $m['capa_ancora'],
     ];
   }
   $mundosPublicados = array_column($saidaMundos, 'id');
@@ -119,8 +119,8 @@ try {
   // fundo e preço de desbloqueio da Casa: um valor só, configurado no painel (aba Móveis)
   // — vale pra todo mundo. Desbloqueado (ou não) é que fica no estado de cada jogador.
   $configCasa = bd()->query('SELECT casa_fundo, preco_casa, capa_lojamoveis_imagem, capa_lojamoveis_ativa,
-      capa_lojamoveis_dias_semana, capa_lojamoveis_hora_inicio, capa_lojamoveis_hora_fim, capa_lojamoveis_data_inicio, capa_lojamoveis_data_fim,
-      capa_mural_imagem, capa_mural_ativa, capa_mural_dias_semana, capa_mural_hora_inicio, capa_mural_hora_fim, capa_mural_data_inicio, capa_mural_data_fim,
+      capa_lojamoveis_dias_semana, capa_lojamoveis_hora_inicio, capa_lojamoveis_hora_fim, capa_lojamoveis_data_inicio, capa_lojamoveis_data_fim, capa_lojamoveis_ancora,
+      capa_mural_imagem, capa_mural_ativa, capa_mural_dias_semana, capa_mural_hora_inicio, capa_mural_hora_fim, capa_mural_data_inicio, capa_mural_data_fim, capa_mural_ancora,
       musica_fundo, musica_ativa
     FROM configuracoes WHERE id = 1')->fetch(PDO::FETCH_ASSOC);
   if (!$configCasa) {
@@ -129,6 +129,7 @@ try {
       foreach (['imagem', 'ativa', 'dias_semana', 'hora_inicio', 'hora_fim', 'data_inicio', 'data_fim'] as $sufixo) {
         $configCasa["capa_{$campo}_{$sufixo}"] = '';
       }
+      $configCasa["capa_{$campo}_ancora"] = 'center';
     }
   }
   $casaConfig = ['fundoUrl' => $urlMovel($configCasa['casa_fundo']), 'precoCasa' => (int)$configCasa['preco_casa']];
@@ -138,10 +139,12 @@ try {
     'lojamoveisDiasSemana' => $diasCapaFixa($configCasa['capa_lojamoveis_dias_semana']),
     'lojamoveisHoraInicio' => $configCasa['capa_lojamoveis_hora_inicio'], 'lojamoveisHoraFim' => $configCasa['capa_lojamoveis_hora_fim'],
     'lojamoveisDataInicio' => $configCasa['capa_lojamoveis_data_inicio'], 'lojamoveisDataFim' => $configCasa['capa_lojamoveis_data_fim'],
+    'lojamoveisAncora' => $configCasa['capa_lojamoveis_ancora'],
     'muralImagemUrl' => $urlMovel($configCasa['capa_mural_imagem']), 'muralAtiva' => (bool)$configCasa['capa_mural_ativa'],
     'muralDiasSemana' => $diasCapaFixa($configCasa['capa_mural_dias_semana']),
     'muralHoraInicio' => $configCasa['capa_mural_hora_inicio'], 'muralHoraFim' => $configCasa['capa_mural_hora_fim'],
     'muralDataInicio' => $configCasa['capa_mural_data_inicio'], 'muralDataFim' => $configCasa['capa_mural_data_fim'],
+    'muralAncora' => $configCasa['capa_mural_ancora'],
   ];
   $musica = ['url' => $urlMovel($configCasa['musica_fundo']), 'ativa' => (bool)$configCasa['musica_ativa']];
 
@@ -150,7 +153,7 @@ try {
   // parte, com agenda (estoque por tempo limitado) igual aos móveis e variantes opcionais
   // (sabor/tamanho) que o aluno escolhe na hora de comprar.
   $lojasLinhas = bd()->query('SELECT id, nome, emoji, capa_imagem, capa_ativa,
-      capa_dias_semana, capa_hora_inicio, capa_hora_fim, capa_data_inicio, capa_data_fim
+      capa_dias_semana, capa_hora_inicio, capa_hora_fim, capa_data_inicio, capa_data_fim, capa_ancora
     FROM lojas WHERE publicado = 1 ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
   $lojasPublicadas = array_column($lojasLinhas, 'id');
   $pastaLojas = dirname(__DIR__) . '/assets/lojas';
@@ -160,7 +163,7 @@ try {
     'capaImagemUrl' => $urlLoja($l['capa_imagem']), 'capaAtiva' => (bool)$l['capa_ativa'],
     'capaDiasSemana' => $l['capa_dias_semana'] === '' ? [] : array_map('intval', explode(',', $l['capa_dias_semana'])),
     'capaHoraInicio' => $l['capa_hora_inicio'], 'capaHoraFim' => $l['capa_hora_fim'],
-    'capaDataInicio' => $l['capa_data_inicio'], 'capaDataFim' => $l['capa_data_fim'],
+    'capaDataInicio' => $l['capa_data_inicio'], 'capaDataFim' => $l['capa_data_fim'], 'capaAncora' => $l['capa_ancora'],
   ], $lojasLinhas);
   $itensLojaLinhas = $lojasPublicadas ? bd()->query('SELECT * FROM itens_loja WHERE publicado = 1 ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC) : [];
   // só itens de loja publicada (excluir a loja não apaga o item, só o esconde)
