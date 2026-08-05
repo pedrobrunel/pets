@@ -147,6 +147,17 @@ try {
     PRIMARY KEY (temporada_id, chave)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
+  /* config de cada minigame do Arcade além dos sprites: uma imagem de fundo (opcional) e
+     os dois sons de feedback (acerto/erro) — sem nada configurado, o jogo usa o visual e o
+     bipe sintetizado padrão de sempre. Uma linha fixa por jogo (memoria/chuva/toca/sequencia). */
+  $pdo->exec('CREATE TABLE IF NOT EXISTS minigame_config (
+    jogo          VARCHAR(20) PRIMARY KEY,
+    fundo         VARCHAR(160) NOT NULL DEFAULT \'\',
+    som_acerto    VARCHAR(160) NOT NULL DEFAULT \'\',
+    som_erro      VARCHAR(160) NOT NULL DEFAULT \'\',
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
   $pdo->exec('CREATE TABLE IF NOT EXISTS licoes (
     id            VARCHAR(24) PRIMARY KEY,
     mundo_id      VARCHAR(24) NOT NULL,
