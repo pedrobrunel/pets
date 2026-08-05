@@ -104,10 +104,27 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
 
 .grade-sprites-minigame{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
 .cartao-sprite-minigame{border:1px solid var(--contorno);border-radius:10px;padding:10px;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center}
-.preview-sprite-minigame{width:56px;height:56px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--contorno);border-radius:8px;background:#FAFAFA}
-.preview-sprite-minigame img{max-width:100%;max-height:100%;object-fit:contain}
+.preview-sprite-minigame{display:flex;align-items:center;justify-content:center;border:1px dashed var(--contorno);border-radius:8px;background:#FAFAFA;margin:0 auto}
+.preview-sprite-minigame img{width:100%;height:100%;object-fit:contain}
 .emoji-sprite-minigame{font-size:28px}
 .rotulo-sprite-minigame{font-size:11px;font-weight:700;color:#555;margin:0;min-height:28px}
+.dica-tamanho-sprite{font-size:11px;color:#7F8C8D;margin:-6px 0 12px}
+.controle-escala-sprite{width:100%;display:flex;flex-direction:column;gap:2px;font-size:11px;color:#555}
+.controle-escala-sprite input[type=range]{width:100%}
+
+/* --- mini-simulador do Arcade: réplica visual estática dos tabuleiros, só pra prévia --- */
+.simulador-arcade{background:#EEF3F4;border:1px solid var(--contorno);border-radius:10px;padding:14px;margin:10px 0 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center}
+.tile-sim{width:64px;height:64px;border-radius:10px;background:#fff;border:1px solid var(--contorno);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.tile-sim.redondo{border-radius:50%}
+.tile-sim img{object-fit:contain}
+.cena-sim{position:relative;width:220px;height:140px;background:linear-gradient(#BEE3F8,#EAF6FF);border:1px solid var(--contorno);border-radius:10px;overflow:hidden}
+.cena-sim .chao-sim{position:absolute;left:0;right:0;bottom:0;height:26px;background:#8BC34A}
+.cena-sim .item-sim{position:absolute;top:14px;width:34px;height:34px;display:flex;align-items:center;justify-content:center}
+.cena-sim .item-sim img{max-width:100%;max-height:100%;object-fit:contain}
+.cena-sim .item-sim span{font-size:26px}
+.cena-sim .cesta-sim{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);height:34px;display:flex;align-items:center;justify-content:center}
+.cena-sim .cesta-sim img{max-width:100%;max-height:100%;object-fit:contain}
+.cena-sim .cesta-sim span{font-size:30px}
 
 #form-mundo, #form-licao{background:#fff;border:1px solid var(--contorno);border-radius:12px;padding:18px;margin-bottom:18px}
 
@@ -2536,26 +2553,82 @@ const GRUPOS_SPRITES_MINIGAME = [
   {titulo: '🕳️ Toca do Bicho', prefixo: 'toca'},
   {titulo: '🎵 Sequência do Bicho', prefixo: 'sequencia'},
 ];
+// tamanho base (px) que cada sprite usa DENTRO do jogo real, antes da escala —
+// mesmos números usados em spriteOuEmoji()/desenharSprite() no app.html, pra prévia bater com o jogo de verdade
+const TAMANHO_BASE_SPRITE_MINIGAME = {memoria: 30, toca: 36, sequencia: 34, chuva: 36, chuvacesta: 74};
+const DICA_TAMANHO_SPRITE_MINIGAME = {
+  memoria: 'imagem quadrada, ~300×300px. A proporção original é sempre preservada.',
+  chuva: 'quadrada, ~200×200px (ícone que cai na tela).',
+  chuvacesta: 'retangular e larga (ex.: 300×140px) — é a cesta no chão, não precisa ser quadrada.',
+  toca: 'quadrada, ~200×200px (aparece dentro de um buraco redondo).',
+  sequencia: 'quadrada, ~250×250px.',
+};
 let spritesMinigameCache = [];
 async function carregarSpritesMinigame(){
   const d = await api('minigame_sprites_listar').catch(() => ({sprites: []}));
   spritesMinigameCache = d.sprites;
+  renderizarGruposSprites();
+}
+function renderizarGruposSprites(){
   $('#grupos-sprites-minigame').innerHTML = GRUPOS_SPRITES_MINIGAME.map(g => {
     const itens = spritesMinigameCache.filter(s => s.chave.startsWith(g.prefixo));
     return `<div class="painel" style="padding:16px;margin-bottom:20px">
       <h3 style="font-size:16px;margin-top:0">${g.titulo}</h3>
+      <p class="dica-tamanho-sprite">Tamanho recomendado: ${DICA_TAMANHO_SPRITE_MINIGAME[g.prefixo]}</p>
       <div class="grade-sprites-minigame">${itens.map(cartaoSpriteMinigame).join('')}</div>
+      <h4 style="font-size:12px;color:#7F8C8D;margin:14px 0 4px">Prévia (simula o jogo)</h4>
+      ${simuladorGrupo(g.prefixo, itens)}
     </div>`;
   }).join('');
 }
 function cartaoSpriteMinigame(s){
+  const caixa = Math.max(30, Math.min(120, Math.round(56 * (s.escala || 100) / 100)));
+  const dicaExtra = s.chave === 'chuvacesta' ? `<p class="dica-tamanho-sprite" style="margin-top:0">${DICA_TAMANHO_SPRITE_MINIGAME.chuvacesta}</p>` : '';
   return `<div class="cartao-sprite-minigame">
-    <div class="preview-sprite-minigame">${s.imagemUrl ? `<img src="${esc(s.imagemUrl)}">` : `<span class="emoji-sprite-minigame">${s.emoji || '—'}</span>`}</div>
+    <div class="preview-sprite-minigame" style="width:${caixa}px;height:${caixa}px">${s.imagemUrl ? `<img src="${esc(s.imagemUrl)}">` : `<span class="emoji-sprite-minigame">${s.emoji || '—'}</span>`}</div>
     <p class="rotulo-sprite-minigame">${esc(s.rotulo)}</p>
+    ${dicaExtra}
     <input type="file" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto" id="input-sprite-${s.chave}" onchange="enviarSpriteMinigame('${s.chave}', this.files[0])">
     <button type="button" class="btn linha branco" onclick="$('#input-sprite-${s.chave}').click()">Trocar</button>
     ${s.imagem ? `<button type="button" class="btn linha erro" onclick="removerSpriteMinigame('${s.chave}')">Usar emoji</button>` : ''}
+    ${s.imagem ? `<div class="controle-escala-sprite"><span>Tamanho no jogo: <b id="valor-escala-${s.chave}">${s.escala}</b>%</span><input type="range" min="50" max="200" step="5" value="${s.escala}" oninput="ajustarEscalaLocal('${s.chave}', this.value)" onchange="salvarEscalaSpriteMinigame('${s.chave}', this.value)"></div>` : ''}
   </div>`;
+}
+function simuladorGrupo(prefixo, itens){
+  if(prefixo === 'chuva'){
+    const cesta = itens.find(s => s.chave === 'chuvacesta');
+    const frutas = itens.filter(s => s.chave !== 'chuvacesta');
+    const itemHtml = frutas.map((s, i) => {
+      const tam = Math.round(TAMANHO_BASE_SPRITE_MINIGAME.chuva * (s.escala || 100) / 100);
+      const conteudo = s.imagemUrl ? `<img src="${esc(s.imagemUrl)}">` : `<span>${s.emoji || '🍎'}</span>`;
+      return `<div class="item-sim" style="left:${10 + i * 40}px;width:${tam}px;height:${tam}px">${conteudo}</div>`;
+    }).join('');
+    const tamCesta = Math.round(TAMANHO_BASE_SPRITE_MINIGAME.chuvacesta * ((cesta && cesta.escala) || 100) / 100);
+    const cestaConteudo = cesta && cesta.imagemUrl ? `<img src="${esc(cesta.imagemUrl)}">` : `<span>🧺</span>`;
+    return `<div class="simulador-arcade"><div class="cena-sim">
+      ${itemHtml}
+      <div class="chao-sim"></div>
+      <div class="cesta-sim" style="width:${tamCesta}px;height:${Math.round(tamCesta * 34 / 74)}px">${cestaConteudo}</div>
+    </div></div>`;
+  }
+  const tamanhoBase = TAMANHO_BASE_SPRITE_MINIGAME[prefixo] || 30;
+  const redondo = prefixo === 'toca' ? ' redondo' : '';
+  return `<div class="simulador-arcade">${itens.map(s => {
+    const tam = Math.round(tamanhoBase * (s.escala || 100) / 100);
+    const conteudo = s.imagemUrl
+      ? `<img src="${esc(s.imagemUrl)}" style="width:${tam}px;height:${tam}px">`
+      : `<span style="font-size:${Math.max(18, tam)}px">${s.emoji || '❔'}</span>`;
+    return `<div class="tile-sim${redondo}">${conteudo}</div>`;
+  }).join('')}</div>`;
+}
+function ajustarEscalaLocal(chave, valor){
+  const s = spritesMinigameCache.find(x => x.chave === chave);
+  if(!s) return;
+  s.escala = Number(valor);
+  renderizarGruposSprites();
+}
+async function salvarEscalaSpriteMinigame(chave, valor){
+  await api('minigame_sprite_escala_salvar', {method:'POST', corpo:{chave, escala: Number(valor)}}).catch(e => alert(e.message));
 }
 async function enviarSpriteMinigame(chave, arquivo){
   if(!arquivo) return;

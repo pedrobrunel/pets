@@ -531,8 +531,11 @@ body.tela-cheia #app{padding:0;max-width:none}
 .bloco[aria-pressed="true"]{background:var(--ceu);color:#fff;border-color:var(--ceu-rim)}
 .previa{background:var(--papel);border:3px dashed var(--tinta);border-radius:14px;padding:12px;font-size:16px;min-height:52px}
 
-/* ---------- minigames ---------- */
-#tabuleiro-memoria{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+/* ---------- minigames ----------
+   os 4 tabuleiros têm max-width fixo — sem isso, no PC (onde a tela de Arcade fica em
+   modo "tela-cheia" e o #app perde o limite de 520px), os quadrados esticam até ocupar
+   a largura toda da janela, gigantes e desproporcionais */
+#tabuleiro-memoria{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:360px;margin:0 auto}
 .carta{aspect-ratio:1;border:var(--borda) solid var(--jabuti-rim);border-bottom-width:6px;border-radius:14px;
   background:var(--jabuti);
   font-size:28px;display:grid;place-items:center;color:transparent;
@@ -540,7 +543,7 @@ body.tela-cheia #app{padding:0;max-width:none}
 .carta:active{transform:translateY(4px);border-bottom-width:1px}
 .carta.virada{background:#fff;color:inherit;border-color:var(--contorno)}
 .carta.par{background:var(--mata);color:#fff;border-color:var(--mata-rim)}
-canvas{display:block;width:100%;height:auto;border:var(--borda) solid var(--contorno);
+canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border:var(--borda) solid var(--contorno);
   border-bottom-width:8px;border-radius:var(--r);background:#D6EAF8;touch-action:none}
 
 /* --- minigame 4: sequência (Simon Says) --- */
@@ -1553,9 +1556,13 @@ let VAPID_PUBLIC_KEY = '';
 let SPRITES_MINIGAME = {};
 // devolve <img> se o Hostmaster subiu uma imagem pra esse slot, senão o emoji padrão —
 // usado nos 3 minigames que renderizam em HTML (a Chuva de Frutas usa canvas, à parte)
-function spriteOuEmoji(chave, emojiPadrao, tamanho = 30){
-  const url = SPRITES_MINIGAME[chave];
-  return url ? `<img src="${esc(url)}" alt="" style="width:${tamanho}px;height:${tamanho}px;object-fit:contain;vertical-align:middle">` : emojiPadrao;
+function spriteOuEmoji(chave, emojiPadrao, tamanhoBase = 30){
+  const dado = SPRITES_MINIGAME[chave];
+  if(!dado || !dado.url) return emojiPadrao;
+  const tamanho = Math.round(tamanhoBase * (dado.escala ?? 100) / 100);
+  // object-fit:contain preserva a proporção original (nunca estica/achata) dentro da
+  // caixa de "tamanho" — a caixa em si é multiplicada pela escala configurada no painel
+  return `<img src="${esc(dado.url)}" alt="" style="width:${tamanho}px;height:${tamanho}px;object-fit:contain;vertical-align:middle">`;
 }
 let elementoMusica = null;
 function iniciarMusicaFundo(){
@@ -2406,12 +2413,24 @@ function jogoChuva(){
   // padrão se não tiver, não carregar a tempo, ou dar erro (offline, arquivo removido...)
   const imgs = {};
   [...TIPOS.map(t=>t.chave), 'chuvacesta'].forEach(chave => {
-    const url = SPRITES_MINIGAME[chave];
-    if(!url) return;
+    const dado = SPRITES_MINIGAME[chave];
+    if(!dado || !dado.url) return;
     const img = new Image();
     img.onload = () => { imgs[chave] = img; };
-    img.src = url;
+    img.src = dado.url;
   });
+  // desenha preservando a proporção original da imagem dentro de uma caixa alvo (nunca
+  // esticando/achatando) — a caixa em si já sai multiplicada pela escala configurada no painel
+  const desenharSprite = (chave, cx, cy, tamanhoBase) => {
+    const img = imgs[chave];
+    if(!img) return false;
+    const alvo = tamanhoBase * ((SPRITES_MINIGAME[chave]?.escala ?? 100) / 100);
+    const razao = img.naturalWidth / img.naturalHeight || 1;
+    const w = razao >= 1 ? alvo : alvo * razao;
+    const h = razao >= 1 ? alvo / razao : alvo;
+    ctx.drawImage(img, cx - w/2, cy - h/2, w, h);
+    return true;
+  };
 
   const px = ev => {
     const r = cv.getBoundingClientRect();
@@ -2461,9 +2480,9 @@ function jogoChuva(){
 
     itens.forEach(it => {
       it.y += it.vy;
-      const img = imgs[it.chave];
-      if(img) ctx.drawImage(img, it.x-18, it.y-18, 36, 36);
-      else { ctx.font='30px serif'; ctx.textAlign='center'; ctx.fillText(it.e, it.x, it.y); }
+      if(!desenharSprite(it.chave, it.x, it.y, 36)){
+        ctx.font='30px serif'; ctx.textAlign='center'; ctx.fillText(it.e, it.x, it.y);
+      }
     });
     itens = itens.filter(it => {
       if(it.y > A-58 && it.y < A-18 && Math.abs(it.x - cesta.x) < cesta.l/2 + 10){
@@ -2472,9 +2491,7 @@ function jogoChuva(){
       return it.y < A+30;
     });
     // cesta
-    if(imgs.chuvacesta){
-      ctx.drawImage(imgs.chuvacesta, cesta.x-cesta.l/2, A-66, cesta.l, 34);
-    } else {
+    if(!desenharSprite('chuvacesta', cesta.x, A-49, cesta.l)){
       ctx.fillStyle = '#C98A4B'; ctx.strokeStyle = '#2C3E50'; ctx.lineWidth = 6;
       ctx.beginPath(); ctx.roundRect(cesta.x-cesta.l/2, A-64, cesta.l, 30, 10); ctx.fill(); ctx.stroke();
     }

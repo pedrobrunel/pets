@@ -68,9 +68,10 @@
      POST ?acao=musica_ativa_salvar   {ativa}
      POST ?acao=musica_upload         (multipart: arquivo) -> sobe e já grava a música de fundo
      POST ?acao=musica_remover        -> remove a música (volta a não ter trilha sonora)
-     GET  ?acao=minigame_sprites_listar -> os 19 slots de sprite dos 4 minigames (emoji padrão + imagem, se subiu)
+     GET  ?acao=minigame_sprites_listar -> os 20 slots de sprite dos 4 minigames (emoji padrão + imagem/escala, se configurados)
      POST ?acao=minigame_sprite_imagem  (multipart: arquivo, chave) -> sobe pra assets/minigames/
      POST ?acao=minigame_sprite_remover {chave} -> volta esse slot pro emoji padrão
+     POST ?acao=minigame_sprite_escala_salvar {chave, escala} -> tamanho da imagem (50 a 200%), só com imagem já enviada
      GET  ?acao=lojas_listar
      GET  ?acao=loja_obter            ?id=xx
      POST ?acao=loja_salvar           {id, nome, emoji, publicado, ordem, capaImagem, capaAtiva,
@@ -1640,11 +1641,17 @@ try {
   /* ---------- Sprites dos minigames do Arcade (opcional — cada slot cai pro emoji padrão) ---------- */
 
   if ($acao === 'minigame_sprites_listar') {
-    $linhas = bd()->query('SELECT chave, imagem FROM minigame_sprites')->fetchAll(PDO::FETCH_KEY_PAIR);
-    responder(['sprites' => array_map(fn($chave, $def) => [
-      'chave' => $chave, 'emoji' => $def['emoji'], 'rotulo' => $def['rotulo'],
-      'imagem' => $linhas[$chave] ?? '', 'imagemUrl' => caminhoPublicoMinigame($linhas[$chave] ?? ''),
-    ], array_keys(SPRITES_MINIGAME), SPRITES_MINIGAME)]);
+    $linhas = [];
+    foreach (bd()->query('SELECT chave, imagem, escala FROM minigame_sprites')->fetchAll(PDO::FETCH_ASSOC) as $l) {
+      $linhas[$l['chave']] = $l;
+    }
+    responder(['sprites' => array_map(function ($chave, $def) use ($linhas) {
+      $l = $linhas[$chave] ?? ['imagem' => '', 'escala' => 100];
+      return [
+        'chave' => $chave, 'emoji' => $def['emoji'], 'rotulo' => $def['rotulo'],
+        'imagem' => $l['imagem'], 'imagemUrl' => caminhoPublicoMinigame($l['imagem']), 'escala' => (int)$l['escala'],
+      ];
+    }, array_keys(SPRITES_MINIGAME), SPRITES_MINIGAME)]);
   }
 
   if ($acao === 'minigame_sprite_imagem') {
@@ -1682,6 +1689,19 @@ try {
     $chave = (string)(corpo()['chave'] ?? '');
     if (!array_key_exists($chave, SPRITES_MINIGAME)) responder(['erro' => 'Slot de sprite desconhecido.'], 422);
     bd()->prepare('DELETE FROM minigame_sprites WHERE chave = ?')->execute([$chave]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'minigame_sprite_escala_salvar') {
+    $d = corpo();
+    $chave = (string)($d['chave'] ?? '');
+    if (!array_key_exists($chave, SPRITES_MINIGAME)) responder(['erro' => 'Slot de sprite desconhecido.'], 422);
+    $escala = (int)($d['escala'] ?? 100);
+    if ($escala < 50 || $escala > 200) responder(['erro' => '"escala" precisa ser um número entre 50 e 200.'], 422);
+    // só existe o que ajustar se já tiver imagem enviada — a linha nasce no upload
+    $st = bd()->prepare('UPDATE minigame_sprites SET escala = ? WHERE chave = ? AND imagem <> \'\'');
+    $st->execute([$escala, $chave]);
+    if ($st->rowCount() === 0) responder(['erro' => 'Suba uma imagem pra esse slot antes de ajustar o tamanho.'], 422);
     responder(['ok' => true]);
   }
 
