@@ -215,6 +215,9 @@ try {
     'capa_hora_fim'      => "VARCHAR(5) NOT NULL DEFAULT ''",
     'capa_data_inicio'   => "VARCHAR(10) NOT NULL DEFAULT ''",
     'capa_data_fim'      => "VARCHAR(10) NOT NULL DEFAULT ''",
+    // ponto de ancoragem vertical da imagem de capa (topo/centro/base) — decide que parte
+    // da imagem fica visível quando ela é cortada pra caber na faixa do cabeçalho
+    'capa_ancora'        => "VARCHAR(10) NOT NULL DEFAULT 'center'",
   ] as $coluna => $definicao) {
     if (!in_array($coluna, $colunasMundos, true)) $pdo->exec("ALTER TABLE mundos ADD COLUMN $coluna $definicao");
   }
@@ -499,6 +502,7 @@ try {
     'capa_hora_fim'    => "VARCHAR(5) NOT NULL DEFAULT ''",
     'capa_data_inicio' => "VARCHAR(10) NOT NULL DEFAULT ''",
     'capa_data_fim'    => "VARCHAR(10) NOT NULL DEFAULT ''",
+    'capa_ancora'      => "VARCHAR(10) NOT NULL DEFAULT 'center'",
   ] as $coluna => $definicao) {
     if (!in_array($coluna, $colunasLojas, true)) $pdo->exec("ALTER TABLE lojas ADD COLUMN $coluna $definicao");
   }
@@ -597,6 +601,7 @@ try {
       'hora_fim'    => "VARCHAR(5) NOT NULL DEFAULT ''",
       'data_inicio' => "VARCHAR(10) NOT NULL DEFAULT ''",
       'data_fim'    => "VARCHAR(10) NOT NULL DEFAULT ''",
+      'ancora'      => "VARCHAR(10) NOT NULL DEFAULT 'center'",
     ] as $sufixo => $definicao) {
       $coluna = "capa_{$campoCapa}_{$sufixo}";
       if (!in_array($coluna, $colunasConfig, true)) $pdo->exec("ALTER TABLE configuracoes ADD COLUMN $coluna $definicao");

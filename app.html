@@ -358,11 +358,18 @@ body.tela-cheia #app{padding:0;max-width:none}
    topo-direita, e uma informação viva (progresso, moedas) numa pilulazinha embaixo. O
    leve deslocamento do background-position em atualizarParallaxCapa() dá o parallax. */
 .capa-cabecalho{
-  position:relative;width:100%;aspect-ratio:7/3;
+  position:relative;width:100%;aspect-ratio:2/1;
   border:var(--borda) solid var(--contorno);border-bottom-width:9px;border-radius:var(--r);
   overflow:hidden;margin-bottom:14px;
   background-size:cover;background-position:center 50%;background-color:var(--papel);
   display:flex;flex-direction:column;justify-content:space-between;
+}
+/* no mobile a faixa fica um pouco mais alta (2:1) que a proporção original da imagem
+   (350×150 ≈ 7:3) — sobra mais espaço pro botão de voltar e o ícone do NPC não brigarem
+   com o rodapé de informação. No desktop a largura já é maior, então a proporção original
+   já dá altura de sobra: volta pra 7:3 pra não esticar demais. */
+@media(min-width:900px){
+  .capa-cabecalho{aspect-ratio:7/3}
 }
 .capa-cabecalho::before{
   content:'';position:absolute;inset:0;
@@ -1594,8 +1601,8 @@ let CASA_CONFIG = {fundoUrl:'', precoCasa:5000};
 // capas de cabeçalho das telas fixas sem entidade própria no banco (Loja de Móveis, Mural)
 // — mesmo sistema visual dos mundos/lojas genéricas, configurado direto em "configuracoes"
 let CAPAS = {
-  lojamoveisImagemUrl:'', lojamoveisAtiva:false, lojamoveisDiasSemana:[], lojamoveisHoraInicio:'', lojamoveisHoraFim:'', lojamoveisDataInicio:'', lojamoveisDataFim:'',
-  muralImagemUrl:'', muralAtiva:false, muralDiasSemana:[], muralHoraInicio:'', muralHoraFim:'', muralDataInicio:'', muralDataFim:'',
+  lojamoveisImagemUrl:'', lojamoveisAtiva:false, lojamoveisDiasSemana:[], lojamoveisHoraInicio:'', lojamoveisHoraFim:'', lojamoveisDataInicio:'', lojamoveisDataFim:'', lojamoveisAncora:'center',
+  muralImagemUrl:'', muralAtiva:false, muralDiasSemana:[], muralHoraInicio:'', muralHoraFim:'', muralDataInicio:'', muralDataFim:'', muralAncora:'center',
 };
 // música de fundo (opcional, enviada no painel) — um Audio só, criado na hora que o
 // jogo entra de fato (login/onboarding), porque autoplay sem gesto do usuário é bloqueado
@@ -1913,10 +1920,15 @@ function blocoNpcsDaTela(tela){
 // cabeçalho de capa opcional (matéria ou loja) — imagem enviada no painel, com o nome à
 // esquerda e o ícone do NPC associado à direita (o mesmo NPC que blocoNpcsDaTela mostraria
 // como card de conversa logo abaixo, se algum tiver "aparece em" apontando pra essa tela)
-function renderCapaCabecalho(imagemUrl, {tela, voltar, infoLinha} = {}){
+// ponto de ancoragem vertical escolhido no painel: decide que parte da imagem original
+// fica visível quando o cabeçalho (proporção fixa) corta a imagem — ex.: uma foto com o
+// assunto no topo pede ancora "top", senão a base 50/50 corta bem onde importa
+const ANCORA_CAPA_Y = {top: 12, center: 50, bottom: 88};
+function renderCapaCabecalho(imagemUrl, {tela, voltar, infoLinha, ancora} = {}){
   if(!imagemUrl) return '';
   const npc = NPCS.find(n => n.tela === tela && npcAtivoAgora(n));
-  return `<div class="capa-cabecalho" style="background-image:url('${esc(imagemUrl)}')">
+  const baseY = ANCORA_CAPA_Y[ancora] ?? ANCORA_CAPA_Y.center;
+  return `<div class="capa-cabecalho" data-ancora-y="${baseY}" style="background-image:url('${esc(imagemUrl)}');background-position-y:${baseY}%">
     <div class="capa-cabecalho-topo">
       ${voltar ? `<button class="btn pequeno branco" onclick="${voltar}">← Mapa</button>` : '<span></span>'}
       ${npc ? `<button class="capa-npc" onclick="abrirNpc('${esc(npc.id)}')" aria-label="Conversar com ${esc(npc.nome)}">${npc.imagemUrl ? `<img src="${esc(npc.imagemUrl)}" alt="">` : (npc.emoji || '🧑')}</button>` : '<span></span>'}
@@ -1926,7 +1938,8 @@ function renderCapaCabecalho(imagemUrl, {tela, voltar, infoLinha} = {}){
 }
 // parallax bem sutil: desloca o background-position vertical da capa visível conforme ela
 // sobe/desce na tela. Um listener global só, sem precisar registrar/desligar por navegação
-// — a cada scroll, procura a capa da tela ativa (só uma por vez) e ajusta.
+// — a cada scroll, procura a capa da tela ativa (só uma por vez) e ajusta. Oscila em torno
+// do ponto de ancoragem escolhido no painel, não sempre do centro.
 const semParallax = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let parallaxTicking = false;
 function atualizarParallaxCapa(){
@@ -1934,9 +1947,10 @@ function atualizarParallaxCapa(){
   if(semParallax) return;
   const el = document.querySelector('.tela.ativa .capa-cabecalho');
   if(!el) return;
+  const baseY = Number(el.dataset.ancoraY) || 50;
   const r = el.getBoundingClientRect();
   const deslocamento = Math.max(-1, Math.min(1, -r.top / Math.max(r.height, 1)));
-  el.style.backgroundPositionY = (50 + deslocamento * 18) + '%';
+  el.style.backgroundPositionY = Math.max(0, Math.min(100, baseY + deslocamento * 18)) + '%';
 }
 addEventListener('scroll', () => {
   if(!parallaxTicking){ requestAnimationFrame(atualizarParallaxCapa); parallaxTicking = true; }
@@ -2095,7 +2109,7 @@ function desenharMundo(t){
   const temCapa = t.capaAtiva && t.capaImagemUrl && dentroDaAgenda(agendaCapa('capa', t));
   $('#tela-mundo').innerHTML = `
     ${temCapa ? renderCapaCabecalho(t.capaImagemUrl, {
-        tela: 'mundo:' + t.id, voltar: "ir('trilhas')", infoLinha: `${feitas}/${total} lições concluídas`,
+        tela: 'mundo:' + t.id, voltar: "ir('trilhas')", infoLinha: `${feitas}/${total} lições concluídas`, ancora: t.capaAncora,
       }) : `
     <div class="mundo-banner" style="--tc:${t.cor}">
       <button class="btn pequeno branco" onclick="ir('trilhas')">← Mapa</button>
@@ -2748,7 +2762,7 @@ RENDER.loja = () => {
   const temCapaVila = lojaVila && lojaVila.capaAtiva && lojaVila.capaImagemUrl && dentroDaAgenda(agendaCapa('capa', lojaVila));
   $('#tela-loja').innerHTML = `
     ${temCapaVila
-      ? renderCapaCabecalho(lojaVila.capaImagemUrl, {tela: 'loja', infoLinha: `🪙 ${estado.moedas}`})
+      ? renderCapaCabecalho(lojaVila.capaImagemUrl, {tela: 'loja', infoLinha: `🪙 ${estado.moedas}`, ancora: lojaVila.capaAncora})
       : `<div class="titulo-secao"><h2>Loja da vila</h2><small>você tem 🪙 ${estado.moedas}</small></div>`}
     ${blocoNpcsDaTela('loja')}
     <div class="sticker" style="text-align:center;padding-bottom:8px">
@@ -2872,7 +2886,7 @@ RENDER.lojamoveis = () => {
   const temCapaMoveis = CAPAS.lojamoveisAtiva && CAPAS.lojamoveisImagemUrl && dentroDaAgenda(agendaCapa('lojamoveis', CAPAS));
   $('#tela-lojamoveis').innerHTML = `
     ${temCapaMoveis
-      ? renderCapaCabecalho(CAPAS.lojamoveisImagemUrl, {tela: 'lojamoveis', infoLinha: `🪙 ${estado.moedas}`})
+      ? renderCapaCabecalho(CAPAS.lojamoveisImagemUrl, {tela: 'lojamoveis', infoLinha: `🪙 ${estado.moedas}`, ancora: CAPAS.lojamoveisAncora})
       : `<div class="titulo-secao"><h2>Loja de Móveis</h2><small>você tem 🪙 ${estado.moedas}</small></div>`}
     ${blocoNpcsDaTela('lojamoveis')}
     <div class="grade-3">${disponiveis.map(cartaoMovel).join('') || '<p class="vazio">Nenhum móvel à venda no momento — volte mais tarde!</p>'}</div>
@@ -2917,7 +2931,7 @@ RENDER.lojagenerica = (lojaId) => {
   const temCapa = loja.capaAtiva && loja.capaImagemUrl && dentroDaAgenda(agendaCapa('capa', loja));
   $('#tela-lojagenerica').innerHTML = `
     ${temCapa
-      ? renderCapaCabecalho(loja.capaImagemUrl, {tela: 'loja:' + lojaId, infoLinha: `🪙 ${estado.moedas}`})
+      ? renderCapaCabecalho(loja.capaImagemUrl, {tela: 'loja:' + lojaId, infoLinha: `🪙 ${estado.moedas}`, ancora: loja.capaAncora})
       : `<div class="titulo-secao"><h2>${esc(loja.emoji)} ${esc(loja.nome)}</h2><small>você tem 🪙 ${estado.moedas}</small></div>`}
     ${blocoNpcsDaTela('loja:' + lojaId)}
     <div class="grade-3">${disponiveis.map(cartaoItemLoja).join('') || '<p class="vazio">Nada à venda no momento — volte mais tarde!</p>'}</div>`;
@@ -3023,7 +3037,7 @@ RENDER.mural = () => {
   const temCapaMural = CAPAS.muralAtiva && CAPAS.muralImagemUrl && dentroDaAgenda(agendaCapa('mural', CAPAS));
   $('#tela-mural').innerHTML = `
     ${temCapaMural
-      ? renderCapaCabecalho(CAPAS.muralImagemUrl, {tela: 'mural'})
+      ? renderCapaCabecalho(CAPAS.muralImagemUrl, {tela: 'mural', ancora: CAPAS.muralAncora})
       : `<div class="titulo-secao"><h2>Mural da vila</h2><small>só frases prontas</small></div>`}
     ${blocoNpcsDaTela('mural')}
     <div class="sticker">
