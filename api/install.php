@@ -120,6 +120,33 @@ try {
   $pastaMinigames = dirname(__DIR__) . '/assets/minigames';
   if (!is_dir($pastaMinigames)) @mkdir($pastaMinigames, 0755, true);
 
+  /* temporadas: pacotes de sprites do Arcade por período (ex.: "Festa Junina"),
+     reaproveitando o mesmo esquema de agenda (dias_semana/hora_inicio/fim/data_inicio/fim)
+     já usado por NPCs/móveis/capas — quem decide se está vigente é o cliente, com a hora do
+     aparelho de quem está jogando (mesmo motivo do dentroDaAgenda() no app.html). Uma
+     temporada não precisa sobrescrever os 20 slots: só os que tiver em temporada_sprites
+     saem do padrão, o resto continua puxando o sprite/emoji de sempre. */
+  $pdo->exec('CREATE TABLE IF NOT EXISTS temporadas (
+    id            VARCHAR(24) PRIMARY KEY,
+    nome          VARCHAR(60) NOT NULL,
+    ativa         TINYINT(1) NOT NULL DEFAULT 1,
+    dias_semana   VARCHAR(20) NOT NULL DEFAULT \'\',
+    hora_inicio   VARCHAR(5)  NOT NULL DEFAULT \'\',
+    hora_fim      VARCHAR(5)  NOT NULL DEFAULT \'\',
+    data_inicio   VARCHAR(10) NOT NULL DEFAULT \'\',
+    data_fim      VARCHAR(10) NOT NULL DEFAULT \'\',
+    ordem         INT NOT NULL DEFAULT 0,
+    criada_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizada_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  $pdo->exec('CREATE TABLE IF NOT EXISTS temporada_sprites (
+    temporada_id VARCHAR(24) NOT NULL,
+    chave        VARCHAR(40) NOT NULL,
+    imagem       VARCHAR(160) NOT NULL DEFAULT \'\',
+    escala       SMALLINT NOT NULL DEFAULT 100,
+    PRIMARY KEY (temporada_id, chave)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
   $pdo->exec('CREATE TABLE IF NOT EXISTS licoes (
     id            VARCHAR(24) PRIMARY KEY,
     mundo_id      VARCHAR(24) NOT NULL,

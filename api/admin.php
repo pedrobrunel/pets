@@ -72,6 +72,14 @@
      POST ?acao=minigame_sprite_imagem  (multipart: arquivo, chave) -> sobe pra assets/minigames/
      POST ?acao=minigame_sprite_remover {chave} -> volta esse slot pro emoji padrão
      POST ?acao=minigame_sprite_escala_salvar {chave, escala} -> tamanho da imagem (50 a 200%), só com imagem já enviada
+     GET  ?acao=temporadas_listar     -> pacotes de sprite por período (ex.: "Festa Junina"), com agenda e quantos slots têm override
+     GET  ?acao=temporada_obter       ?id=xx -> temporada + seus 20 slots (override ou vazio = usa o sprite padrão)
+     POST ?acao=temporada_salvar      {id, nome, ativa, ordem, diasSemana, horaInicio, horaFim, dataInicio, dataFim}
+     POST ?acao=temporada_excluir     {id}
+     POST ?acao=temporada_duplicar    {id, novoId} -> clona uma temporada (agenda + sprites), fica desativada
+     POST ?acao=temporada_sprite_imagem  (multipart: arquivo, temporadaId, chave) -> sobe pra assets/minigames/
+     POST ?acao=temporada_sprite_remover {temporadaId, chave} -> volta esse slot da temporada pro sprite padrão
+     POST ?acao=temporada_sprite_escala_salvar {temporadaId, chave, escala} -> tamanho (50 a 200%), só com imagem já enviada
      GET  ?acao=lojas_listar
      GET  ?acao=loja_obter            ?id=xx
      POST ?acao=loja_salvar           {id, nome, emoji, publicado, ordem, capaImagem, capaAtiva,
@@ -1701,6 +1709,160 @@ try {
     // só existe o que ajustar se já tiver imagem enviada — a linha nasce no upload
     $st = bd()->prepare('UPDATE minigame_sprites SET escala = ? WHERE chave = ? AND imagem <> \'\'');
     $st->execute([$escala, $chave]);
+    if ($st->rowCount() === 0) responder(['erro' => 'Suba uma imagem pra esse slot antes de ajustar o tamanho.'], 422);
+    responder(['ok' => true]);
+  }
+
+  /* ---------- Temporadas: pacotes de sprites do Arcade por período (ex.: "Festa Junina") ----------
+     Mesmo esquema de agenda dos NPCs/móveis/capas (dias_semana/hora_inicio/fim/data_inicio/fim) —
+     quem decide se está vigente é o cliente, com a hora do aparelho de quem está jogando. Uma
+     temporada não precisa sobrescrever os 20 slots: só os que tiver em temporada_sprites saem do
+     padrão, o resto continua puxando o sprite (ou emoji) de sempre. */
+
+  if ($acao === 'temporadas_listar') {
+    $linhas = bd()->query('SELECT id, nome, ativa, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, ordem FROM temporadas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    $contagem = [];
+    foreach (bd()->query("SELECT temporada_id, COUNT(*) AS n FROM temporada_sprites WHERE imagem <> '' GROUP BY temporada_id")->fetchAll(PDO::FETCH_ASSOC) as $c) {
+      $contagem[$c['temporada_id']] = (int)$c['n'];
+    }
+    responder(['temporadas' => array_map(fn($t) => [
+      'id' => $t['id'], 'nome' => $t['nome'], 'ativa' => (bool)$t['ativa'], 'ordem' => (int)$t['ordem'],
+      'diasSemana' => $t['dias_semana'], 'horaInicio' => $t['hora_inicio'], 'horaFim' => $t['hora_fim'],
+      'dataInicio' => $t['data_inicio'], 'dataFim' => $t['data_fim'],
+      'sprites' => $contagem[$t['id']] ?? 0,
+    ], $linhas)]);
+  }
+
+  if ($acao === 'temporada_obter') {
+    $id = (string)($_GET['id'] ?? '');
+    $st = bd()->prepare('SELECT id, nome, ativa, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, ordem FROM temporadas WHERE id = ?');
+    $st->execute([$id]);
+    $t = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$t) responder(['erro' => 'Temporada não encontrada.'], 404);
+    $st2 = bd()->prepare('SELECT chave, imagem, escala FROM temporada_sprites WHERE temporada_id = ?');
+    $st2->execute([$id]);
+    $linhas = [];
+    foreach ($st2->fetchAll(PDO::FETCH_ASSOC) as $l) $linhas[$l['chave']] = $l;
+    responder([
+      'id' => $t['id'], 'nome' => $t['nome'], 'ativa' => (bool)$t['ativa'], 'ordem' => (int)$t['ordem'],
+      'diasSemana' => $t['dias_semana'], 'horaInicio' => $t['hora_inicio'], 'horaFim' => $t['hora_fim'],
+      'dataInicio' => $t['data_inicio'], 'dataFim' => $t['data_fim'],
+      'sprites' => array_map(function ($chave, $def) use ($linhas) {
+        $l = $linhas[$chave] ?? ['imagem' => '', 'escala' => 100];
+        return [
+          'chave' => $chave, 'emoji' => $def['emoji'], 'rotulo' => $def['rotulo'],
+          'imagem' => $l['imagem'], 'imagemUrl' => caminhoPublicoMinigame($l['imagem']), 'escala' => (int)$l['escala'],
+        ];
+      }, array_keys(SPRITES_MINIGAME), SPRITES_MINIGAME),
+    ]);
+  }
+
+  if ($acao === 'temporada_salvar') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    if (!validarId($id)) responder(['erro' => '"id" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
+    $nome = trim((string)($d['nome'] ?? ''));
+    if ($nome === '' || mb_strlen($nome) > 60) responder(['erro' => '"nome" precisa ter de 1 a 60 caracteres.'], 422);
+    $erroAgenda = validarAgenda($d);
+    if ($erroAgenda) responder(['erro' => $erroAgenda], 422);
+    bd()->prepare('INSERT INTO temporadas (id, nome, ativa, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE nome=VALUES(nome), ativa=VALUES(ativa), dias_semana=VALUES(dias_semana),
+        hora_inicio=VALUES(hora_inicio), hora_fim=VALUES(hora_fim), data_inicio=VALUES(data_inicio),
+        data_fim=VALUES(data_fim), ordem=VALUES(ordem)')
+      ->execute([
+        $id, $nome, !empty($d['ativa']) ? 1 : 0,
+        normalizarDiasSemana(trim((string)($d['diasSemana'] ?? ''))), trim((string)($d['horaInicio'] ?? '')), trim((string)($d['horaFim'] ?? '')),
+        trim((string)($d['dataInicio'] ?? '')), trim((string)($d['dataFim'] ?? '')), (int)($d['ordem'] ?? 0),
+      ]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'temporada_excluir') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    bd()->prepare('DELETE FROM temporada_sprites WHERE temporada_id = ?')->execute([$id]);
+    bd()->prepare('DELETE FROM temporadas WHERE id = ?')->execute([$id]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'temporada_duplicar') {
+    $d = corpo();
+    $novoId = (string)($d['novoId'] ?? '');
+    if (!validarId($novoId)) responder(['erro' => '"novoId" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
+    $st = bd()->prepare('SELECT COUNT(*) FROM temporadas WHERE id = ?');
+    $st->execute([$novoId]);
+    if ($st->fetchColumn()) responder(['erro' => "Já existe uma temporada com id \"$novoId\"."], 422);
+    $st = bd()->prepare('SELECT nome, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, ordem FROM temporadas WHERE id = ?');
+    $st->execute([(string)($d['id'] ?? '')]);
+    $t = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$t) responder(['erro' => 'Temporada original não encontrada.'], 404);
+    bd()->prepare('INSERT INTO temporadas (id, nome, ativa, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, ordem)
+      VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?)')
+      ->execute([
+        $novoId, $t['nome'] . ' (cópia)', $t['dias_semana'], $t['hora_inicio'], $t['hora_fim'],
+        $t['data_inicio'], $t['data_fim'], (int)$t['ordem'],
+      ]);
+    $st = bd()->prepare('SELECT chave, imagem, escala FROM temporada_sprites WHERE temporada_id = ?');
+    $st->execute([(string)($d['id'] ?? '')]);
+    $ins = bd()->prepare('INSERT INTO temporada_sprites (temporada_id, chave, imagem, escala) VALUES (?, ?, ?, ?)');
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $l) $ins->execute([$novoId, $l['chave'], $l['imagem'], $l['escala']]);
+    responder(['ok' => true, 'id' => $novoId]);
+  }
+
+  if ($acao === 'temporada_sprite_imagem') {
+    $temporadaId = (string)($_POST['temporadaId'] ?? '');
+    $chave = (string)($_POST['chave'] ?? '');
+    if (!array_key_exists($chave, SPRITES_MINIGAME)) responder(['erro' => 'Slot de sprite desconhecido.'], 422);
+    $st = bd()->prepare('SELECT COUNT(*) FROM temporadas WHERE id = ?');
+    $st->execute([$temporadaId]);
+    if (!$st->fetchColumn()) responder(['erro' => 'Temporada não encontrada.'], 404);
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || ($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+      $limite = ini_get('upload_max_filesize');
+      $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+        ? "A imagem passou do limite do servidor ($limite)."
+        : 'Nenhum arquivo recebido.';
+      responder(['erro' => $motivo], 422);
+    }
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_IMAGEM[$ext])) {
+      responder(['erro' => 'Formato não aceito. Use webp, png ou jpg (webp é o mais leve).'], 422);
+    }
+    $info = @getimagesize($arq['tmp_name']);
+    if (!$info || !in_array($info['mime'], EXTENSOES_IMAGEM, true)) {
+      responder(['erro' => 'O arquivo não é uma imagem válida.'], 422);
+    }
+    $nome = 'temporada-' . $temporadaId . '-sprite-' . $chave . '-' . bin2hex(random_bytes(3)) . '.' . $ext;
+    if (!is_dir(pastaMinigames()) && !@mkdir(pastaMinigames(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta assets/minigames no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaMinigames() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo em assets/minigames (confira a permissão da pasta).'], 500);
+    }
+    bd()->prepare('INSERT INTO temporada_sprites (temporada_id, chave, imagem) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE imagem = VALUES(imagem)')
+      ->execute([$temporadaId, $chave, $nome]);
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoMinigame($nome)]);
+  }
+
+  if ($acao === 'temporada_sprite_remover') {
+    $d = corpo();
+    $temporadaId = (string)($d['temporadaId'] ?? '');
+    $chave = (string)($d['chave'] ?? '');
+    if (!array_key_exists($chave, SPRITES_MINIGAME)) responder(['erro' => 'Slot de sprite desconhecido.'], 422);
+    bd()->prepare('DELETE FROM temporada_sprites WHERE temporada_id = ? AND chave = ?')->execute([$temporadaId, $chave]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'temporada_sprite_escala_salvar') {
+    $d = corpo();
+    $temporadaId = (string)($d['temporadaId'] ?? '');
+    $chave = (string)($d['chave'] ?? '');
+    if (!array_key_exists($chave, SPRITES_MINIGAME)) responder(['erro' => 'Slot de sprite desconhecido.'], 422);
+    $escala = (int)($d['escala'] ?? 100);
+    if ($escala < 50 || $escala > 200) responder(['erro' => '"escala" precisa ser um número entre 50 e 200.'], 422);
+    $st = bd()->prepare('UPDATE temporada_sprites SET escala = ? WHERE temporada_id = ? AND chave = ? AND imagem <> \'\'');
+    $st->execute([$escala, $temporadaId, $chave]);
     if ($st->rowCount() === 0) responder(['erro' => 'Suba uma imagem pra esse slot antes de ajustar o tamanho.'], 422);
     responder(['ok' => true]);
   }

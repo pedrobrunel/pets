@@ -275,6 +275,7 @@ body.conectando-fluxo{cursor:crosshair}
       <button data-aba="itens">🔭 Itens</button>
       <button data-aba="moveis">🛋️ Móveis</button>
       <button data-aba="arcade">🕹️ Arcade</button>
+      <button data-aba="temporadas">🎉 Temporadas</button>
       <button data-aba="lojas">🏪 Lojas</button>
       <button data-aba="mundos">🎒 Mundos</button>
       <button data-aba="licoes">📚 Lições</button>
@@ -750,6 +751,45 @@ body.conectando-fluxo{cursor:crosshair}
       <div id="grupos-sprites-minigame"></div>
     </section>
 
+    <section id="aba-temporadas" class="oculto">
+      <h2>Temporadas — sprites do Arcade por período</h2>
+      <p class="sub">crie pacotes de sprite pra datas comemorativas (ex.: "Festa Junina"): defina o período e suba só as imagens que quiser trocar — o resto continua puxando o sprite (ou emoji) padrão da aba Arcade. Quando o período passar, o jogo volta sozinho pro normal.</p>
+
+      <button class="btn" id="btn-nova-temporada" style="margin-bottom:14px">+ Nova temporada</button>
+      <form id="form-temporada" class="oculto">
+        <h3 id="titulo-form-temporada" style="font-size:16px">Nova temporada</h3>
+        <div class="linha3">
+          <div><label>id (fixo, não dá pra editar depois)</label><input type="text" id="temporada-id" placeholder="ex.: festajunina"></div>
+          <div><label>ordem</label><input type="number" id="temporada-ordem" value="0"></div>
+          <div class="check" style="align-self:end"><input type="checkbox" id="temporada-ativa" checked><label style="margin:0" for="temporada-ativa">ativa</label></div>
+        </div>
+        <label>nome</label>
+        <input type="text" id="temporada-nome" placeholder="ex.: Festa Junina">
+
+        <label style="margin-top:14px">período <span style="font-weight:700;color:#7F8C8D">(tudo opcional — vazio = sempre, enquanto estiver ativa)</span></label>
+        <div class="dias-semana" id="temporada-dias-semana"></div>
+        <div class="linha2" style="margin-top:8px">
+          <div><label style="margin-top:6px">horário — de</label><input type="text" id="temporada-hora-inicio" placeholder="08:00" maxlength="5"></div>
+          <div><label style="margin-top:6px">até</label><input type="text" id="temporada-hora-fim" placeholder="18:00" maxlength="5"></div>
+        </div>
+        <div class="linha2">
+          <div><label style="margin-top:6px">só a partir de</label><input type="text" id="temporada-data-inicio" placeholder="AAAA-MM-DD" maxlength="10"></div>
+          <div><label style="margin-top:6px">até</label><input type="text" id="temporada-data-fim" placeholder="AAAA-MM-DD" maxlength="10"></div>
+        </div>
+        <p class="dica-editor">Fora do período escolhido (ou com "ativa" desmarcado), a temporada some — os jogos voltam pro sprite padrão sozinhos, sem precisar mexer em nada de novo.</p>
+
+        <div id="temporada-aviso" class="aviso-form"></div>
+        <div class="rodape-form">
+          <button type="submit" class="btn mata">Salvar temporada</button>
+          <button type="button" class="btn branco" id="btn-cancelar-temporada">Cancelar</button>
+          <button type="button" class="btn erro" id="btn-excluir-temporada" style="margin-left:auto">Excluir temporada</button>
+        </div>
+      </form>
+      <div class="painel" style="margin-bottom:24px"><table id="tabela-temporadas"></table></div>
+
+      <div id="editor-sprites-temporada"></div>
+    </section>
+
     <section id="aba-lojas" class="oculto">
       <h2>Lojas</h2>
       <p class="sub">crie quantas lojas quiser (Lanchonete, Mercado...) — cada uma vira um destino de verdade: coloque um ponto tipo "Visitar uma loja" apontando pra ela num mapa (aba Mapas).</p>
@@ -1074,6 +1114,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   if(b.dataset.aba === 'itens') carregarItens();
   if(b.dataset.aba === 'moveis') { carregarMoveis(); carregarCasaFundo(); carregarCapasFixas(); carregarMusica(); }
   if(b.dataset.aba === 'arcade') carregarSpritesMinigame();
+  if(b.dataset.aba === 'temporadas') carregarTemporadas();
   if(b.dataset.aba === 'lojas') carregarLojas();
 });
 
@@ -2646,6 +2687,210 @@ async function removerSpriteMinigame(chave){
   if(!confirm('Voltar esse slot pro emoji padrão?')) return;
   await api('minigame_sprite_remover', {method:'POST', corpo:{chave}});
   carregarSpritesMinigame();
+}
+
+/* ---------- Temporadas: pacotes de sprite do Arcade por período (ex.: "Festa Junina") ---------- */
+let temporadasCache = [];
+let temporadaDiasSemanaSel = [];
+let temporadaSpritesAberta = null; // id da temporada com a grade de sprites aberta, ou null
+let temporadaSpritesCache = [];
+
+$('#temporada-dias-semana').innerHTML = DIAS_SEMANA.map(d => `<button type="button" data-dia="${d.v}">${d.rotulo}</button>`).join('');
+$$('#temporada-dias-semana button').forEach(b => b.onclick = () => {
+  const dia = Number(b.dataset.dia);
+  temporadaDiasSemanaSel = temporadaDiasSemanaSel.includes(dia) ? temporadaDiasSemanaSel.filter(d => d !== dia) : [...temporadaDiasSemanaSel, dia];
+  pintarTemporadaDiasSemana();
+});
+function pintarTemporadaDiasSemana(){
+  $$('#temporada-dias-semana button').forEach(b => b.classList.toggle('ativo', temporadaDiasSemanaSel.includes(Number(b.dataset.dia))));
+}
+// mesma lógica do dentroDaAgenda() do app.html (duplicada aqui — o painel não carrega o
+// app.html) só pra mostrar "vigente agora" na lista; quem decide de verdade é o cliente,
+// com a hora do aparelho de quem está jogando
+function dentroDaAgendaAdmin(a){
+  const agora = new Date();
+  const hoje = agora.toISOString().slice(0, 10);
+  if(a.dataInicio && hoje < a.dataInicio) return false;
+  if(a.dataFim && hoje > a.dataFim) return false;
+  if(a.diasSemana){
+    const dia = agora.getDay() === 0 ? 7 : agora.getDay();
+    if(!String(a.diasSemana).includes(dia)) return false;
+  }
+  if(a.horaInicio && a.horaFim){
+    const minutosAgora = agora.getHours()*60 + agora.getMinutes();
+    const [hi, mi] = a.horaInicio.split(':').map(Number), [hf, mf] = a.horaFim.split(':').map(Number);
+    const ini = hi*60+mi, fim = hf*60+mf;
+    const dentro = ini <= fim ? (minutosAgora >= ini && minutosAgora <= fim) : (minutosAgora >= ini || minutosAgora <= fim);
+    if(!dentro) return false;
+  }
+  return true;
+}
+function statusTemporada(t){
+  if(!t.ativa) return {texto: 'desativada', cls: 'off'};
+  return dentroDaAgendaAdmin(t) ? {texto: 'vigente agora', cls: 'on'} : {texto: 'fora do período', cls: 'off'};
+}
+async function carregarTemporadas(){
+  const d = await api('temporadas_listar').catch(() => ({temporadas: []}));
+  temporadasCache = d.temporadas;
+  $('#tabela-temporadas').innerHTML = `
+    <tr><th>Ordem</th><th>Temporada</th><th>Status</th><th>Sprites</th><th></th></tr>
+    ${temporadasCache.map(t => {
+      const st = statusTemporada(t);
+      return `<tr>
+        <td>${t.ordem}</td>
+        <td>${esc(t.nome)} <code style="opacity:.5">${t.id}</code></td>
+        <td><span class="selo ${st.cls}">${st.texto}</span></td>
+        <td>${t.sprites} slot(s)</td>
+        <td class="acoes">
+          <button class="btn linha branco" onclick="editarTemporada('${t.id}')">Editar</button>
+          <button class="btn linha branco" onclick="abrirSpritesTemporada('${t.id}')">Sprites</button>
+          <button class="btn linha branco" onclick="duplicarTemporada('${t.id}')">Duplicar</button>
+          <button class="btn linha erro" onclick="excluirTemporada('${t.id}','${esc(t.nome)}')">Excluir</button>
+        </td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="5">Nenhuma temporada ainda.</td></tr>'}`;
+  if(temporadaSpritesAberta && !temporadasCache.some(t => t.id === temporadaSpritesAberta)){
+    temporadaSpritesAberta = null;
+    $('#editor-sprites-temporada').innerHTML = '';
+  }
+}
+function limparFormTemporada(){
+  $('#form-temporada').reset();
+  $('#temporada-id').disabled = false;
+  $('#temporada-ativa').checked = true;
+  $('#temporada-aviso').style.display = 'none';
+  $('#btn-excluir-temporada').classList.add('oculto');
+  temporadaDiasSemanaSel = [];
+  pintarTemporadaDiasSemana();
+}
+$('#btn-nova-temporada').onclick = () => {
+  limparFormTemporada();
+  $('#titulo-form-temporada').textContent = 'Nova temporada';
+  $('#form-temporada').classList.remove('oculto');
+  $('#form-temporada').scrollIntoView({behavior:'smooth'});
+};
+$('#btn-cancelar-temporada').onclick = () => $('#form-temporada').classList.add('oculto');
+window.editarTemporada = async (id) => {
+  const t = await api('temporada_obter', {query:`&id=${encodeURIComponent(id)}`}).catch(e => { alert(e.message); return null; });
+  if(!t) return;
+  limparFormTemporada();
+  $('#temporada-id').value = t.id; $('#temporada-id').disabled = true;
+  $('#temporada-nome').value = t.nome; $('#temporada-ordem').value = t.ordem;
+  $('#temporada-ativa').checked = t.ativa;
+  temporadaDiasSemanaSel = t.diasSemana ? t.diasSemana.split(',').map(Number) : [];
+  pintarTemporadaDiasSemana();
+  $('#temporada-hora-inicio').value = t.horaInicio || '';
+  $('#temporada-hora-fim').value = t.horaFim || '';
+  $('#temporada-data-inicio').value = t.dataInicio || '';
+  $('#temporada-data-fim').value = t.dataFim || '';
+  $('#btn-excluir-temporada').classList.remove('oculto');
+  $('#titulo-form-temporada').textContent = 'Editar temporada';
+  $('#form-temporada').classList.remove('oculto');
+  $('#form-temporada').scrollIntoView({behavior:'smooth'});
+};
+window.excluirTemporada = async (id, nome) => {
+  if(!confirm(`Excluir a temporada "${nome}"? As imagens enviadas pra ela também somem.`)) return;
+  await api('temporada_excluir', {method:'POST', corpo:{id}});
+  $('#form-temporada').classList.add('oculto');
+  if(temporadaSpritesAberta === id){ temporadaSpritesAberta = null; $('#editor-sprites-temporada').innerHTML = ''; }
+  carregarTemporadas();
+};
+$('#btn-excluir-temporada').onclick = () => {
+  const id = $('#temporada-id').value;
+  const t = temporadasCache.find(x => x.id === id);
+  if(t) excluirTemporada(id, t.nome);
+};
+window.duplicarTemporada = async (id) => {
+  const novoId = prompt('Id da nova temporada (ex.: festajunina2):');
+  if(!novoId) return;
+  try{
+    await api('temporada_duplicar', {method:'POST', corpo:{id, novoId}});
+    carregarTemporadas();
+  }catch(e){ alert(e.message); }
+};
+$('#form-temporada').addEventListener('submit', async e => {
+  e.preventDefault();
+  const aviso = $('#temporada-aviso');
+  aviso.style.display = 'none';
+  try{
+    const id = $('#temporada-id').value.trim();
+    await api('temporada_salvar', {method:'POST', corpo:{
+      id, nome: $('#temporada-nome').value.trim(), ativa: $('#temporada-ativa').checked, ordem: Number($('#temporada-ordem').value) || 0,
+      diasSemana: temporadaDiasSemanaSel.join(','), horaInicio: $('#temporada-hora-inicio').value.trim(), horaFim: $('#temporada-hora-fim').value.trim(),
+      dataInicio: $('#temporada-data-inicio').value.trim(), dataFim: $('#temporada-data-fim').value.trim(),
+    }});
+    $('#form-temporada').classList.add('oculto');
+    carregarTemporadas();
+  }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
+});
+
+/* grade de sprites de uma temporada — reaproveita os grupos do Arcade (GRUPOS_SPRITES_MINIGAME),
+   escopada a essa temporada; temporada_obter já devolve os 20 slots (override ou vazio) */
+window.abrirSpritesTemporada = async (id) => {
+  if(temporadaSpritesAberta === id){ temporadaSpritesAberta = null; $('#editor-sprites-temporada').innerHTML = ''; return; }
+  await carregarSpritesTemporada(id);
+};
+async function carregarSpritesTemporada(id){
+  const t = await api('temporada_obter', {query:`&id=${encodeURIComponent(id)}`}).catch(e => { alert(e.message); return null; });
+  if(!t) return;
+  temporadaSpritesAberta = id;
+  temporadaSpritesCache = t.sprites;
+  renderizarSpritesTemporada(t.nome);
+}
+function renderizarSpritesTemporada(nomeTemporada){
+  $('#editor-sprites-temporada').innerHTML = `<div class="painel" style="padding:16px;margin-top:8px">
+    <h3 style="font-size:16px;margin-top:0">🎨 Sprites de "${esc(nomeTemporada)}"</h3>
+    <p class="sub">slot sem imagem aqui continua usando o sprite (ou emoji) padrão da aba Arcade.</p>
+    ${GRUPOS_SPRITES_MINIGAME.map(g => {
+      const itens = temporadaSpritesCache.filter(s => s.chave.startsWith(g.prefixo));
+      return `<div style="margin-bottom:20px">
+        <h4 style="font-size:13px;margin:0 0 8px">${g.titulo}</h4>
+        <div class="grade-sprites-minigame">${itens.map(cartaoSpriteTemporada).join('')}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function cartaoSpriteTemporada(s){
+  const caixa = Math.max(30, Math.min(120, Math.round(56 * (s.escala || 100) / 100)));
+  return `<div class="cartao-sprite-minigame">
+    <div class="preview-sprite-minigame" style="width:${caixa}px;height:${caixa}px">${s.imagemUrl ? `<img src="${esc(s.imagemUrl)}">` : `<span class="emoji-sprite-minigame">${s.emoji || '—'}</span>`}</div>
+    <p class="rotulo-sprite-minigame">${esc(s.rotulo)}</p>
+    ${!s.imagem ? `<p class="dica-tamanho-sprite" style="margin-top:0">usa o sprite padrão</p>` : ''}
+    <input type="file" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto" id="input-temporada-sprite-${s.chave}" onchange="enviarSpriteTemporada('${s.chave}', this.files[0])">
+    <button type="button" class="btn linha branco" onclick="$('#input-temporada-sprite-${s.chave}').click()">Trocar</button>
+    ${s.imagem ? `<button type="button" class="btn linha erro" onclick="removerSpriteTemporada('${s.chave}')">Voltar ao padrão</button>` : ''}
+    ${s.imagem ? `<div class="controle-escala-sprite"><span>Tamanho: <b id="valor-escala-temporada-${s.chave}">${s.escala}</b>%</span><input type="range" min="50" max="200" step="5" value="${s.escala}" oninput="ajustarEscalaTemporadaLocal('${s.chave}', this.value)" onchange="salvarEscalaSpriteTemporada('${s.chave}', this.value)"></div>` : ''}
+  </div>`;
+}
+function ajustarEscalaTemporadaLocal(chave, valor){
+  const s = temporadaSpritesCache.find(x => x.chave === chave);
+  if(!s) return;
+  s.escala = Number(valor);
+  const t = temporadasCache.find(x => x.id === temporadaSpritesAberta);
+  renderizarSpritesTemporada(t ? t.nome : '');
+}
+async function salvarEscalaSpriteTemporada(chave, valor){
+  await api('temporada_sprite_escala_salvar', {method:'POST', corpo:{temporadaId: temporadaSpritesAberta, chave, escala: Number(valor)}}).catch(e => alert(e.message));
+}
+async function enviarSpriteTemporada(chave, arquivo){
+  if(!arquivo) return;
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    fd.append('temporadaId', temporadaSpritesAberta);
+    fd.append('chave', chave);
+    const r = await fetch('api/admin.php?acao=temporada_sprite_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    await carregarSpritesTemporada(temporadaSpritesAberta);
+    carregarTemporadas();
+  }catch(e){ alert(e.message); }
+}
+async function removerSpriteTemporada(chave){
+  if(!confirm('Voltar esse slot pro sprite padrão?')) return;
+  await api('temporada_sprite_remover', {method:'POST', corpo:{temporadaId: temporadaSpritesAberta, chave}});
+  await carregarSpritesTemporada(temporadaSpritesAberta);
+  carregarTemporadas();
 }
 
 /* ---------- Lojas genéricas (Lanchonete, Mercado, e as que forem criadas) ---------- */

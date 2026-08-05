@@ -1554,10 +1554,25 @@ let VAPID_PUBLIC_KEY = '';
 // sprites dos minigames do Arcade (opcional, painel > aba Arcade) — só os slots com
 // imagem enviada aparecem aqui; o resto continua no emoji padrão embutido em cada jogo
 let SPRITES_MINIGAME = {};
-// devolve <img> se o Hostmaster subiu uma imagem pra esse slot, senão o emoji padrão —
-// usado nos 3 minigames que renderizam em HTML (a Chuva de Frutas usa canvas, à parte)
+// pacotes de sprite por período (painel > aba Temporadas, ex.: "Festa Junina") — cada um só
+// sobrescreve os slots que configurou; o resto continua puxando SPRITES_MINIGAME normalmente
+let TEMPORADAS_ARCADE = [];
+// qual temporada está vigente agora, calculado no aparelho (mesma lógica de dentroDaAgenda
+// usada por NPCs/capas/móveis). Se duas se sobrepõem, a última da lista (maior ordem) vence.
+function temporadaVigente(){
+  const ativas = TEMPORADAS_ARCADE.filter(dentroDaAgenda);
+  return ativas.length ? ativas[ativas.length - 1] : null;
+}
+// sprite que vale AGORA pra esse slot: override da temporada vigente, senão o padrão do painel
+function spriteAtivo(chave){
+  const t = temporadaVigente();
+  if(t && t.sprites[chave]) return t.sprites[chave];
+  return SPRITES_MINIGAME[chave];
+}
+// devolve <img> se houver sprite ativo pra esse slot, senão o emoji padrão — usado nos 3
+// minigames que renderizam em HTML (a Chuva de Frutas usa canvas, à parte)
 function spriteOuEmoji(chave, emojiPadrao, tamanhoBase = 30){
-  const dado = SPRITES_MINIGAME[chave];
+  const dado = spriteAtivo(chave);
   if(!dado || !dado.url) return emojiPadrao;
   const tamanho = Math.round(tamanhoBase * (dado.escala ?? 100) / 100);
   // object-fit:contain preserva a proporção original (nunca estica/achata) dentro da
@@ -2413,7 +2428,7 @@ function jogoChuva(){
   // padrão se não tiver, não carregar a tempo, ou dar erro (offline, arquivo removido...)
   const imgs = {};
   [...TIPOS.map(t=>t.chave), 'chuvacesta'].forEach(chave => {
-    const dado = SPRITES_MINIGAME[chave];
+    const dado = spriteAtivo(chave);
     if(!dado || !dado.url) return;
     const img = new Image();
     img.onload = () => { imgs[chave] = img; };
@@ -2424,7 +2439,7 @@ function jogoChuva(){
   const desenharSprite = (chave, cx, cy, tamanhoBase) => {
     const img = imgs[chave];
     if(!img) return false;
-    const alvo = tamanhoBase * ((SPRITES_MINIGAME[chave]?.escala ?? 100) / 100);
+    const alvo = tamanhoBase * ((spriteAtivo(chave)?.escala ?? 100) / 100);
     const razao = img.naturalWidth / img.naturalHeight || 1;
     const w = razao >= 1 ? alvo : alvo * razao;
     const h = razao >= 1 ? alvo / razao : alvo;
@@ -3207,6 +3222,7 @@ async function carregarConteudo(){
     if(dados.musica) MUSICA = dados.musica;
     if(dados.vapidPublicKey) VAPID_PUBLIC_KEY = dados.vapidPublicKey;
     if(dados.spritesMinigame) SPRITES_MINIGAME = dados.spritesMinigame;
+    if(Array.isArray(dados.temporadas)) TEMPORADAS_ARCADE = dados.temporadas;
     if(Array.isArray(dados.lojas)) LOJAS = dados.lojas;
     if(Array.isArray(dados.itensLoja)) ITENS_LOJA = dados.itensLoja;
   }catch(e){ /* offline ou hospedagem sem PHP: fica com o conteúdo embutido */ }
