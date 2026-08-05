@@ -762,6 +762,40 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .seta-filtro:active{transform:translateY(3px);border-bottom-width:1px}
 .seta-filtro:disabled{opacity:.3;pointer-events:none}
 .vazio .emoji{font-size:44px;display:block;margin-bottom:8px}
+
+/* ---------- Jornal (Neoiatimes) — de propósito bem diferente do resto do app: papel
+   bege, tinta escura, serifa, regrinhas finas em vez das bordas grossas coloridas e
+   cantos arredondados do resto do jogo. Tudo escopado em .tela-jornal pra não vazar
+   pras outras telas. A margem negativa faz o "papel" sangrar até a borda da tela (em
+   vez de ficar preso no card com respiro de 16px como o resto do app), efeito clássico
+   de jornal — quem cuida do respiro interno é o padding da mesma regra. */
+.tela-jornal{
+  background:#f4ecd8;color:#1c1a15;
+  margin:0 -16px;padding:18px 16px 40px;
+  font-family:Georgia,'Times New Roman',serif;
+}
+.jornal-masthead{text-align:center;padding-bottom:10px;border-bottom:4px double #1c1a15;margin-bottom:4px}
+.jornal-data{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;opacity:.7;display:flex;justify-content:space-between;padding:0 2px 6px}
+.jornal-titulo{font-size:44px;font-weight:900;letter-spacing:1px;line-height:1;margin:0}
+.jornal-slogan{font-size:12px;font-style:italic;opacity:.75;margin:6px 0 0}
+.jornal-secao{
+  font-size:13px;font-weight:900;letter-spacing:2px;text-transform:uppercase;
+  text-align:center;margin:26px 0 10px;
+}
+.jornal-secao::before, .jornal-secao::after{content:'';display:inline-block;width:26px;height:1px;background:#1c1a15;vertical-align:middle;margin:0 8px}
+.jornal-manchete, .jornal-artigo{width:100%;text-align:left;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;color:inherit}
+.jornal-manchete{padding-bottom:20px;border-bottom:2px solid #1c1a15}
+.jornal-manchete img{width:100%;aspect-ratio:16/9;object-fit:cover;border:1px solid #1c1a15;margin-bottom:12px;display:block}
+.jornal-manchete h2{font-size:26px;font-weight:900;line-height:1.15;margin:0 0 6px}
+.jornal-subtitulo{font-size:15px;font-style:italic;opacity:.85;margin:0 0 8px;line-height:1.35}
+.jornal-artigo{padding:14px 0;border-bottom:1px solid #c9beA0;display:flex;gap:12px;align-items:flex-start}
+.jornal-artigo:last-child{border-bottom:none}
+.jornal-artigo img{width:64px;height:64px;object-fit:cover;border:1px solid #1c1a15;flex:none}
+.jornal-artigo h3{font-size:17px;font-weight:900;line-height:1.2;margin:0 0 3px}
+.jornal-artigo .jornal-subtitulo{font-size:13px;margin:0 0 4px}
+.jornal-assinatura{font-size:11px;font-style:italic;opacity:.65;margin:0}
+.jornal-assinatura b{font-style:normal}
+.jornal-vazio{text-align:center;padding:50px 10px;font-style:italic;opacity:.6}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -830,6 +864,8 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
   <section id="tela-lojagenerica" class="tela"></section>
   <!-- ====== MURAL ====== -->
   <section id="tela-mural" class="tela"></section>
+  <!-- ====== JORNAL (Neoiatimes) ====== -->
+  <section id="tela-jornal" class="tela tela-jornal"></section>
   <!-- ====== AMIGOS ====== -->
   <section id="tela-amigos" class="tela"></section>
   <!-- ====== MENSAGENS (lista de conversas) ====== -->
@@ -854,7 +890,6 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
   </div>
   <button class="aba" data-ir="trilhas"><span class="icone"><svg viewBox="0 0 24 24"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5A1.5 1.5 0 014 18.5z" fill="currentColor" opacity=".9"/><path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H13v16h5.5a1.5 1.5 0 001.5-1.5z" fill="currentColor" opacity=".55"/></svg></span>Trilhas</button>
   <button class="aba" data-ir="arcade"><span class="icone"><svg viewBox="0 0 24 24"><rect x="2.5" y="8.5" width="19" height="10" rx="5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M7 11v4M5 13h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="15.5" cy="12" r="1.1" fill="currentColor"/><circle cx="18" cy="14.5" r="1.1" fill="currentColor"/></svg></span>Arcade</button>
-  <button class="aba" data-ir="mural"><span class="icone"><svg viewBox="0 0 24 24"><path d="M4 5.5C4 4.7 4.7 4 5.5 4h13c.8 0 1.5.7 1.5 1.5v9c0 .8-.7 1.5-1.5 1.5H10l-4 3.5V16H5.5A1.5 1.5 0 014 14.5z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/></svg></span>Mural</button>
 </nav>
 
 <div id="brinde" role="status" aria-live="polite"></div>
@@ -1641,6 +1676,9 @@ const acharItemMapa = id => ITENS_MAPA.find(it => it.id === id);
 // diferente dos itens de mapa acima que são achados de graça
 let MOVEIS = [];
 const acharMovel = id => MOVEIS.find(m => m.id === id);
+// artigos do Jornal (Neoiatimes, aba Jornal) — cada um pode ter um mundo (vira seção) e
+// um colunista (NPC de verdade, com diálogo clicável) ou só um nome de autor solto
+let JORNAL = [];
 let CASA_CONFIG = {fundoUrl:'', precoCasa:5000};
 // capas de cabeçalho das telas fixas sem entidade própria no banco (Loja de Móveis, Mural)
 // — mesmo sistema visual dos mundos/lojas genéricas, configurado direto em "configuracoes"
@@ -3118,6 +3156,69 @@ function publicarRecado(){
   RENDER.mural();
 }
 
+/* ---------- Jornal (Neoiatimes) — só alcançável por um ponto tipo "tela" num mapa
+   (aba Mapas), colocado manualmente pelo Hostmaster; sem aba própria no rodapé. Cada
+   artigo pode ser geral, ligado a um mundo (vira seção) ou ter um colunista (NPC de
+   verdade — a assinatura abre o diálogo dele). Visual deliberadamente diferente do
+   resto do app: ver .tela-jornal no CSS. */
+RENDER.jornal = () => {
+  const destaque = JORNAL.find(a => a.destaque) || JORNAL[0];
+  const resto = JORNAL.filter(a => a !== destaque);
+  const gerais = resto.filter(a => !a.mundo);
+  const secoesMundo = [];
+  const porMundoId = {};
+  resto.filter(a => a.mundo).forEach(a => {
+    if(!porMundoId[a.mundo.id]){ porMundoId[a.mundo.id] = {mundo: a.mundo, artigos: []}; secoesMundo.push(porMundoId[a.mundo.id]); }
+    porMundoId[a.mundo.id].artigos.push(a);
+  });
+  const hoje = new Date().toLocaleDateString('pt-BR', {day:'2-digit', month:'long', year:'numeric'});
+  const assinatura = a => `<p class="jornal-assinatura">Por <b>${esc(a.autor || 'Redação')}</b></p>`;
+  const cartaoArtigo = a => `
+    <button type="button" class="jornal-artigo" onclick="abrirArtigoJornal(${a.id})">
+      ${a.imagemUrl ? `<img src="${esc(a.imagemUrl)}" alt="">` : ''}
+      <div>
+        <h3>${esc(a.titulo)}</h3>
+        ${a.subtitulo ? `<p class="jornal-subtitulo">${esc(a.subtitulo)}</p>` : ''}
+        ${assinatura(a)}
+      </div>
+    </button>`;
+  $('#tela-jornal').innerHTML = `
+    <div class="jornal-masthead">
+      <div class="jornal-data"><span>Edição da Bichoteca</span><span>${hoje}</span></div>
+      <h1 class="jornal-titulo">Neoiatimes</h1>
+      <p class="jornal-slogan">Notícias, colunas e curiosidades da vila</p>
+    </div>
+    ${!JORNAL.length ? '<p class="jornal-vazio">Nenhuma edição publicada ainda.<br>Volte mais tarde!</p>' : ''}
+    ${destaque ? `
+      <button type="button" class="jornal-manchete" onclick="abrirArtigoJornal(${destaque.id})">
+        ${destaque.imagemUrl ? `<img src="${esc(destaque.imagemUrl)}" alt="">` : ''}
+        <h2>${esc(destaque.titulo)}</h2>
+        ${destaque.subtitulo ? `<p class="jornal-subtitulo">${esc(destaque.subtitulo)}</p>` : ''}
+        ${assinatura(destaque)}
+      </button>` : ''}
+    ${gerais.length ? `<div class="jornal-secao">Geral</div>${gerais.map(cartaoArtigo).join('')}` : ''}
+    ${secoesMundo.map(({mundo, artigos}) => `
+      <div class="jornal-secao">${esc(mundo.emoji)} ${esc(mundo.nome)}</div>
+      ${artigos.map(cartaoArtigo).join('')}`).join('')}`;
+};
+function abrirArtigoJornal(id){
+  const a = JORNAL.find(x => x.id === id);
+  if(!a) return;
+  modal(`
+    <div style="font-family:Georgia,'Times New Roman',serif;color:#1c1a15">
+      ${a.imagemUrl ? `<img src="${esc(a.imagemUrl)}" alt="" style="width:100%;aspect-ratio:16/9;object-fit:cover;border:1px solid #1c1a15;margin-bottom:10px">` : ''}
+      <h2 style="font-size:22px;font-weight:900;line-height:1.2;margin:0 0 6px">${esc(a.titulo)}</h2>
+      ${a.subtitulo ? `<p style="font-style:italic;opacity:.8;margin:0 0 8px">${esc(a.subtitulo)}</p>` : ''}
+      <p style="font-size:12px;font-style:italic;opacity:.65;margin:0 0 14px">Por <b style="font-style:normal">${esc(a.autor || 'Redação')}</b></p>
+      <div style="font-size:15px;line-height:1.6">${a.corpo.split('\n').filter(p=>p.trim()).map(p => `<p style="margin:0 0 12px">${esc(p)}</p>`).join('')}</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      ${a.colunista ? `<button class="btn azul" onclick="fecharModal();abrirNpc('${esc(a.colunista.id)}')">💬 Falar com ${esc(a.colunista.nome)}</button>` : ''}
+      <button class="btn branco" onclick="fecharModal()">Fechar</button>
+    </div>
+  `);
+}
+
 /* ---------- Amigos e mensagens privadas — só entre quem já é amigo dos dois lados ----------
    Mensagem passa pelo filtro de palavra/link/telefone no servidor antes de gravar (ver
    textoProibido() em api/bd.php); qualquer mensagem dá pra denunciar, o que a deixa
@@ -3783,6 +3884,7 @@ async function carregarConteudo(){
     if(dados.minigameConfig) MINIGAME_CONFIG = dados.minigameConfig;
     if(Array.isArray(dados.lojas)) LOJAS = dados.lojas;
     if(Array.isArray(dados.itensLoja)) ITENS_LOJA = dados.itensLoja;
+    if(Array.isArray(dados.jornal)) JORNAL = dados.jornal;
   }catch(e){ /* offline ou hospedagem sem PHP: fica com o conteúdo embutido */ }
 }
 // dispara já no carregamento da página — some com a espera perceptível, porque

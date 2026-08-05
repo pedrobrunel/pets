@@ -71,6 +71,36 @@ try {
     'dialogo' => json_decode($n['dialogo'], true),
   ], $npcsLinhas);
 
+  // Jornal (Neoiatimes): colunista (se tiver) puxa nome/emoji/imagem do NPC ligado — o
+  // cliente usa isso pra montar a assinatura clicável (abre o diálogo dele), sem precisar
+  // resolver id sozinho. Artigo ligado a um mundo que não está mais publicado (ou foi
+  // apagado) some da lista — evita "vazar" seção de assunto que o aluno ainda não vê.
+  $npcsPorId = [];
+  foreach ($npcsLinhas as $n) {
+    $npcsPorId[$n['id']] = [
+      'id' => $n['id'], 'nome' => $n['nome'], 'emoji' => $n['emoji'],
+      'imagemUrl' => $n['imagem'] !== '' && is_file($pastaNpcs . '/' . $n['imagem']) ? 'assets/npcs/' . $n['imagem'] : '',
+    ];
+  }
+  $mundoInfoPorId = [];
+  foreach ($saidaMundos as $m) { $mundoInfoPorId[$m['id']] = ['id' => $m['id'], 'nome' => $m['nome'], 'emoji' => $m['emoji'], 'cor' => $m['cor']]; }
+  $pastaJornal = dirname(__DIR__) . '/assets/jornal';
+  $jornalLinhas = bd()->query('SELECT id, titulo, subtitulo, corpo, mundo_id, colunista_npc_id, autor_nome, imagem, destaque, ordem
+      FROM jornal_artigos WHERE publicado = 1 ORDER BY destaque DESC, ordem, id DESC')->fetchAll(PDO::FETCH_ASSOC);
+  $saidaJornal = [];
+  foreach ($jornalLinhas as $a) {
+    if ($a['mundo_id'] !== null && !isset($mundoInfoPorId[$a['mundo_id']])) continue;
+    $colunista = $a['colunista_npc_id'] !== null ? ($npcsPorId[$a['colunista_npc_id']] ?? null) : null;
+    $saidaJornal[] = [
+      'id' => (int)$a['id'], 'titulo' => $a['titulo'], 'subtitulo' => $a['subtitulo'], 'corpo' => $a['corpo'],
+      'mundo' => $a['mundo_id'] !== null ? $mundoInfoPorId[$a['mundo_id']] : null,
+      'colunista' => $colunista,
+      'autor' => $colunista ? $colunista['nome'] : $a['autor_nome'],
+      'imagemUrl' => $a['imagem'] !== '' && is_file($pastaJornal . '/' . $a['imagem']) ? 'assets/jornal/' . $a['imagem'] : '',
+      'destaque' => (bool)$a['destaque'],
+    ];
+  }
+
   // missões: catálogo central, publicadas só. O NPC não guarda nada dela — só o id,
   // nos botões do diálogo — então o app.html cruza os dois na hora de decidir o que mostrar.
   $missoesLinhas = bd()->query('SELECT id, titulo, descricao, tipo, objetivo, premio FROM missoes WHERE publicado = 1 ORDER BY ordem, titulo')
@@ -294,10 +324,10 @@ try {
     // o par VAPID no api/config.php; sem isso, o botão de lembrete some sozinho no cliente
     'vapidPublicKey' => defined('VAPID_PUBLIC_KEY') ? VAPID_PUBLIC_KEY : '',
     'spritesMinigame' => $spritesMinigame, 'temporadas' => $saidaTemporadas, 'minigameConfig' => $minigameConfig,
-    'lojas' => $saidaLojas, 'itensLoja' => $saidaItensLoja,
+    'lojas' => $saidaLojas, 'itensLoja' => $saidaItensLoja, 'jornal' => $saidaJornal,
   ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
   error_log('[bichoteca-conteudo] ' . $e->getMessage());
   http_response_code(500);
-  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => [], 'moveis' => [], 'casaConfig' => ['fundoUrl' => ''], 'capas' => ['lojamoveisImagemUrl' => '', 'lojamoveisAtiva' => false, 'muralImagemUrl' => '', 'muralAtiva' => false], 'musica' => ['url' => '', 'ativa' => false], 'spritesMinigame' => [], 'temporadas' => [], 'minigameConfig' => [], 'lojas' => [], 'itensLoja' => []]);
+  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => [], 'moveis' => [], 'casaConfig' => ['fundoUrl' => ''], 'capas' => ['lojamoveisImagemUrl' => '', 'lojamoveisAtiva' => false, 'muralImagemUrl' => '', 'muralAtiva' => false], 'musica' => ['url' => '', 'ativa' => false], 'spritesMinigame' => [], 'temporadas' => [], 'minigameConfig' => [], 'lojas' => [], 'itensLoja' => [], 'jornal' => []]);
 }

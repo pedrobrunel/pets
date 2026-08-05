@@ -405,6 +405,34 @@ try {
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
+  /* Jornal (Neoiatimes): artigos do jornal temático da vila — cada um pode ser "geral"
+     (mundo_id vazio) ou ligado a um mundo específico (vira "seção" daquele assunto), e
+     pode ter um colunista de verdade: um NPC já cadastrado, cujo nome vira a assinatura
+     clicável (abre o diálogo dele, mesmo sistema de sempre). Sem colunista, autor_nome
+     é só texto (ex.: "Redação"). Tela própria, com visual de jornal — bem diferente do
+     resto do app de propósito. */
+  $pdo->exec('CREATE TABLE IF NOT EXISTS jornal_artigos (
+    id               INT AUTO_INCREMENT PRIMARY KEY,
+    titulo           VARCHAR(160) NOT NULL,
+    subtitulo        VARCHAR(240) NOT NULL DEFAULT \'\',
+    corpo            TEXT NOT NULL,
+    mundo_id         VARCHAR(24) NULL,
+    colunista_npc_id VARCHAR(24) NULL,
+    autor_nome       VARCHAR(60) NOT NULL DEFAULT \'\',
+    imagem           VARCHAR(160) NOT NULL DEFAULT \'\',
+    destaque         TINYINT(1) NOT NULL DEFAULT 0,
+    publicado        TINYINT(1) NOT NULL DEFAULT 1,
+    ordem            INT NOT NULL DEFAULT 0,
+    criado_em        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (mundo_id) REFERENCES mundos(id) ON DELETE SET NULL,
+    FOREIGN KEY (colunista_npc_id) REFERENCES npcs(id) ON DELETE SET NULL,
+    INDEX (mundo_id),
+    INDEX (destaque)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  $pastaJornal = dirname(__DIR__) . '/assets/jornal';
+  if (!is_dir($pastaJornal)) @mkdir($pastaJornal, 0755, true);
+
   /* itens colecionáveis: objetos soltos no mapa (o "binóculo"), sem preço nem moeda
      envolvida — o jogador simplesmente acha e pega. Viram um ponto tipo "item" numa
      cena; ao tocar, somem do mapa pra sempre e entram no inventário. Qualquer outro

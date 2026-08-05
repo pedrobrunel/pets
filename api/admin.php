@@ -55,6 +55,12 @@
      POST ?acao=missao_excluir        {id}
      POST ?acao=missao_duplicar       {id, novoId} -> clona uma missão (fica como rascunho)
      POST ?acao=missoes_importar      {missoes:[...]} -> cria/atualiza várias de uma vez (mesmo formato do salvar)
+     GET  ?acao=jornal_listar         -> artigos do Jornal (Neoiatimes)
+     GET  ?acao=jornal_obter          ?id=xx
+     POST ?acao=jornal_salvar         {id?, titulo, subtitulo, corpo, mundoId?, colunistaNpcId?, autorNome,
+                                        imagem, destaque, publicado, ordem} -> sem id cria um artigo novo
+     POST ?acao=jornal_excluir        {id}
+     POST ?acao=jornal_imagem         (multipart: arquivo) -> sobe imagem pra assets/jornal/
      GET  ?acao=itens_listar
      GET  ?acao=item_obter            ?id=xx
      POST ?acao=item_salvar           {id, nome, emoji, imagem, descricao, publicado, ordem}
@@ -135,7 +141,7 @@ const TIPOS_PONTO = ['mundo', 'cena', 'licao', 'tela', 'aviso', 'npc', 'gatilho'
 // "editarcasa" é a tela de decorar o quarto (arrastar/girar/remover móvel), separada
 // da Casa de propósito — lá é só o perfil do bicho (cuidar, ver progresso). Fica fora
 // de TELAS_NPC (não faz sentido um NPC flutuar sozinho na tela de decoração).
-const TELAS_VALIDAS = ['casa', 'trilhas', 'arcade', 'loja', 'mural', 'perfil', 'lojamoveis', 'editarcasa'];
+const TELAS_VALIDAS = ['casa', 'trilhas', 'arcade', 'loja', 'mural', 'perfil', 'lojamoveis', 'editarcasa', 'jornal'];
 // onde um NPC pode flutuar sozinho, sem precisar de ponto no mapa. Sem "trilhas": lá
 // quem posiciona um NPC é o ponto no mapa mesmo, senão teria dois jeitos de fazer a
 // mesma coisa competindo entre si.
@@ -186,12 +192,14 @@ function pastaMoveis(): string { return dirname(__DIR__) . '/assets/moveis'; }
 function pastaLojas(): string { return dirname(__DIR__) . '/assets/lojas'; }
 function pastaMundos(): string { return dirname(__DIR__) . '/assets/mundos'; }
 function pastaMinigames(): string { return dirname(__DIR__) . '/assets/minigames'; }
+function pastaJornal(): string { return dirname(__DIR__) . '/assets/jornal'; }
 function caminhoPublicoMundo(string $nome): string { return $nome === '' ? '' : 'assets/mundos/' . $nome; }
 function caminhoPublicoNpc(string $nome): string { return $nome === '' ? '' : 'assets/npcs/' . $nome; }
 function caminhoPublicoItem(string $nome): string { return $nome === '' ? '' : 'assets/itens/' . $nome; }
 function caminhoPublicoMovel(string $nome): string { return $nome === '' ? '' : 'assets/moveis/' . $nome; }
 function caminhoPublicoLoja(string $nome): string { return $nome === '' ? '' : 'assets/lojas/' . $nome; }
 function caminhoPublicoMinigame(string $nome): string { return $nome === '' ? '' : 'assets/minigames/' . $nome; }
+function caminhoPublicoJornal(string $nome): string { return $nome === '' ? '' : 'assets/jornal/' . $nome; }
 
 /* catálogo fechado dos "slots" de sprite dos minigames (Arcade) — cada um tem um emoji
    padrão (o que já vinha embutido no jogo) que continua valendo enquanto o Hostmaster não
@@ -1426,6 +1434,103 @@ try {
       $bdc->commit();
     } catch (Throwable $e) { $bdc->rollBack(); throw $e; }
     responder(['ok' => true, 'missoes' => count($missoes)]);
+  }
+
+  /* ---------- Jornal (Neoiatimes): artigos ---------- */
+
+  function linhaJornal(array $a): array {
+    return [
+      'id' => (int)$a['id'], 'titulo' => $a['titulo'], 'subtitulo' => $a['subtitulo'], 'corpo' => $a['corpo'],
+      'mundoId' => $a['mundo_id'], 'colunistaNpcId' => $a['colunista_npc_id'], 'autorNome' => $a['autor_nome'],
+      'imagem' => $a['imagem'], 'imagemUrl' => caminhoPublicoJornal($a['imagem']),
+      'destaque' => (bool)$a['destaque'], 'publicado' => (bool)$a['publicado'], 'ordem' => (int)$a['ordem'],
+    ];
+  }
+
+  if ($acao === 'jornal_listar') {
+    $linhas = bd()->query('SELECT * FROM jornal_artigos ORDER BY ordem, id DESC')->fetchAll(PDO::FETCH_ASSOC);
+    responder(['artigos' => array_map('linhaJornal', $linhas)]);
+  }
+
+  if ($acao === 'jornal_obter') {
+    $st = bd()->prepare('SELECT * FROM jornal_artigos WHERE id = ?');
+    $st->execute([(int)($_GET['id'] ?? 0)]);
+    $a = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$a) responder(['erro' => 'Artigo não encontrado.'], 404);
+    responder(linhaJornal($a));
+  }
+
+  if ($acao === 'jornal_salvar') {
+    $d = corpo();
+    $titulo = trim((string)($d['titulo'] ?? ''));
+    if ($titulo === '' || mb_strlen($titulo) > 160) responder(['erro' => '"titulo" precisa ter de 1 a 160 caracteres.'], 422);
+    $subtitulo = trim((string)($d['subtitulo'] ?? ''));
+    if (mb_strlen($subtitulo) > 240) responder(['erro' => '"subtitulo" pode ter no máximo 240 caracteres.'], 422);
+    $corpoArtigo = trim((string)($d['corpo'] ?? ''));
+    if ($corpoArtigo === '') responder(['erro' => '"corpo" não pode ficar vazio.'], 422);
+    $mundoId = trim((string)($d['mundoId'] ?? ''));
+    if ($mundoId !== '') {
+      $st = bd()->prepare('SELECT 1 FROM mundos WHERE id = ?');
+      $st->execute([$mundoId]);
+      if (!$st->fetchColumn()) responder(['erro' => 'Esse mundo não existe.'], 422);
+    }
+    $colunistaId = trim((string)($d['colunistaNpcId'] ?? ''));
+    if ($colunistaId !== '') {
+      $st = bd()->prepare('SELECT 1 FROM npcs WHERE id = ?');
+      $st->execute([$colunistaId]);
+      if (!$st->fetchColumn()) responder(['erro' => 'Esse NPC (colunista) não existe.'], 422);
+    }
+    $autorNome = trim((string)($d['autorNome'] ?? ''));
+    if ($autorNome === '' && $colunistaId === '') responder(['erro' => 'Defina um "autorNome" ou escolha um colunista (NPC).'], 422);
+    if (mb_strlen($autorNome) > 60) responder(['erro' => '"autorNome" pode ter no máximo 60 caracteres.'], 422);
+    $imagem = trim((string)($d['imagem'] ?? ''));
+    if ($imagem !== '' && !validarNomeImagem($imagem)) responder(['erro' => '"imagem" tem um nome de arquivo inválido.'], 422);
+    $destaque = !empty($d['destaque']) ? 1 : 0;
+    $publicado = !empty($d['publicado']) ? 1 : 0;
+    $ordem = (int)($d['ordem'] ?? 0);
+    $id = (int)($d['id'] ?? 0);
+    if ($id > 0) {
+      bd()->prepare('UPDATE jornal_artigos SET titulo=?, subtitulo=?, corpo=?, mundo_id=?, colunista_npc_id=?, autor_nome=?, imagem=?, destaque=?, publicado=?, ordem=? WHERE id=?')
+        ->execute([$titulo, $subtitulo, $corpoArtigo, $mundoId ?: null, $colunistaId ?: null, $autorNome, $imagem, $destaque, $publicado, $ordem, $id]);
+    } else {
+      bd()->prepare('INSERT INTO jornal_artigos (titulo, subtitulo, corpo, mundo_id, colunista_npc_id, autor_nome, imagem, destaque, publicado, ordem) VALUES (?,?,?,?,?,?,?,?,?,?)')
+        ->execute([$titulo, $subtitulo, $corpoArtigo, $mundoId ?: null, $colunistaId ?: null, $autorNome, $imagem, $destaque, $publicado, $ordem]);
+      $id = (int)bd()->lastInsertId();
+    }
+    responder(['ok' => true, 'id' => $id]);
+  }
+
+  if ($acao === 'jornal_excluir') {
+    $d = corpo();
+    bd()->prepare('DELETE FROM jornal_artigos WHERE id = ?')->execute([(int)($d['id'] ?? 0)]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'jornal_imagem') {
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || ($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+      $limite = ini_get('upload_max_filesize');
+      $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+        ? "A imagem passou do limite do servidor ($limite)."
+        : 'Nenhum arquivo recebido.';
+      responder(['erro' => $motivo], 422);
+    }
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_IMAGEM[$ext])) {
+      responder(['erro' => 'Formato não aceito. Use webp, png ou jpg (webp é o mais leve).'], 422);
+    }
+    $info = @getimagesize($arq['tmp_name']);
+    if (!$info || !in_array($info['mime'], EXTENSOES_IMAGEM, true)) {
+      responder(['erro' => 'O arquivo não é uma imagem válida.'], 422);
+    }
+    $nome = 'artigo-' . bin2hex(random_bytes(6)) . '.' . $ext;
+    if (!is_dir(pastaJornal()) && !@mkdir(pastaJornal(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta assets/jornal no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaJornal() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo em assets/jornal (confira a permissão da pasta).'], 500);
+    }
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoJornal($nome)]);
   }
 
   /* ---------- Itens colecionáveis (objetos soltos no mapa) ---------- */
