@@ -21,11 +21,13 @@
      GET  ?acao=jogadores_listar      [?busca=]
      POST ?acao=jogador_resetar_senha {id, novaSenha}
      POST ?acao=jogador_excluir       {id}
-     GET  ?acao=moderacao_listar      -> mensagens privadas e posts do fórum denunciados
+     GET  ?acao=moderacao_listar      -> mensagens privadas, posts do fórum e mensagens de grupo denunciados
      POST ?acao=moderacao_mensagem_remover {id} -> some com o texto (fica "[mensagem removida]")
      POST ?acao=moderacao_mensagem_ignorar {id} -> falso positivo, some da fila mas mantém a mensagem
      POST ?acao=moderacao_post_remover {id}     -> remove o comentário do fórum
      POST ?acao=moderacao_post_ignorar {id}     -> falso positivo, some da fila mas mantém o post
+     POST ?acao=moderacao_grupo_mensagem_remover {id} -> some com o texto da mensagem de grupo
+     POST ?acao=moderacao_grupo_mensagem_ignorar {id} -> falso positivo, some da fila mas mantém a mensagem
      GET  ?acao=palavras_proibidas_listar
      POST ?acao=palavra_proibida_adicionar {palavra}
      POST ?acao=palavra_proibida_remover   {palavra}
@@ -810,6 +812,12 @@ try {
       LEFT JOIN licoes l ON l.id = f.licao_id
       WHERE f.denunciado = 1 AND f.removido = 0 ORDER BY f.criado_em DESC")->fetchAll(PDO::FETCH_ASSOC);
 
+    $mensagensGrupo = bd()->query("SELECT gm.id, gm.texto, gm.criado_em, j.apelido AS remetente, g.nome AS grupo
+      FROM grupo_mensagens gm
+      JOIN jogadores j ON j.id = gm.remetente_id
+      JOIN grupos g ON g.id = gm.grupo_id
+      WHERE gm.denunciada = 1 AND gm.removida = 0 ORDER BY gm.criado_em DESC")->fetchAll(PDO::FETCH_ASSOC);
+
     responder([
       'mensagens' => array_map(fn($m) => [
         'id' => (int)$m['id'], 'texto' => $m['texto'], 'quando' => $m['criado_em'],
@@ -819,6 +827,10 @@ try {
         'id' => (int)$p['id'], 'texto' => $p['texto'], 'quando' => $p['criado_em'],
         'autor' => $p['autor'], 'licao' => $p['licao_titulo'] ?: $p['licao_id'],
       ], $posts),
+      'mensagensGrupo' => array_map(fn($m) => [
+        'id' => (int)$m['id'], 'texto' => $m['texto'], 'quando' => $m['criado_em'],
+        'remetente' => $m['remetente'], 'grupo' => $m['grupo'],
+      ], $mensagensGrupo),
     ]);
   }
 
@@ -839,6 +851,16 @@ try {
 
   if ($acao === 'moderacao_post_ignorar') {
     bd()->prepare('UPDATE forum_posts SET denunciado = 0 WHERE id = ?')->execute([(int)(corpo()['id'] ?? 0)]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'moderacao_grupo_mensagem_remover') {
+    bd()->prepare('UPDATE grupo_mensagens SET removida = 1, denunciada = 0 WHERE id = ?')->execute([(int)(corpo()['id'] ?? 0)]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'moderacao_grupo_mensagem_ignorar') {
+    bd()->prepare('UPDATE grupo_mensagens SET denunciada = 0 WHERE id = ?')->execute([(int)(corpo()['id'] ?? 0)]);
     responder(['ok' => true]);
   }
 
@@ -869,12 +891,31 @@ try {
     }
     $totalLicoes = (int)$bdc->query('SELECT COUNT(*) FROM licoes')->fetchColumn();
     $licoesPublicadas = (int)$bdc->query('SELECT COUNT(*) FROM licoes WHERE publicado = 1')->fetchColumn();
+
+    // engajamento social + moderação — mesma tabela de métricas, pra não espalhar o
+    // painel em telas separadas; "duvidas" conta só post-raiz (pergunta em si, sem
+    // contar as respostas), pra apontar QUAL lição gera mais dúvida de verdade
+    $duvidasPorLicao = $bdc->query("SELECT f.licao_id, COUNT(*) n, MAX(l.titulo) titulo
+      FROM forum_posts f LEFT JOIN licoes l ON l.id = f.licao_id
+      WHERE f.removido = 0 AND f.resposta_a IS NULL
+      GROUP BY f.licao_id ORDER BY n DESC LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
+
     responder([
       'totalJogadores' => (int)$bdc->query('SELECT COUNT(*) FROM jogadores')->fetchColumn(),
       'ativos7d' => (int)$bdc->query('SELECT COUNT(*) FROM jogadores WHERE atualizado_em >= NOW() - INTERVAL 7 DAY')->fetchColumn(),
       'totalMundos' => (int)$bdc->query('SELECT COUNT(*) FROM mundos')->fetchColumn(),
       'totalLicoes' => $totalLicoes, 'licoesPublicadas' => $licoesPublicadas, 'licoesRascunho' => $totalLicoes - $licoesPublicadas,
       'totalConclusoes' => $totalConcluidas,
+      'denunciasPendentes' => (int)$bdc->query("SELECT
+          (SELECT COUNT(*) FROM mensagens WHERE denunciada = 1 AND removida = 0)
+          + (SELECT COUNT(*) FROM forum_posts WHERE denunciado = 1 AND removido = 0)")->fetchColumn(),
+      'mensagensRemovidas' => (int)$bdc->query('SELECT COUNT(*) FROM mensagens WHERE removida = 1')->fetchColumn(),
+      'postsRemovidos' => (int)$bdc->query('SELECT COUNT(*) FROM forum_posts WHERE removido = 1')->fetchColumn(),
+      'totalAmizades' => (int)$bdc->query("SELECT COUNT(*) FROM amizades WHERE status = 'aceita'")->fetchColumn(),
+      'mensagens7d' => (int)$bdc->query('SELECT COUNT(*) FROM mensagens WHERE criado_em >= NOW() - INTERVAL 7 DAY')->fetchColumn(),
+      'licoesComMaisDuvidas' => array_map(fn($l) => [
+        'licaoId' => $l['licao_id'], 'titulo' => $l['titulo'] ?: $l['licao_id'], 'perguntas' => (int)$l['n'],
+      ], $duvidasPorLicao),
     ]);
   }
 

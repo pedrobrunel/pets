@@ -128,6 +128,43 @@ try {
     INDEX (denunciado)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
+  // grupo de mensagem: só quem já é amigo mútuo de quem convida entra — nunca junta gente
+  // que não se conhece. "criador_id" não tem privilégio especial hoje além de ter fundado
+  // o grupo (qualquer membro pode convidar outro amigo seu, qualquer um pode sair).
+  $pdo->exec('CREATE TABLE IF NOT EXISTS grupos (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    nome        VARCHAR(40) NOT NULL,
+    criador_id  INT NOT NULL,
+    criado_em   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (criador_id) REFERENCES jogadores(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+  // ultima_leitura marca até onde esse membro já viu (pra contar não-lidas sem precisar de
+  // uma linha por mensagem por membro, que ficaria pesado com grupo grande)
+  $pdo->exec('CREATE TABLE IF NOT EXISTS grupo_membros (
+    grupo_id       INT NOT NULL,
+    jogador_id     INT NOT NULL,
+    entrou_em      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ultima_leitura TIMESTAMP NULL DEFAULT NULL,
+    PRIMARY KEY (grupo_id, jogador_id),
+    FOREIGN KEY (grupo_id) REFERENCES grupos(id) ON DELETE CASCADE,
+    FOREIGN KEY (jogador_id) REFERENCES jogadores(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+  $pdo->exec('CREATE TABLE IF NOT EXISTS grupo_mensagens (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    grupo_id     INT NOT NULL,
+    remetente_id INT NOT NULL,
+    texto        VARCHAR(300) NOT NULL,
+    denunciada   TINYINT(1) NOT NULL DEFAULT 0,
+    removida     TINYINT(1) NOT NULL DEFAULT 0,
+    criado_em    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (grupo_id) REFERENCES grupos(id) ON DELETE CASCADE,
+    FOREIGN KEY (remetente_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    INDEX (grupo_id),
+    INDEX (denunciada)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
   // inscrições de notificação push (lembrete de sequência) — um jogador pode ter mais de
   // uma (celular + computador, por exemplo). endpoint é a URL única que o navegador dá
   // pra cada inscrição; sem UNIQUE por causa do tamanho em utf8mb4, resolvido na aplicação

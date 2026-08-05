@@ -301,6 +301,12 @@ body.conectando-fluxo{cursor:crosshair}
       <h2>Painel</h2>
       <p class="sub">visão geral da Bichoteca</p>
       <div class="grade-metricas" id="grade-metricas"></div>
+
+      <h3 style="font-size:16px;margin-top:24px">👥 Engajamento e moderação</h3>
+      <div class="grade-metricas" id="grade-metricas-social"></div>
+
+      <h3 style="font-size:16px;margin-top:24px">❓ Lições com mais dúvidas no fórum</h3>
+      <div id="lista-duvidas-painel" class="painel" style="padding:12px 16px"></div>
     </section>
 
     <section id="aba-mapas" class="oculto">
@@ -1155,6 +1161,15 @@ async function carregarPainel(){
     <div class="metrica"><b>${m.licoesPublicadas}</b><span>Lições publicadas</span></div>
     <div class="metrica"><b>${m.licoesRascunho}</b><span>Lições em rascunho</span></div>
     <div class="metrica"><b>${m.totalConclusoes}</b><span>Lições concluídas (total)</span></div>`;
+  $('#grade-metricas-social').innerHTML = `
+    <div class="metrica"><b>${m.denunciasPendentes}</b><span>Denúncias pendentes</span></div>
+    <div class="metrica"><b>${m.totalAmizades}</b><span>Amizades formadas</span></div>
+    <div class="metrica"><b>${m.mensagens7d}</b><span>Mensagens em 7 dias</span></div>
+    <div class="metrica"><b>${m.mensagensRemovidas}</b><span>Mensagens removidas (total)</span></div>
+    <div class="metrica"><b>${m.postsRemovidos}</b><span>Posts do fórum removidos (total)</span></div>`;
+  $('#lista-duvidas-painel').innerHTML = m.licoesComMaisDuvidas.length
+    ? m.licoesComMaisDuvidas.map(l => `<p style="margin:4px 0"><b>${l.perguntas}</b> pergunta${l.perguntas===1?'':'s'} — ${esc(l.titulo)}</p>`).join('')
+    : '<p class="sub" style="margin:0">Nenhuma dúvida postada ainda.</p>';
 }
 
 /* ---------- mapas (cenas + pontos clicáveis) ----------
@@ -3640,7 +3655,7 @@ async function carregarModeracao(){
   await Promise.all([carregarDenuncias(), carregarPalavrasProibidas()]);
 }
 async function carregarDenuncias(){
-  const d = await api('moderacao_listar').catch(() => ({mensagens: [], posts: []}));
+  const d = await api('moderacao_listar').catch(() => ({mensagens: [], posts: [], mensagensGrupo: []}));
   const cartaoMensagem = m => `<div class="bloco-preview">
     <b class="tag">mensagem privada</b>
     <p style="margin:6px 0">${esc(m.remetente)} → ${esc(m.destinatario)}: "${esc(m.texto)}"</p>
@@ -3659,7 +3674,17 @@ async function carregarDenuncias(){
       <button class="btn linha branco" onclick="moderarPost(${p.id},'ignorar')">Ignorar denúncia</button>
     </div>
   </div>`;
-  const tudo = d.mensagens.map(cartaoMensagem).join('') + d.posts.map(cartaoPost).join('');
+  const cartaoGrupo = m => `<div class="bloco-preview">
+    <b class="tag">mensagem de grupo — ${esc(m.grupo)}</b>
+    <p style="margin:6px 0">${esc(m.remetente)}: "${esc(m.texto)}"</p>
+    <p class="sub" style="margin:0 0 8px">${esc(m.quando)}</p>
+    <div class="acoes">
+      <button class="btn linha erro" onclick="moderarGrupoMensagem(${m.id},'remover')">Remover mensagem</button>
+      <button class="btn linha branco" onclick="moderarGrupoMensagem(${m.id},'ignorar')">Ignorar denúncia</button>
+    </div>
+  </div>`;
+  const tudo = d.mensagens.map(cartaoMensagem).join('') + d.posts.map(cartaoPost).join('')
+    + (d.mensagensGrupo || []).map(cartaoGrupo).join('');
   $('#lista-denuncias').innerHTML = tudo || '<p class="sub">Nenhuma denúncia pendente. 🎉</p>';
 }
 window.moderarMensagem = async (id, acao) => {
@@ -3668,6 +3693,10 @@ window.moderarMensagem = async (id, acao) => {
 };
 window.moderarPost = async (id, acao) => {
   await api('moderacao_post_' + acao, {method:'POST', corpo:{id}}).catch(e => alert(e.message));
+  carregarDenuncias();
+};
+window.moderarGrupoMensagem = async (id, acao) => {
+  await api('moderacao_grupo_mensagem_' + acao, {method:'POST', corpo:{id}}).catch(e => alert(e.message));
   carregarDenuncias();
 };
 async function carregarPalavrasProibidas(){
