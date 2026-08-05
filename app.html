@@ -137,20 +137,22 @@ nav.rodape .aba[aria-current="true"] .icone{
 nav.rodape .aba:focus-visible{outline:3px solid var(--jabuti)}
 nav.rodape .aba-menu{position:relative;flex:1;max-width:96px;display:flex}
 nav.rodape .aba-menu .aba{width:100%}
-/* popup que sobe do botão Casa com as opções Perfil/Pet/Casa — nasce "dentro" do botão
-   (opacidade 0, um pouco mais baixo) e sobe com uma leve "molinha" no final, dando a
-   sensação de sair de baixo pra cima. Alinhado pela esquerda (não centralizado): esse
-   botão é o primeiro da barra, e centralizar cortava o popup na borda da tela nos
-   celulares mais estreitos. pointer-events:none evita cliques quando fechado, sem
-   precisar de position:fixed nem de um backdrop cobrindo a tela inteira. */
+/* popup que sobe do botão Casa com as opções Perfil/Pet/Casa/Inventário — nasce "dentro"
+   do botão (opacidade 0, um pouco mais baixo) e sobe com uma leve "molinha" no final,
+   dando a sensação de sair de baixo pra cima. Alinhado pela esquerda (não centralizado):
+   esse botão é o primeiro da barra, e centralizar cortava o popup na borda da tela nos
+   celulares mais estreitos. Largura fixa (não auto por conteúdo) pra todo botão ficar do
+   mesmo tamanho, em vez de cada um encolher pro texto dele. pointer-events:none evita
+   cliques quando fechado, sem precisar de position:fixed nem de um backdrop cobrindo a
+   tela inteira. */
 .popup-casa{
-  position:absolute;left:0;bottom:calc(100% + 10px);
-  display:flex;flex-direction:column;gap:8px;align-items:flex-start;
+  position:absolute;left:0;bottom:calc(100% + 10px);width:150px;
+  display:flex;flex-direction:column;gap:8px;
   opacity:0;pointer-events:none;transform:translateY(14px);
   transition:transform .22s cubic-bezier(.34,1.4,.4,1), opacity .16s ease;
 }
 .popup-casa.aberto{opacity:1;pointer-events:auto;transform:translateY(0)}
-.popup-casa-item{white-space:nowrap;box-shadow:0 6px 14px rgba(0,0,0,.18)}
+.popup-casa-item{width:100%;justify-content:flex-start;box-shadow:0 6px 14px rgba(0,0,0,.18)}
 
 /* ---------- telas ---------- */
 .tela{display:none;animation:entra .22s ease-out}
@@ -731,11 +733,7 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 @keyframes pop{0%{transform:scale(.4)}70%{transform:scale(1.15)}100%{transform:scale(1)}}
 .placar-toca{text-align:center;font-weight:900;font-size:15px;margin:2px 0 6px}
 
-/* ---------- abas da loja / filtro de série nas trilhas ---------- */
-.abas-loja{display:flex;gap:8px;margin:16px 0 4px}
-.aba-loja{flex:1;background:#fff;border:3px solid var(--contorno);border-bottom-width:5px;border-radius:14px;padding:10px 8px;
-  font-size:14px;font-weight:900}
-.aba-loja.ativa{background:var(--moeda);border-color:var(--moeda-rim)}
+/* ---------- filtro de série nas trilhas ---------- */
 /* carrossel de séries: setas fixas nas pontas, a tira de chips rola por trás (arraste
    ou toque nas setas) — sem barra de rolagem visível poluindo o visual */
 .filtro-series-wrap{display:flex;align-items:center;gap:6px;margin-bottom:18px}
@@ -813,6 +811,8 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
   <section id="tela-arcade" class="tela"></section>
   <!-- ====== LOJA ====== -->
   <section id="tela-loja" class="tela"></section>
+  <!-- ====== INVENTÁRIO (mochila — comida guardada, acessórios, itens especiais) ====== -->
+  <section id="tela-inventario" class="tela"></section>
   <!-- ====== LOJA DE MÓVEIS ====== -->
   <section id="tela-lojamoveis" class="tela"></section>
   <!-- ====== LOJA GENÉRICA (Lanchonete, Mercado, etc — aba Lojas do admin) ====== -->
@@ -837,6 +837,7 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
       <button class="btn branco pequeno popup-casa-item" onclick="irDoMenuCasa('perfil')">🪪 Perfil</button>
       <button class="btn branco pequeno popup-casa-item" onclick="irDoMenuCasa('casa')">🐾 Pet</button>
       <button class="btn branco pequeno popup-casa-item" onclick="irDoMenuCasa('editarcasa')">🏠 Casa</button>
+      <button class="btn branco pequeno popup-casa-item" onclick="irDoMenuCasa('inventario')">🎒 Inventário</button>
     </div>
     <button class="aba" id="botao-casa" data-ir="casa"><span class="icone"><svg viewBox="0 0 24 24"><path d="M4 11.5L12 4l8 7.5" stroke="currentColor" stroke-width="2.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 10v8.5a1 1 0 001 1h9a1 1 0 001-1V10" stroke="currentColor" stroke-width="2.3" fill="none" stroke-linejoin="round"/></svg></span>Casa</button>
   </div>
@@ -1095,7 +1096,7 @@ function ir(tela, dados){
   document.querySelectorAll('.tela').forEach(s => { s.classList.remove('ativa'); s.style.height = ''; s.style.overflowY = ''; });
   const secao = $('#tela-'+tela);
   secao.classList.add('ativa');
-  const naGuardaCasa = tela === 'casa' || tela === 'perfil' || tela === 'editarcasa';
+  const naGuardaCasa = tela === 'casa' || tela === 'perfil' || tela === 'editarcasa' || tela === 'inventario';
   document.querySelectorAll('.aba').forEach(a =>
     a.setAttribute('aria-current', String(a.dataset.ir === tela || (a.dataset.ir === 'casa' && naGuardaCasa))));
   window.scrollTo({top:0, behavior:'instant'});
@@ -1236,8 +1237,6 @@ function ativarDragMovel(el){
 
 RENDER.casa = () => {
   const h = humor();
-  const pendentes = TRILHAS.flatMap(t=>t.licoes).filter(l=>!estado.licoesFeitas.includes(l.id));
-  const proxima = pendentes[0];
   const temFundo = !!CASA_CONFIG.fundoUrl;
   const casaAtiva = temFundo && estado.casaDesbloqueada;
   $('#tela-casa').innerHTML = `
@@ -1274,19 +1273,9 @@ RENDER.casa = () => {
       barra('Nível '+nivel(), xpNoNivel()/120*100, 'var(--mata)')
     }</div>
 
-    <div class="titulo-secao"><h2>Hoje na vila</h2></div>
-    <div class="sticker" style="display:flex;gap:14px;align-items:center">
-      <div style="font-size:40px">${proxima ? proxima.emoji : '🏆'}</div>
-      <div style="flex:1">
-        <b style="font-family:'Baloo 2';font-size:19px;display:block">${proxima ? proxima.titulo : 'Tudo estudado!'}</b>
-        <span style="font-size:13px">${proxima ? 'Vale 🪙 25 e ⭐ 40' : 'Você zerou as trilhas do protótipo.'}</span>
-      </div>
-      <button class="btn pequeno laranja" onclick="${proxima ? `ir('licao','${proxima.id}')` : `ir('arcade')`}">Ir</button>
-    </div>
     ${blocoNpcsDaTela('casa')}
 
-    <div class="grade" style="margin-top:14px">
-      <button class="btn azul grande" onclick="ir('arcade')">🎮 Jogar</button>
+    <div style="margin-top:14px">
       <button class="btn roxo grande" onclick="ir('loja')">🍉 Alimentar</button>
     </div>`;
   if(casaAtiva) renderCamadaMoveis(false, 'casa'); // só pra ver — quem edita é a tela "Editar minha casa"
@@ -2793,16 +2782,10 @@ function jogoSequencia(){
 /* ---------- 9. TELA: LOJA DA VILA ----------
    Uma loja como qualquer outra do motor genérico (ver seção 9c) — só que com id fixo
    "lojadavila" e aba própria no rodapé, por ser a lojinha padrão do jogo desde sempre. */
-let lojaAba = 'comprar';
-function trocarAbaLoja(aba){ lojaAba = aba; RENDER.loja(); }
 RENDER.loja = () => {
   const itensVila = itensDaLoja('lojadavila').filter(dentroDaAgenda);
   const comidasVila = itensVila.filter(it => it.tipo !== 'acessorio');
   const acessoriosVila = itensVila.filter(it => it.tipo === 'acessorio');
-  const acessoriosNaMochila = ITENS_LOJA.filter(it => it.tipo === 'acessorio' && estado.mochila.includes(it.id));
-  const itensEspeciais = estado.itensColetados.map(acharItemMapa).filter(Boolean);
-  const comprasLoja = itensLojaNaMochila();
-  const mochilaVazia = !acessoriosNaMochila.length && !itensEspeciais.length && !comprasLoja.length;
   const lojaVila = acharLoja('lojadavila');
   const temCapaVila = lojaVila && lojaVila.capaAtiva && lojaVila.capaImagemUrl && dentroDaAgenda(agendaCapa('capa', lojaVila));
   $('#tela-loja').innerHTML = `
@@ -2816,31 +2799,36 @@ RENDER.loja = () => {
         <span class="chip">🍖 fome ${lim(estado.fome)}</span><span class="chip">💗 alegria ${lim(estado.felicidade)}</span>
       </div>
     </div>
-    <div class="abas-loja">
-      <button class="aba-loja ${lojaAba==='comprar'?'ativa':''}" onclick="trocarAbaLoja('comprar')">🛒 Comprar</button>
-      <button class="aba-loja ${lojaAba==='mochila'?'ativa':''}" onclick="trocarAbaLoja('mochila')">🎒 Mochila</button>
-    </div>
-    ${lojaAba==='comprar' ? `
-      <div class="titulo-secao"><h2 style="font-size:21px">Comidas</h2></div>
-      <div class="grade-3">${comidasVila.map(cartaoItemLoja).join('') || '<p class="vazio">Nenhuma comida à venda no momento.</p>'}</div>
+    <div class="titulo-secao"><h2 style="font-size:21px">Comidas</h2></div>
+    <div class="grade-3">${comidasVila.map(cartaoItemLoja).join('') || '<p class="vazio">Nenhuma comida à venda no momento.</p>'}</div>
+    <div class="titulo-secao"><h2 style="font-size:21px">Acessórios</h2></div>
+    <div class="grade-3">${acessoriosVila.map(cartaoItemLoja).join('') || '<p class="vazio">Nenhum acessório à venda no momento.</p>'}</div>`;
+};
+
+/* ---------- 9b. TELA: INVENTÁRIO (mochila) ----------
+   Antes era uma aba dentro da Loja da vila; separada de propósito num destino próprio
+   (menu do botão Casa) — é o único lugar onde o inventário aparece agora. */
+RENDER.inventario = () => {
+  const acessoriosNaMochila = ITENS_LOJA.filter(it => it.tipo === 'acessorio' && estado.mochila.includes(it.id));
+  const itensEspeciais = estado.itensColetados.map(acharItemMapa).filter(Boolean);
+  const comprasLoja = itensLojaNaMochila();
+  const mochilaVazia = !acessoriosNaMochila.length && !itensEspeciais.length && !comprasLoja.length;
+  $('#tela-inventario').innerHTML = `
+    <div class="titulo-secao" style="margin:12px 4px 0"><h2 style="font-size:22px">🎒 Inventário</h2></div>
+    ${comprasLoja.length ? `
+      <div class="titulo-secao"><h2 style="font-size:21px">Comida guardada</h2><small>toque pra dar pro bicho</small></div>
+      <div class="grade-3">${comprasLoja.map(cartaoMochilaLoja).join('')}</div>` : ''}
+    ${acessoriosNaMochila.length ? `
       <div class="titulo-secao"><h2 style="font-size:21px">Acessórios</h2></div>
-      <div class="grade-3">${acessoriosVila.map(cartaoItemLoja).join('') || '<p class="vazio">Nenhum acessório à venda no momento.</p>'}</div>
-    ` : `
-      ${comprasLoja.length ? `
-        <div class="titulo-secao"><h2 style="font-size:21px">Comida guardada</h2><small>toque pra dar pro bicho</small></div>
-        <div class="grade-3">${comprasLoja.map(cartaoMochilaLoja).join('')}</div>` : ''}
-      ${acessoriosNaMochila.length ? `
-        <div class="titulo-secao"><h2 style="font-size:21px">Acessórios</h2></div>
-        <div class="grade-3">${acessoriosNaMochila.map(cartaoItemLoja).join('')}</div>` : ''}
-      ${itensEspeciais.length ? `
-        <div class="titulo-secao"><h2 style="font-size:21px">Itens especiais</h2></div>
-        <div class="grade-3">${itensEspeciais.map(it => `<div class="item-loja">
-          ${it.imagemUrl ? `<img src="${esc(it.imagemUrl)}" alt="" style="width:32px;height:32px;border-radius:8px;object-fit:cover">` : `<span class="emoji">${esc(it.emoji)}</span>`}
-          <b>${esc(it.nome)}</b>
-          ${it.descricao ? `<small style="font-weight:700;color:#7F8C8D">${esc(it.descricao)}</small>` : ''}
-        </div>`).join('')}</div>` : ''}
-      ${mochilaVazia ? `<p class="vazio"><span class="emoji">🎒</span>Sua mochila tá vazia. Compre algo na aba Comprar!</p>` : ''}
-    `}`;
+      <div class="grade-3">${acessoriosNaMochila.map(cartaoItemLoja).join('')}</div>` : ''}
+    ${itensEspeciais.length ? `
+      <div class="titulo-secao"><h2 style="font-size:21px">Itens especiais</h2></div>
+      <div class="grade-3">${itensEspeciais.map(it => `<div class="item-loja">
+        ${it.imagemUrl ? `<img src="${esc(it.imagemUrl)}" alt="" style="width:32px;height:32px;border-radius:8px;object-fit:cover">` : `<span class="emoji">${esc(it.emoji)}</span>`}
+        <b>${esc(it.nome)}</b>
+        ${it.descricao ? `<small style="font-weight:700;color:#7F8C8D">${esc(it.descricao)}</small>` : ''}
+      </div>`).join('')}</div>` : ''}
+    ${mochilaVazia ? `<p class="vazio"><span class="emoji">🎒</span>Sua mochila tá vazia. Compre algo na Loja!</p>` : ''}`;
 };
 // itens comprados nas lojas genéricas (Lanchonete, Mercado, Loja da vila...) ficam no mesmo
 // estado.inventario dos itens antigos, mas com chave "itemId" ou "itemId__varianteId"
@@ -2879,7 +2867,7 @@ function consumirItemLoja(chave){
   estado.fome = lim(estado.fome + it.fome);
   estado.felicidade = lim(estado.felicidade + it.alegria);
   brinde(it.emoji + ' Nhac! Fome em ' + lim(estado.fome) + '.');
-  atualizarHud(); RENDER.loja();
+  atualizarHud(); RENDER.inventario();
   agendarSalvar();
 }
 // presentear: manda 1 unidade de um item da mochila pra outro jogador, pelo apelido —
@@ -2914,13 +2902,13 @@ async function enviarPresente(chave){
     if(!r.ok) return mostrarErro(d.erro || 'Não deu pra presentear.');
     estado.inventario[chave]--;
     fecharModal();
-    atualizarHud(); RENDER.loja();
+    atualizarHud(); RENDER.inventario();
     agendarSalvar();
     brinde('🎁 Presente enviado pra ' + d.apelidoDestino + '!');
   }catch(e){ mostrarErro('Sem conexão — tenta de novo.'); }
 }
 
-/* ---------- 9b. TELA: LOJA DE MÓVEIS (decorar a Casa, estilo Club Penguin) ----------
+/* ---------- 9c. TELA: LOJA DE MÓVEIS (decorar a Casa, estilo Club Penguin) ----------
    Só alcançável por um ponto tipo "tela" num mapa (aba Mapas) — sem aba própria no
    rodapé, igual à lição. Comprado aqui, o móvel fica disponível pra colocar na Casa. */
 // agenda opcional (mesmo formato dos NPCs) -> "estoque por tempo limitado": o móvel só
@@ -2958,13 +2946,13 @@ function comprarMovel(id){
   agendarSalvar();
 }
 
-/* ---------- 9c. TELA: LOJA GENÉRICA (Lanchonete, Mercado, e quaisquer outras que Pedro
+/* ---------- 9d. TELA: LOJA GENÉRICA (Lanchonete, Mercado, e quaisquer outras que Pedro
    criar na aba Lojas do admin) ----------
    Igual à Loja de Móveis: só alcançável por um ponto tipo "loja" num mapa. Cada loja tem
    seus próprios itens (comida/objeto, com fome/alegria opcionais), que podem ter
    variantes (ex.: sabores) escolhidas antes de comprar, e agenda opcional (mesmo formato
    dos NPCs/móveis) pra "estoque por tempo limitado". Comprado, o item cai na mochila
-   (estado.inventario), separado por variante — mesma pilha usada na aba Mochila. */
+   (estado.inventario), separado por variante — mesma pilha usada na tela Inventário. */
 const chaveInventarioLoja = (itemId, varianteId) => varianteId ? itemId + '__' + varianteId : itemId;
 RENDER.lojagenerica = (lojaId) => {
   const loja = acharLoja(lojaId);
@@ -3021,9 +3009,12 @@ function trocarImagemItemLoja(itemId, varianteId){
   const img = $('#img-item-loja-' + itemId);
   if(img) img.src = (v && v.imagemUrl) || it.imagemUrl || '';
 }
-// atualiza só a tela de onde a compra partiu (Loja da vila tem aba própria no rodapé;
-// as demais lojas usam a tela genérica) — telaAtual diz qual das duas está aberta
+// atualiza só a tela de onde a ação partiu — comprar acontece na Loja da vila ou numa
+// loja genérica, mas vestir/tirar acessório já possuído também pode partir do Inventário
+// (mesmo cartão, cartaoItemLoja, é reaproveitado nos três lugares) — telaAtual diz qual
+// das três está aberta
 function atualizarTelaDaLoja(lojaId){
+  if(telaAtual === 'inventario') return RENDER.inventario();
   return telaAtual === 'loja' ? RENDER.loja() : RENDER.lojagenerica(lojaId);
 }
 async function usarItemLoja(itemId){
