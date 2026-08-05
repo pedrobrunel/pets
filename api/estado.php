@@ -5,7 +5,8 @@
    Suba este arquivo em /api/estado.php e crie a tabela do LEIA-ME.
 
    Ações:
-     POST ?acao=entrar          {apelido, senha}       -> cria ou autentica
+     POST ?acao=cadastrar       {apelido, senha}       -> cria uma conta nova (erro se o nome já existe)
+     POST ?acao=entrar          {apelido, senha}       -> autentica uma conta existente (nunca cria)
      GET  ?acao=carregar                               -> devolve o estado salvo
      POST ?acao=salvar          {...estado}            -> grava o estado
      GET  ?acao=ver_casa        ?apelido=xx            -> casa (só isso) de outro jogador, pra visitar
@@ -19,49 +20,107 @@
    ========================================================= */
 
 declare(strict_types=1);
-session_start();
-header('Content-Type: application/json; charset=utf-8');
 require __DIR__ . '/bd.php';
+iniciarSessaoSegura();
+header('Content-Type: application/json; charset=utf-8');
 
 $acao = $_GET['acao'] ?? '';
 
+/* apelido: só letras, números e _ — nada de nome real, e-mail ou telefone. Senha sem
+   exigir maiúscula/número/símbolo (é jogo infantil, não banco), só o tamanho. Mesma
+   checagem pros dois fluxos (cadastrar/entrar). */
+function validarApelidoSenha(string $apelido, string $senha): ?string {
+  if (!preg_match('/^[\p{L}0-9_]{3,14}$/u', $apelido)) {
+    return 'Use um usuário de 3 a 14 letras, números ou _.';
+  }
+  if (mb_strlen($senha) < 4 || mb_strlen($senha) > 60) {
+    return 'A senha precisa ter de 4 a 60 caracteres.';
+  }
+  return null;
+}
+
 try {
-  if ($acao === 'entrar') {
+  if ($acao === 'cadastrar') {
     $d = corpo();
     $apelido = trim((string)($d['apelido'] ?? ''));
     $senha   = (string)($d['senha'] ?? '');
+    $erro = validarApelidoSenha($apelido, $senha);
+    if ($erro) responder(['erro' => $erro], 422);
 
-    // apelido: só letras, números e _ — nada de nome real, e-mail ou telefone
-    // senha: sem exigir número/maiúscula/símbolo — é jogo infantil, não banco
-    if (!preg_match('/^[\p{L}0-9_]{3,14}$/u', $apelido) || mb_strlen($senha) < 4 || mb_strlen($senha) > 60) {
-      responder(['erro' => 'Use um usuário de 3 a 14 letras e uma senha de pelo menos 4 caracteres.'], 422);
+    $st = bd()->prepare('SELECT id FROM jogadores WHERE apelido = ?');
+    $st->execute([$apelido]);
+    if ($st->fetch()) {
+      responder(['erro' => 'Esse nome de usuário já existe. Tente entrar, ou escolha outro nome.'], 422);
     }
 
     // "pin_hash" é o nome antigo da coluna (a tabela já existe em produção);
     // guarda o hash da senha normalmente, sem precisar mudar o banco
-    $st = bd()->prepare('SELECT id, pin_hash FROM jogadores WHERE apelido = ?');
-    $st->execute([$apelido]);
-    $jogador = $st->fetch(PDO::FETCH_ASSOC);
-
-    if ($jogador) {
-      if (!password_verify($senha, $jogador['pin_hash'])) {
-        usleep(400000); // atrasa tentativa de força bruta
-        responder(['erro' => 'Usuário já existe e a senha não confere.'], 401);
-      }
-      $id = (int)$jogador['id'];
-    } else {
-      $st = bd()->prepare('INSERT INTO jogadores (apelido, pin_hash, estado) VALUES (?, ?, ?)');
-      $st->execute([$apelido, password_hash($senha, PASSWORD_DEFAULT), '{}']);
-      $id = (int)bd()->lastInsertId();
-    }
+    $st = bd()->prepare('INSERT INTO jogadores (apelido, pin_hash, estado) VALUES (?, ?, ?)');
+    $st->execute([$apelido, password_hash($senha, PASSWORD_DEFAULT), '{}']);
+    $id = (int)bd()->lastInsertId();
 
     session_regenerate_id(true);
     $_SESSION['jogador_id'] = $id;
+    $_SESSION['versao_sessao'] = 0;
+    responder(['ok' => true, 'apelido' => $apelido]);
+  }
+
+  if ($acao === 'entrar') {
+    $d = corpo();
+    $apelido = trim((string)($d['apelido'] ?? ''));
+    $senha   = (string)($d['senha'] ?? '');
+    $erro = validarApelidoSenha($apelido, $senha);
+    if ($erro) responder(['erro' => $erro], 422);
+
+    $st = bd()->prepare('SELECT id, pin_hash, tentativas_falhas, bloqueado_ate, versao_sessao FROM jogadores WHERE apelido = ?');
+    $st->execute([$apelido]);
+    $jogador = $st->fetch(PDO::FETCH_ASSOC);
+
+    // mensagem igual pros dois casos (usuário não existe / senha errada) — não dá pista de
+    // qual dos dois é, prática recomendada contra enumeração de contas
+    $erroGenerico = ['erro' => 'Usuário ou senha incorretos.'];
+
+    if (!$jogador) {
+      usleep(400000); // mesmo atraso do caso "senha errada" abaixo, pra não dar pista pelo tempo de resposta
+      responder($erroGenerico, 401);
+    }
+
+    if ($jogador['bloqueado_ate'] !== null && $jogador['bloqueado_ate'] > date('Y-m-d H:i:s')) {
+      responder(['erro' => 'Muitas tentativas erradas. Tente de novo em alguns minutos, ou peça pro professor resetar sua senha.'], 429);
+    }
+
+    if (!password_verify($senha, $jogador['pin_hash'])) {
+      $tentativas = (int)$jogador['tentativas_falhas'] + 1;
+      // bloqueia por 5 minutos a partir da 6ª tentativa errada seguida — segura força
+      // bruta mesmo com pedidos em paralelo (o usleep sozinho não segurava isso)
+      $bloqueioAte = $tentativas >= 6 ? date('Y-m-d H:i:s', time() + 300) : null;
+      bd()->prepare('UPDATE jogadores SET tentativas_falhas = ?, bloqueado_ate = ? WHERE id = ?')
+        ->execute([$tentativas, $bloqueioAte, $jogador['id']]);
+      usleep(400000);
+      responder($erroGenerico, 401);
+    }
+
+    bd()->prepare('UPDATE jogadores SET tentativas_falhas = 0, bloqueado_ate = NULL WHERE id = ?')->execute([$jogador['id']]);
+
+    session_regenerate_id(true);
+    $_SESSION['jogador_id'] = (int)$jogador['id'];
+    $_SESSION['versao_sessao'] = (int)$jogador['versao_sessao'];
     responder(['ok' => true, 'apelido' => $apelido]);
   }
 
   $id = $_SESSION['jogador_id'] ?? null;
   if (!$id) responder(['erro' => 'Entre com seu usuário e senha primeiro.'], 401);
+
+  // sessão fica inválida se a senha foi resetada (painel do professor) depois do login —
+  // sem isso, uma sessão antiga continuaria valendo mesmo depois de trocar a senha
+  $st = bd()->prepare('SELECT versao_sessao FROM jogadores WHERE id = ?');
+  $st->execute([$id]);
+  $versaoAtual = $st->fetchColumn();
+  if ($versaoAtual === false || (int)$versaoAtual !== (int)($_SESSION['versao_sessao'] ?? -1)) {
+    session_unset();
+    session_destroy();
+    responder(['erro' => 'Sua sessão expirou (a senha foi trocada). Entre de novo.'], 401);
+  }
 
   if ($acao === 'carregar') {
     $st = bd()->prepare('SELECT estado FROM jogadores WHERE id = ?');

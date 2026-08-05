@@ -25,3 +25,14 @@ function responder(array $dados, int $codigo = 200): never {
 function corpo(): array {
   return json_decode(file_get_contents('php://input') ?: '{}', true) ?? [];
 }
+/** sessão com cookie endurecido: HttpOnly sempre, Secure quando servido por HTTPS (local
+    dev por HTTP continua funcionando), SameSite=Lax barra a maioria dos ataques de CSRF
+    sem precisar de token — cookie não é reenviado em requisição de outro site */
+function iniciarSessaoSegura(): void {
+  $https = !empty($_SERVER['HTTPS']) || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+  session_set_cookie_params([
+    'lifetime' => 0, 'path' => '/', 'domain' => '',
+    'secure' => $https, 'httponly' => true, 'samesite' => 'Lax',
+  ]);
+  session_start();
+}

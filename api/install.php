@@ -31,6 +31,24 @@ try {
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
+  // segurança de login: tentativas_falhas + bloqueado_ate implementam um bloqueio
+  // temporário contra força bruta (usleep sozinho não segura tentativas em paralelo);
+  // versao_sessao invalida sessões antigas quando a senha é trocada pelo painel — chegaram
+  // depois de "jogadores" já existir em produção, mesma checagem por INFORMATION_SCHEMA
+  // usada nas outras colunas novas deste arquivo
+  $colunasJogadores = array_column($pdo->query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'jogadores'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+  foreach ([
+    'tentativas_falhas' => 'SMALLINT NOT NULL DEFAULT 0',
+    'bloqueado_ate'      => 'DATETIME NULL DEFAULT NULL',
+    'versao_sessao'      => 'INT NOT NULL DEFAULT 0',
+  ] as $coluna => $definicao) {
+    if (!in_array($coluna, $colunasJogadores, true)) {
+      $pdo->exec("ALTER TABLE jogadores ADD COLUMN $coluna $definicao");
+    }
+  }
+
   // presentes pendentes: quem manda só mexe na própria linha de "jogadores" (decrementa
   // a mochila); o item entra numa fila aqui até o destinatário abrir o jogo de novo, e é
   // só o próprio destinatário (dono da linha dele) quem aplica o +1 e apaga a fila — assim

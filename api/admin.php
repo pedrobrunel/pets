@@ -103,9 +103,9 @@
    ========================================================= */
 
 declare(strict_types=1);
-session_start();
-header('Content-Type: application/json; charset=utf-8');
 require __DIR__ . '/bd.php';
+iniciarSessaoSegura();
+header('Content-Type: application/json; charset=utf-8');
 
 const TIPOS_BLOCO = ['texto', 'flashcard', 'video', 'cloze', 'cacapalavras', 'pergunta'];
 const SERIES_VALIDAS = [
@@ -771,7 +771,11 @@ try {
     $d = corpo();
     $novaSenha = (string)($d['novaSenha'] ?? '');
     if (mb_strlen($novaSenha) < 4 || mb_strlen($novaSenha) > 60) responder(['erro' => 'Senha precisa ter de 4 a 60 caracteres.'], 422);
-    bd()->prepare('UPDATE jogadores SET pin_hash = ? WHERE id = ?')->execute([password_hash($novaSenha, PASSWORD_DEFAULT), (int)($d['id'] ?? 0)]);
+    // versao_sessao += 1 derruba qualquer sessão antiga desse jogador (se alguém mais tinha
+    // acesso a uma sessão ativa, o reset de senha tira esse acesso); zera bloqueio de
+    // tentativas erradas também, já que é um recomeço assistido pelo professor
+    bd()->prepare('UPDATE jogadores SET pin_hash = ?, versao_sessao = versao_sessao + 1, tentativas_falhas = 0, bloqueado_ate = NULL WHERE id = ?')
+      ->execute([password_hash($novaSenha, PASSWORD_DEFAULT), (int)($d['id'] ?? 0)]);
     responder(['ok' => true]);
   }
 
