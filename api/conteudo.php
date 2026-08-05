@@ -238,16 +238,27 @@ try {
     ];
   }
 
+  // sprites dos minigames do Arcade — só os slots com imagem enviada (o cliente já
+  // conhece o emoji padrão de cada um, então aqui basta a URL, sem entulhar quem não subiu nada)
+  $pastaMinigames = dirname(__DIR__) . '/assets/minigames';
+  $urlMinigame = fn($nome) => $nome !== '' && is_file($pastaMinigames . '/' . $nome) ? 'assets/minigames/' . $nome : '';
+  $spritesMinigame = [];
+  foreach (bd()->query('SELECT chave, imagem FROM minigame_sprites')->fetchAll(PDO::FETCH_KEY_PAIR) as $chave => $imagem) {
+    $url = $urlMinigame($imagem);
+    if ($url !== '') $spritesMinigame[$chave] = $url;
+  }
+
   echo json_encode([
     'mundos' => $saidaMundos, 'cenas' => $saidaCenas, 'npcs' => $saidaNpcs, 'missoes' => $saidaMissoes,
     'itens' => $saidaItens, 'moveis' => $saidaMoveis, 'casaConfig' => $casaConfig, 'capas' => $capas, 'musica' => $musica,
     // chave pública do lembrete de sequência (push) — só existe se o Hostmaster já gerou
     // o par VAPID no api/config.php; sem isso, o botão de lembrete some sozinho no cliente
     'vapidPublicKey' => defined('VAPID_PUBLIC_KEY') ? VAPID_PUBLIC_KEY : '',
+    'spritesMinigame' => $spritesMinigame,
     'lojas' => $saidaLojas, 'itensLoja' => $saidaItensLoja,
   ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
   error_log('[bichoteca-conteudo] ' . $e->getMessage());
   http_response_code(500);
-  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => [], 'moveis' => [], 'casaConfig' => ['fundoUrl' => ''], 'capas' => ['lojamoveisImagemUrl' => '', 'lojamoveisAtiva' => false, 'muralImagemUrl' => '', 'muralAtiva' => false], 'musica' => ['url' => '', 'ativa' => false], 'lojas' => [], 'itensLoja' => []]);
+  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => [], 'moveis' => [], 'casaConfig' => ['fundoUrl' => ''], 'capas' => ['lojamoveisImagemUrl' => '', 'lojamoveisAtiva' => false, 'muralImagemUrl' => '', 'muralAtiva' => false], 'musica' => ['url' => '', 'ativa' => false], 'spritesMinigame' => [], 'lojas' => [], 'itensLoja' => []]);
 }

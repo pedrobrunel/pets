@@ -101,6 +101,16 @@ try {
   $pastaMundos = dirname(__DIR__) . '/assets/mundos';
   if (!is_dir($pastaMundos)) @mkdir($pastaMundos, 0755, true);
 
+  // sprites dos minigames do Arcade — cada linha é um "slot" opcional (ver SPRITES_MINIGAME
+  // em admin.php); sem linha pro slot, o jogo usa o emoji padrão que já vinha embutido
+  $pdo->exec('CREATE TABLE IF NOT EXISTS minigame_sprites (
+    chave         VARCHAR(40) PRIMARY KEY,
+    imagem        VARCHAR(160) NOT NULL DEFAULT \'\',
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  $pastaMinigames = dirname(__DIR__) . '/assets/minigames';
+  if (!is_dir($pastaMinigames)) @mkdir($pastaMinigames, 0755, true);
+
   $pdo->exec('CREATE TABLE IF NOT EXISTS licoes (
     id            VARCHAR(24) PRIMARY KEY,
     mundo_id      VARCHAR(24) NOT NULL,

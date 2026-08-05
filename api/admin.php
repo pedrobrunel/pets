@@ -68,6 +68,9 @@
      POST ?acao=musica_ativa_salvar   {ativa}
      POST ?acao=musica_upload         (multipart: arquivo) -> sobe e já grava a música de fundo
      POST ?acao=musica_remover        -> remove a música (volta a não ter trilha sonora)
+     GET  ?acao=minigame_sprites_listar -> os 19 slots de sprite dos 4 minigames (emoji padrão + imagem, se subiu)
+     POST ?acao=minigame_sprite_imagem  (multipart: arquivo, chave) -> sobe pra assets/minigames/
+     POST ?acao=minigame_sprite_remover {chave} -> volta esse slot pro emoji padrão
      GET  ?acao=lojas_listar
      GET  ?acao=loja_obter            ?id=xx
      POST ?acao=loja_salvar           {id, nome, emoji, publicado, ordem, capaImagem, capaAtiva,
@@ -155,11 +158,40 @@ function pastaItens(): string { return dirname(__DIR__) . '/assets/itens'; }
 function pastaMoveis(): string { return dirname(__DIR__) . '/assets/moveis'; }
 function pastaLojas(): string { return dirname(__DIR__) . '/assets/lojas'; }
 function pastaMundos(): string { return dirname(__DIR__) . '/assets/mundos'; }
+function pastaMinigames(): string { return dirname(__DIR__) . '/assets/minigames'; }
 function caminhoPublicoMundo(string $nome): string { return $nome === '' ? '' : 'assets/mundos/' . $nome; }
 function caminhoPublicoNpc(string $nome): string { return $nome === '' ? '' : 'assets/npcs/' . $nome; }
 function caminhoPublicoItem(string $nome): string { return $nome === '' ? '' : 'assets/itens/' . $nome; }
 function caminhoPublicoMovel(string $nome): string { return $nome === '' ? '' : 'assets/moveis/' . $nome; }
 function caminhoPublicoLoja(string $nome): string { return $nome === '' ? '' : 'assets/lojas/' . $nome; }
+function caminhoPublicoMinigame(string $nome): string { return $nome === '' ? '' : 'assets/minigames/' . $nome; }
+
+/* catálogo fechado dos "slots" de sprite dos minigames (Arcade) — cada um tem um emoji
+   padrão (o que já vinha embutido no jogo) que continua valendo enquanto o Hostmaster não
+   subir uma imagem própria. Fechado igual a TIPOS_BLOCO/TIPOS_PONTO: nada de chave livre
+   indo pro banco, senão o cliente vira alvo de upload em local arbitrário. */
+const SPRITES_MINIGAME = [
+  'memoria1' => ['emoji' => '🍉', 'rotulo' => 'Memória do Bicho — carta 1'],
+  'memoria2' => ['emoji' => '🐟', 'rotulo' => 'Memória do Bicho — carta 2'],
+  'memoria3' => ['emoji' => '🦴', 'rotulo' => 'Memória do Bicho — carta 3'],
+  'memoria4' => ['emoji' => '🧀', 'rotulo' => 'Memória do Bicho — carta 4'],
+  'memoria5' => ['emoji' => '🍎', 'rotulo' => 'Memória do Bicho — carta 5'],
+  'memoria6' => ['emoji' => '🍪', 'rotulo' => 'Memória do Bicho — carta 6'],
+  'chuva1' => ['emoji' => '🍉', 'rotulo' => 'Chuva de Frutas — item 1 (melancia, vale 1)'],
+  'chuva2' => ['emoji' => '🍎', 'rotulo' => 'Chuva de Frutas — item 2 (maçã, vale 1)'],
+  'chuva3' => ['emoji' => '🍌', 'rotulo' => 'Chuva de Frutas — item 3 (banana, vale 1)'],
+  'chuva4' => ['emoji' => '🍓', 'rotulo' => 'Chuva de Frutas — item 4 (morango, vale 2)'],
+  'chuva5' => ['emoji' => '🥫', 'rotulo' => 'Chuva de Frutas — item 5 (lata, tira 2 — evitar)'],
+  'chuvacesta' => ['emoji' => '', 'rotulo' => 'Chuva de Frutas — cesta (sem imagem: retângulo colorido)'],
+  'tocacapivara' => ['emoji' => '🦫', 'rotulo' => 'Toca do Bicho — alvo (bicho capivara)'],
+  'tocasalsicha' => ['emoji' => '🐶', 'rotulo' => 'Toca do Bicho — alvo (bicho cachorro-salsicha)'],
+  'tocagato' => ['emoji' => '🐱', 'rotulo' => 'Toca do Bicho — alvo (bicho gato)'],
+  'tocaraio' => ['emoji' => '⚡', 'rotulo' => 'Toca do Bicho — raio (evitar)'],
+  'sequencia1' => ['emoji' => '🍉', 'rotulo' => 'Sequência do Bicho — quadrado 1'],
+  'sequencia2' => ['emoji' => '🌸', 'rotulo' => 'Sequência do Bicho — quadrado 2'],
+  'sequencia3' => ['emoji' => '🍀', 'rotulo' => 'Sequência do Bicho — quadrado 3'],
+  'sequencia4' => ['emoji' => '⭐', 'rotulo' => 'Sequência do Bicho — quadrado 4'],
+];
 /* a imagem pode estar em assets/cenas/ (enviada pelo painel) ou em assets/ (veio no
    repositório, como o mapa-mundosv2.webp da ilha) — o front tenta nessa ordem */
 function caminhoPublicoImagem(string $nome): string {
@@ -1602,6 +1634,54 @@ try {
 
   if ($acao === 'musica_remover') {
     bd()->prepare('UPDATE configuracoes SET musica_fundo = \'\', musica_ativa = 0 WHERE id = 1')->execute();
+    responder(['ok' => true]);
+  }
+
+  /* ---------- Sprites dos minigames do Arcade (opcional — cada slot cai pro emoji padrão) ---------- */
+
+  if ($acao === 'minigame_sprites_listar') {
+    $linhas = bd()->query('SELECT chave, imagem FROM minigame_sprites')->fetchAll(PDO::FETCH_KEY_PAIR);
+    responder(['sprites' => array_map(fn($chave, $def) => [
+      'chave' => $chave, 'emoji' => $def['emoji'], 'rotulo' => $def['rotulo'],
+      'imagem' => $linhas[$chave] ?? '', 'imagemUrl' => caminhoPublicoMinigame($linhas[$chave] ?? ''),
+    ], array_keys(SPRITES_MINIGAME), SPRITES_MINIGAME)]);
+  }
+
+  if ($acao === 'minigame_sprite_imagem') {
+    $chave = (string)($_POST['chave'] ?? '');
+    if (!array_key_exists($chave, SPRITES_MINIGAME)) responder(['erro' => 'Slot de sprite desconhecido.'], 422);
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || ($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+      $limite = ini_get('upload_max_filesize');
+      $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+        ? "A imagem passou do limite do servidor ($limite)."
+        : 'Nenhum arquivo recebido.';
+      responder(['erro' => $motivo], 422);
+    }
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_IMAGEM[$ext])) {
+      responder(['erro' => 'Formato não aceito. Use webp, png ou jpg (webp é o mais leve).'], 422);
+    }
+    $info = @getimagesize($arq['tmp_name']);
+    if (!$info || !in_array($info['mime'], EXTENSOES_IMAGEM, true)) {
+      responder(['erro' => 'O arquivo não é uma imagem válida.'], 422);
+    }
+    $nome = 'sprite-' . $chave . '-' . bin2hex(random_bytes(3)) . '.' . $ext;
+    if (!is_dir(pastaMinigames()) && !@mkdir(pastaMinigames(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta assets/minigames no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaMinigames() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo em assets/minigames (confira a permissão da pasta).'], 500);
+    }
+    bd()->prepare('INSERT INTO minigame_sprites (chave, imagem) VALUES (?, ?) ON DUPLICATE KEY UPDATE imagem = VALUES(imagem)')
+      ->execute([$chave, $nome]);
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoMinigame($nome)]);
+  }
+
+  if ($acao === 'minigame_sprite_remover') {
+    $chave = (string)(corpo()['chave'] ?? '');
+    if (!array_key_exists($chave, SPRITES_MINIGAME)) responder(['erro' => 'Slot de sprite desconhecido.'], 422);
+    bd()->prepare('DELETE FROM minigame_sprites WHERE chave = ?')->execute([$chave]);
     responder(['ok' => true]);
   }
 
