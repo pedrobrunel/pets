@@ -239,13 +239,13 @@ try {
   }
 
   // sprites dos minigames do Arcade — só os slots com imagem enviada (o cliente já
-  // conhece o emoji padrão de cada um, então aqui basta a URL, sem entulhar quem não subiu nada)
+  // conhece o emoji padrão de cada um, então aqui basta url/escala, sem entulhar quem não subiu nada)
   $pastaMinigames = dirname(__DIR__) . '/assets/minigames';
   $urlMinigame = fn($nome) => $nome !== '' && is_file($pastaMinigames . '/' . $nome) ? 'assets/minigames/' . $nome : '';
   $spritesMinigame = [];
-  foreach (bd()->query('SELECT chave, imagem FROM minigame_sprites')->fetchAll(PDO::FETCH_KEY_PAIR) as $chave => $imagem) {
-    $url = $urlMinigame($imagem);
-    if ($url !== '') $spritesMinigame[$chave] = $url;
+  foreach (bd()->query('SELECT chave, imagem, escala FROM minigame_sprites')->fetchAll(PDO::FETCH_ASSOC) as $l) {
+    $url = $urlMinigame($l['imagem']);
+    if ($url !== '') $spritesMinigame[$l['chave']] = ['url' => $url, 'escala' => (int)$l['escala']];
   }
 
   echo json_encode([

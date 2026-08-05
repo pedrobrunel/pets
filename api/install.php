@@ -106,8 +106,17 @@ try {
   $pdo->exec('CREATE TABLE IF NOT EXISTS minigame_sprites (
     chave         VARCHAR(40) PRIMARY KEY,
     imagem        VARCHAR(160) NOT NULL DEFAULT \'\',
+    escala        SMALLINT NOT NULL DEFAULT 100,
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  // "escala" (50 a 200, em %) chegou depois de minigame_sprites já existir em produção —
+  // mesma checagem por INFORMATION_SCHEMA usada nas outras colunas novas deste arquivo
+  $colunasSpritesMinigame = array_column($pdo->query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'minigame_sprites'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+  if (!in_array('escala', $colunasSpritesMinigame, true)) {
+    $pdo->exec('ALTER TABLE minigame_sprites ADD COLUMN escala SMALLINT NOT NULL DEFAULT 100');
+  }
   $pastaMinigames = dirname(__DIR__) . '/assets/minigames';
   if (!is_dir($pastaMinigames)) @mkdir($pastaMinigames, 0755, true);
 
