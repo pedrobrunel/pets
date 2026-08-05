@@ -279,6 +279,7 @@ body.conectando-fluxo{cursor:crosshair}
       <button data-aba="mapas">🗺️ Mapas</button>
       <button data-aba="npcs">🗨️ NPCs</button>
       <button data-aba="missoes">🎯 Missões</button>
+      <button data-aba="jornal">📰 Jornal</button>
       <button data-aba="itens">🔭 Itens</button>
       <button data-aba="moveis">🛋️ Móveis</button>
       <button data-aba="arcade">🕹️ Arcade</button>
@@ -579,6 +580,50 @@ body.conectando-fluxo{cursor:crosshair}
         <div id="missoes-import-aviso" class="aviso-form"></div>
         <button class="btn erro" id="btn-importar-missoes" style="margin-top:10px">Importar missões</button>
       </div>
+    </section>
+
+    <section id="aba-jornal" class="oculto">
+      <h2>📰 Jornal (Neoiatimes)</h2>
+      <p class="sub">artigos do jornal temático da vila — geral, ligado a um mundo (vira seção daquele assunto) ou assinado por um colunista de verdade (um NPC já cadastrado; a assinatura no jornal abre o diálogo dele). Só é alcançável por um ponto tipo "tela" num mapa (aba Mapas), que você coloca manualmente.</p>
+      <button class="btn" id="btn-novo-artigo" style="margin-bottom:14px">+ Novo artigo</button>
+
+      <form id="form-artigo" class="oculto">
+        <h3 id="titulo-form-artigo" style="font-size:16px">Novo artigo</h3>
+        <label>título</label>
+        <input type="text" id="artigo-titulo" placeholder="ex.: Capivara é flagrada dormindo em aula de Matemática" maxlength="160">
+        <label>subtítulo/resumo <span style="font-weight:700;color:#7F8C8D">(opcional)</span></label>
+        <input type="text" id="artigo-subtitulo" placeholder="linha de apoio, aparece embaixo do título" maxlength="240">
+        <label>corpo do artigo <span style="font-weight:700;color:#7F8C8D">(um parágrafo por linha)</span></label>
+        <textarea id="artigo-corpo" rows="8" placeholder="Escreva o artigo aqui..."></textarea>
+
+        <div class="linha2" style="margin-top:10px">
+          <div><label>seção (mundo)</label><select id="artigo-mundo"><option value="">— Geral —</option></select></div>
+          <div><label>colunista (NPC)</label><select id="artigo-colunista"><option value="">— Sem colunista —</option></select></div>
+        </div>
+        <label>nome do autor <span style="font-weight:700;color:#7F8C8D">(usado se não tiver colunista; ex.: "Redação")</span></label>
+        <input type="text" id="artigo-autor" placeholder="ex.: Redação" maxlength="60">
+
+        <label style="margin-top:10px">imagem <span style="font-weight:700;color:#7F8C8D">(opcional)</span></label>
+        <div class="upload" id="zona-upload-artigo">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+        <input type="file" id="input-artigo" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
+        <div id="preview-artigo"></div>
+
+        <div class="linha3" style="margin-top:10px">
+          <div><label>ordem</label><input type="number" id="artigo-ordem" value="0"></div>
+          <div style="display:flex;flex-direction:column;justify-content:flex-end"><label class="check" style="margin:0"><input type="checkbox" id="artigo-destaque" style="width:auto"> manchete (destaque)</label></div>
+          <div style="display:flex;flex-direction:column;justify-content:flex-end"><label class="check" style="margin:0"><input type="checkbox" id="artigo-publicado" checked style="width:auto"> publicado</label></div>
+        </div>
+
+        <div id="artigo-aviso" class="aviso-form"></div>
+        <div class="rodape-form">
+          <button type="submit" class="btn mata">Salvar artigo</button>
+          <button type="button" class="btn branco" id="btn-cancelar-artigo">Cancelar</button>
+          <button type="button" class="btn erro" id="btn-excluir-artigo" style="margin-left:auto">Excluir artigo</button>
+        </div>
+      </form>
+
+      <div class="painel"><table id="tabela-jornal"></table></div>
+    </section>
     </section>
 
     <section id="aba-itens" class="oculto">
@@ -1167,6 +1212,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   if(b.dataset.aba === 'mapas') carregarCenas();
   if(b.dataset.aba === 'npcs') carregarNpcs();
   if(b.dataset.aba === 'missoes') carregarMissoes();
+  if(b.dataset.aba === 'jornal') carregarJornal();
   if(b.dataset.aba === 'itens') carregarItens();
   if(b.dataset.aba === 'moveis') { carregarMoveis(); carregarCasaFundo(); carregarCapasFixas(); carregarMusica(); }
   if(b.dataset.aba === 'arcade') carregarArcade();
@@ -2266,6 +2312,126 @@ $('#btn-importar-missoes').onclick = async () => {
     carregarMissoes();
   }catch(e){ aviso.className='aviso-form erro'; aviso.textContent = e.message; aviso.style.display='block'; }
 };
+
+/* ---------- Jornal (Neoiatimes) ---------- */
+let jornalCache = [];
+let jornalImagem = '';
+async function carregarJornal(){
+  const [dJornal, dMundos, dNpcs] = await Promise.all([
+    api('jornal_listar').catch(() => ({artigos:[]})),
+    api('mundos_listar').catch(() => ({mundos:[]})),
+    api('npcs_listar').catch(() => ({npcs:[]})),
+  ]);
+  jornalCache = dJornal.artigos;
+  $('#artigo-mundo').innerHTML = '<option value="">— Geral —</option>' +
+    dMundos.mundos.map(m => `<option value="${esc(m.id)}">${esc(m.emoji)} ${esc(m.nome)}</option>`).join('');
+  $('#artigo-colunista').innerHTML = '<option value="">— Sem colunista —</option>' +
+    dNpcs.npcs.map(n => `<option value="${esc(n.id)}">${esc(n.emoji)} ${esc(n.nome)}</option>`).join('');
+  $('#tabela-jornal').innerHTML = `
+    <tr><th>Ordem</th><th>Artigo</th><th>Seção</th><th>Autor</th><th>Status</th><th></th></tr>
+    ${jornalCache.map(a => {
+      const mundo = dMundos.mundos.find(m => m.id === a.mundoId);
+      const npc = dNpcs.npcs.find(n => n.id === a.colunistaNpcId);
+      return `<tr>
+        <td>${a.ordem}</td>
+        <td>${a.destaque ? '⭐ ' : ''}${esc(a.titulo)}</td>
+        <td>${mundo ? esc(mundo.emoji) + ' ' + esc(mundo.nome) : 'Geral'}</td>
+        <td>${npc ? '💬 ' + esc(npc.nome) : esc(a.autorNome || '—')}</td>
+        <td><span class="selo ${a.publicado?'on':'off'}">${a.publicado?'publicado':'rascunho'}</span></td>
+        <td class="acoes">
+          <button class="btn linha branco" onclick="editarArtigo(${a.id})">Editar</button>
+          <button class="btn linha erro" onclick="excluirArtigo(${a.id},'${esc(a.titulo)}')">Excluir</button>
+        </td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6">Nenhum artigo ainda.</td></tr>'}`;
+}
+function limparFormArtigo(){
+  $('#form-artigo').reset();
+  jornalImagem = '';
+  $('#preview-artigo').innerHTML = '';
+  $('#artigo-aviso').style.display = 'none';
+  $('#btn-excluir-artigo').classList.add('oculto');
+}
+$('#btn-novo-artigo').onclick = () => {
+  limparFormArtigo();
+  $('#titulo-form-artigo').textContent = 'Novo artigo';
+  delete $('#form-artigo').dataset.id;
+  $('#form-artigo').classList.remove('oculto');
+  $('#form-artigo').scrollIntoView({behavior:'smooth'});
+};
+$('#btn-cancelar-artigo').onclick = () => $('#form-artigo').classList.add('oculto');
+window.editarArtigo = async (id) => {
+  const a = await api('jornal_obter', {query:`&id=${id}`}).catch(e => { alert(e.message); return null; });
+  if(!a) return;
+  limparFormArtigo();
+  $('#form-artigo').dataset.id = a.id;
+  $('#artigo-titulo').value = a.titulo;
+  $('#artigo-subtitulo').value = a.subtitulo;
+  $('#artigo-corpo').value = a.corpo;
+  $('#artigo-mundo').value = a.mundoId || '';
+  $('#artigo-colunista').value = a.colunistaNpcId || '';
+  $('#artigo-autor').value = a.autorNome;
+  jornalImagem = a.imagem || '';
+  $('#preview-artigo').innerHTML = a.imagemUrl ? `<img class="movel-thumb" src="${esc(a.imagemUrl)}">` : '';
+  $('#artigo-ordem').value = a.ordem;
+  $('#artigo-destaque').checked = a.destaque;
+  $('#artigo-publicado').checked = a.publicado;
+  $('#btn-excluir-artigo').classList.remove('oculto');
+  $('#titulo-form-artigo').textContent = 'Editar artigo';
+  $('#form-artigo').classList.remove('oculto');
+  $('#form-artigo').scrollIntoView({behavior:'smooth'});
+};
+window.excluirArtigo = async (id, titulo) => {
+  if(!confirm(`Excluir o artigo "${titulo}"?`)) return;
+  await api('jornal_excluir', {method:'POST', corpo:{id}});
+  $('#form-artigo').classList.add('oculto');
+  carregarJornal();
+};
+$('#btn-excluir-artigo').onclick = () => {
+  const id = $('#form-artigo').dataset.id;
+  const a = jornalCache.find(x => x.id === Number(id));
+  if(a) excluirArtigo(a.id, a.titulo);
+};
+$('#zona-upload-artigo').onclick = () => $('#input-artigo').click();
+$('#input-artigo').onchange = e => { if(e.target.files[0]) enviarImagemArtigo(e.target.files[0]); };
+['dragover','drop'].forEach(ev => $('#zona-upload-artigo').addEventListener(ev, e => e.preventDefault()));
+$('#zona-upload-artigo').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemArtigo(e.dataTransfer.files[0]); });
+async function enviarImagemArtigo(arquivo){
+  const aviso = $('#artigo-aviso');
+  const zona = $('#zona-upload-artigo');
+  const textoOriginal = zona.textContent;
+  zona.textContent = '⏳ Enviando…';
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    const r = await fetch('api/admin.php?acao=jornal_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    jornalImagem = d.imagem;
+    $('#preview-artigo').innerHTML = `<img class="movel-thumb" src="${esc(d.imagemUrl)}">`;
+    aviso.className = 'aviso-form ok'; aviso.textContent = 'Imagem enviada. Agora salve o artigo.'; aviso.style.display = 'block';
+  }catch(e){
+    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
+  }finally{ zona.textContent = textoOriginal; }
+}
+$('#form-artigo').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const aviso = $('#artigo-aviso');
+  aviso.style.display = 'none';
+  try{
+    const id = $('#form-artigo').dataset.id;
+    await api('jornal_salvar', {method:'POST', corpo:{
+      id: id ? Number(id) : undefined,
+      titulo: $('#artigo-titulo').value.trim(), subtitulo: $('#artigo-subtitulo').value.trim(),
+      corpo: $('#artigo-corpo').value.trim(), mundoId: $('#artigo-mundo').value,
+      colunistaNpcId: $('#artigo-colunista').value, autorNome: $('#artigo-autor').value.trim(),
+      imagem: jornalImagem, destaque: $('#artigo-destaque').checked, publicado: $('#artigo-publicado').checked,
+      ordem: Number($('#artigo-ordem').value) || 0,
+    }});
+    $('#form-artigo').classList.add('oculto');
+    carregarJornal();
+  }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
+});
 
 /* ---------- Itens colecionáveis (objetos soltos no mapa) ---------- */
 let itensCache = [];
