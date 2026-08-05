@@ -7,6 +7,7 @@
    Ações:
      POST ?acao=cadastrar       {apelido, senha}       -> cria uma conta nova (erro se o nome já existe)
      POST ?acao=entrar          {apelido, senha}       -> autentica uma conta existente (nunca cria)
+     POST ?acao=sair                                   -> derruba a sessão (logout)
      GET  ?acao=carregar                               -> devolve o estado salvo
      POST ?acao=salvar          {...estado}            -> grava o estado
      GET  ?acao=ver_casa        ?apelido=xx            -> casa (só isso) de outro jogador, pra visitar
@@ -124,6 +125,12 @@ try {
     $_SESSION['jogador_id'] = (int)$jogador['id'];
     $_SESSION['versao_sessao'] = (int)$jogador['versao_sessao'];
     responder(['ok' => true, 'apelido' => $apelido]);
+  }
+
+  if ($acao === 'sair') {
+    session_unset();
+    session_destroy();
+    responder(['ok' => true]);
   }
 
   $id = $_SESSION['jogador_id'] ?? null;
