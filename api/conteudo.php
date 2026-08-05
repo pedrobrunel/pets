@@ -270,17 +270,31 @@ try {
     ];
   }
 
+  // fundo e sons (acerto/erro) de cada minigame — só os campos com arquivo enviado, pra não
+  // entulhar quem não configurou nada (o jogo cai sozinho no visual/bipe padrão)
+  $minigameConfig = [];
+  foreach (bd()->query('SELECT jogo, fundo, som_acerto, som_erro FROM minigame_config')->fetchAll(PDO::FETCH_ASSOC) as $c) {
+    $entrada = [];
+    $fundoUrl = $urlMinigame($c['fundo']);
+    if ($fundoUrl !== '') $entrada['fundoUrl'] = $fundoUrl;
+    $somAcertoUrl = $urlMinigame($c['som_acerto']);
+    if ($somAcertoUrl !== '') $entrada['somAcertoUrl'] = $somAcertoUrl;
+    $somErroUrl = $urlMinigame($c['som_erro']);
+    if ($somErroUrl !== '') $entrada['somErroUrl'] = $somErroUrl;
+    if ($entrada) $minigameConfig[$c['jogo']] = $entrada;
+  }
+
   echo json_encode([
     'mundos' => $saidaMundos, 'cenas' => $saidaCenas, 'npcs' => $saidaNpcs, 'missoes' => $saidaMissoes,
     'itens' => $saidaItens, 'moveis' => $saidaMoveis, 'casaConfig' => $casaConfig, 'capas' => $capas, 'musica' => $musica,
     // chave pública do lembrete de sequência (push) — só existe se o Hostmaster já gerou
     // o par VAPID no api/config.php; sem isso, o botão de lembrete some sozinho no cliente
     'vapidPublicKey' => defined('VAPID_PUBLIC_KEY') ? VAPID_PUBLIC_KEY : '',
-    'spritesMinigame' => $spritesMinigame, 'temporadas' => $saidaTemporadas,
+    'spritesMinigame' => $spritesMinigame, 'temporadas' => $saidaTemporadas, 'minigameConfig' => $minigameConfig,
     'lojas' => $saidaLojas, 'itensLoja' => $saidaItensLoja,
   ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
   error_log('[bichoteca-conteudo] ' . $e->getMessage());
   http_response_code(500);
-  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => [], 'moveis' => [], 'casaConfig' => ['fundoUrl' => ''], 'capas' => ['lojamoveisImagemUrl' => '', 'lojamoveisAtiva' => false, 'muralImagemUrl' => '', 'muralAtiva' => false], 'musica' => ['url' => '', 'ativa' => false], 'spritesMinigame' => [], 'temporadas' => [], 'lojas' => [], 'itensLoja' => []]);
+  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => [], 'moveis' => [], 'casaConfig' => ['fundoUrl' => ''], 'capas' => ['lojamoveisImagemUrl' => '', 'lojamoveisAtiva' => false, 'muralImagemUrl' => '', 'muralAtiva' => false], 'musica' => ['url' => '', 'ativa' => false], 'spritesMinigame' => [], 'temporadas' => [], 'minigameConfig' => [], 'lojas' => [], 'itensLoja' => []]);
 }

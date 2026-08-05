@@ -72,6 +72,11 @@
      POST ?acao=minigame_sprite_imagem  (multipart: arquivo, chave) -> sobe pra assets/minigames/
      POST ?acao=minigame_sprite_remover {chave} -> volta esse slot pro emoji padrão
      POST ?acao=minigame_sprite_escala_salvar {chave, escala} -> tamanho da imagem (50 a 200%), só com imagem já enviada
+     GET  ?acao=minigame_configs_listar -> fundo + sons de acerto/erro dos 4 minigames (memoria/chuva/toca/sequencia)
+     POST ?acao=minigame_fundo_imagem   (multipart: arquivo, jogo) -> imagem de fundo desse minigame, sobe pra assets/minigames/
+     POST ?acao=minigame_fundo_remover  {jogo} -> volta pro fundo padrão
+     POST ?acao=minigame_som_upload     (multipart: arquivo, jogo, evento=acerto|erro) -> substitui o bipe padrão
+     POST ?acao=minigame_som_remover    {jogo, evento} -> volta pro bipe padrão
      GET  ?acao=temporadas_listar     -> pacotes de sprite por período (ex.: "Festa Junina"), com agenda e quantos slots têm override
      GET  ?acao=temporada_obter       ?id=xx -> temporada + seus 20 slots (override ou vazio = usa o sprite padrão)
      POST ?acao=temporada_salvar      {id, nome, ativa, ordem, diasSemana, horaInicio, horaFim, dataInicio, dataFim}
@@ -200,6 +205,12 @@ const SPRITES_MINIGAME = [
   'sequencia2' => ['emoji' => '🌸', 'rotulo' => 'Sequência do Bicho — quadrado 2'],
   'sequencia3' => ['emoji' => '🍀', 'rotulo' => 'Sequência do Bicho — quadrado 3'],
   'sequencia4' => ['emoji' => '⭐', 'rotulo' => 'Sequência do Bicho — quadrado 4'],
+];
+/* os 4 minigames em si (não os slots de sprite) — usado pra validar "jogo" nos endpoints
+   de fundo/som, mesmo espírito de whitelist fechada do SPRITES_MINIGAME acima */
+const JOGOS_ARCADE = [
+  'memoria' => 'Memória do Bicho', 'chuva' => 'Chuva de Frutas',
+  'toca' => 'Toca do Bicho', 'sequencia' => 'Sequência do Bicho',
 ];
 /* a imagem pode estar em assets/cenas/ (enviada pelo painel) ou em assets/ (veio no
    repositório, como o mapa-mundosv2.webp da ilha) — o front tenta nessa ordem */
@@ -1710,6 +1721,105 @@ try {
     $st = bd()->prepare('UPDATE minigame_sprites SET escala = ? WHERE chave = ? AND imagem <> \'\'');
     $st->execute([$escala, $chave]);
     if ($st->rowCount() === 0) responder(['erro' => 'Suba uma imagem pra esse slot antes de ajustar o tamanho.'], 422);
+    responder(['ok' => true]);
+  }
+
+  /* ---------- Fundo e sons de cada minigame do Arcade (opcional, um por jogo) ---------- */
+
+  if ($acao === 'minigame_configs_listar') {
+    $linhas = [];
+    foreach (bd()->query('SELECT jogo, fundo, som_acerto, som_erro FROM minigame_config')->fetchAll(PDO::FETCH_ASSOC) as $c) {
+      $linhas[$c['jogo']] = $c;
+    }
+    $configs = [];
+    foreach (JOGOS_ARCADE as $jogo => $nome) {
+      $l = $linhas[$jogo] ?? ['fundo' => '', 'som_acerto' => '', 'som_erro' => ''];
+      $configs[$jogo] = [
+        'jogo' => $jogo, 'nome' => $nome,
+        'fundo' => $l['fundo'], 'fundoUrl' => caminhoPublicoMinigame($l['fundo']),
+        'somAcerto' => $l['som_acerto'], 'somAcertoUrl' => caminhoPublicoMinigame($l['som_acerto']),
+        'somErro' => $l['som_erro'], 'somErroUrl' => caminhoPublicoMinigame($l['som_erro']),
+      ];
+    }
+    responder(['configs' => $configs]);
+  }
+
+  if ($acao === 'minigame_fundo_imagem') {
+    $jogo = (string)($_POST['jogo'] ?? '');
+    if (!array_key_exists($jogo, JOGOS_ARCADE)) responder(['erro' => 'Minigame desconhecido.'], 422);
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || ($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+      $limite = ini_get('upload_max_filesize');
+      $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+        ? "A imagem passou do limite do servidor ($limite)."
+        : 'Nenhum arquivo recebido.';
+      responder(['erro' => $motivo], 422);
+    }
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_IMAGEM[$ext])) {
+      responder(['erro' => 'Formato não aceito. Use webp, png ou jpg (webp é o mais leve).'], 422);
+    }
+    $info = @getimagesize($arq['tmp_name']);
+    if (!$info || !in_array($info['mime'], EXTENSOES_IMAGEM, true)) {
+      responder(['erro' => 'O arquivo não é uma imagem válida.'], 422);
+    }
+    $nome = 'fundo-' . $jogo . '-' . bin2hex(random_bytes(3)) . '.' . $ext;
+    if (!is_dir(pastaMinigames()) && !@mkdir(pastaMinigames(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta assets/minigames no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaMinigames() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo em assets/minigames (confira a permissão da pasta).'], 500);
+    }
+    bd()->prepare('INSERT INTO minigame_config (jogo, fundo) VALUES (?, ?) ON DUPLICATE KEY UPDATE fundo = VALUES(fundo)')
+      ->execute([$jogo, $nome]);
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoMinigame($nome)]);
+  }
+
+  if ($acao === 'minigame_fundo_remover') {
+    $jogo = (string)(corpo()['jogo'] ?? '');
+    if (!array_key_exists($jogo, JOGOS_ARCADE)) responder(['erro' => 'Minigame desconhecido.'], 422);
+    bd()->prepare('UPDATE minigame_config SET fundo = \'\' WHERE jogo = ?')->execute([$jogo]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'minigame_som_upload') {
+    $jogo = (string)($_POST['jogo'] ?? '');
+    $evento = (string)($_POST['evento'] ?? '');
+    if (!array_key_exists($jogo, JOGOS_ARCADE)) responder(['erro' => 'Minigame desconhecido.'], 422);
+    if (!in_array($evento, ['acerto', 'erro'], true)) responder(['erro' => '"evento" precisa ser "acerto" ou "erro".'], 422);
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq || ($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+      $limite = ini_get('upload_max_filesize');
+      $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+        ? "O áudio passou do limite do servidor ($limite)."
+        : 'Nenhum arquivo recebido.';
+      responder(['erro' => $motivo], 422);
+    }
+    $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+    if (!isset(EXTENSOES_AUDIO[$ext])) {
+      responder(['erro' => 'Formato não aceito. Use mp3, ogg, wav ou m4a.'], 422);
+    }
+    $nome = 'som-' . $evento . '-' . $jogo . '-' . bin2hex(random_bytes(3)) . '.' . $ext;
+    if (!is_dir(pastaMinigames()) && !@mkdir(pastaMinigames(), 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta assets/minigames no servidor.'], 500);
+    }
+    if (!@move_uploaded_file($arq['tmp_name'], pastaMinigames() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo em assets/minigames (confira a permissão da pasta).'], 500);
+    }
+    $coluna = $evento === 'acerto' ? 'som_acerto' : 'som_erro';
+    bd()->prepare("INSERT INTO minigame_config (jogo, $coluna) VALUES (?, ?) ON DUPLICATE KEY UPDATE $coluna = VALUES($coluna)")
+      ->execute([$jogo, $nome]);
+    responder(['ok' => true, 'arquivo' => $nome, 'arquivoUrl' => caminhoPublicoMinigame($nome)]);
+  }
+
+  if ($acao === 'minigame_som_remover') {
+    $d = corpo();
+    $jogo = (string)($d['jogo'] ?? '');
+    $evento = (string)($d['evento'] ?? '');
+    if (!array_key_exists($jogo, JOGOS_ARCADE)) responder(['erro' => 'Minigame desconhecido.'], 422);
+    if (!in_array($evento, ['acerto', 'erro'], true)) responder(['erro' => '"evento" precisa ser "acerto" ou "erro".'], 422);
+    $coluna = $evento === 'acerto' ? 'som_acerto' : 'som_erro';
+    bd()->prepare("UPDATE minigame_config SET $coluna = '' WHERE jogo = ?")->execute([$jogo]);
     responder(['ok' => true]);
   }
 
