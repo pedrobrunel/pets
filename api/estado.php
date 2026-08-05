@@ -13,6 +13,17 @@
      POST ?acao=completar_licao {licaoId, respostas}   -> confere gabarito e credita moedas/XP
      POST ?acao=item_loja_comprar {itemId}             -> decremento atômico de estoque limitado
      POST ?acao=presentear_item {itemId, varianteId, apelidoDestino} -> transfere 1 unidade da mochila
+     POST ?acao=amizade_solicitar {apelidoDestino}     -> pede amizade (aceita na hora se o outro já tinha pedido)
+     POST ?acao=amizade_responder {solicitanteApelido, aceitar} -> aceita ou recusa um pedido recebido
+     POST ?acao=amizade_remover {apelido}              -> desfaz amizade (ou cancela pedido) a qualquer momento
+     GET  ?acao=amizades_listar                        -> amigos + pedidos recebidos/enviados
+     POST ?acao=mensagem_enviar {apelidoDestino, texto} -> só entre amigos aceitos; passa pelo filtro
+     GET  ?acao=conversa_obter  ?apelido=xx             -> últimas mensagens trocadas com esse amigo
+     GET  ?acao=conversas_listar                        -> lista de amigos com prévia da última mensagem
+     POST ?acao=mensagem_denunciar {id}                -> marca pra revisão do professor (aba Moderação)
+     POST ?acao=forum_postar   {licaoId, texto, respostaA} -> comenta/responde numa lição, publica na hora
+     GET  ?acao=forum_listar   ?licaoId=xx              -> comentários dessa lição
+     POST ?acao=forum_denunciar {id}                   -> qualquer um pode denunciar, vai pra Moderação
      GET  ?acao=ranking                                -> top 10 por nível e por sequência (só apelido/bicho/número)
      POST ?acao=push_inscrever  {endpoint, p256dh, auth} -> ativa lembrete de sequência nesse aparelho
      POST ?acao=push_desinscrever {endpoint}            -> desativa nesse aparelho
@@ -274,6 +285,226 @@ try {
     bd()->prepare('INSERT INTO presentes (destinatario_id, item_chave, remetente_apelido) VALUES (?, ?, ?)')
       ->execute([(int)$destino['id'], $chave, $linhaRemetente['apelido']]);
     responder(['ok' => true, 'apelidoDestino' => $destino['apelido']]);
+  }
+
+  /* ---------- Amizades e mensagens privadas ----------
+     Mensagem só entre quem já é amigo dos DOIS lados (pedido + aceite) — ninguém manda
+     mensagem pra um estranho. Texto passa pelo filtro (palavrão/link/telefone) antes de
+     gravar; qualquer um dos dois pode denunciar uma mensagem, o que a deixa visível pro
+     Hostmaster revisar na aba Moderação do painel. */
+
+  function buscarJogadorPorApelido(string $apelido): ?array {
+    if (!preg_match('/^[\p{L}0-9_]{3,14}$/u', $apelido)) return null;
+    $st = bd()->prepare('SELECT id, apelido FROM jogadores WHERE apelido = ?');
+    $st->execute([$apelido]);
+    return $st->fetch(PDO::FETCH_ASSOC) ?: null;
+  }
+
+  if ($acao === 'amizade_solicitar') {
+    $apelidoDestino = trim((string)(corpo()['apelidoDestino'] ?? ''));
+    $destino = buscarJogadorPorApelido($apelidoDestino);
+    if (!$destino) responder(['erro' => 'Não achamos ninguém com esse apelido.'], 404);
+    $destinoId = (int)$destino['id'];
+    if ($destinoId === $id) responder(['erro' => 'Você já é seu próprio amigo :)'], 422);
+
+    $st = bd()->prepare('SELECT id, solicitante_id, status FROM amizades
+      WHERE (solicitante_id = ? AND destinatario_id = ?) OR (solicitante_id = ? AND destinatario_id = ?)');
+    $st->execute([$id, $destinoId, $destinoId, $id]);
+    $existente = $st->fetch(PDO::FETCH_ASSOC);
+
+    if ($existente) {
+      if ($existente['status'] === 'aceita') responder(['erro' => 'Vocês já são amigos.'], 422);
+      if ((int)$existente['solicitante_id'] === $id) responder(['erro' => 'Você já mandou um pedido — espere ele(a) aceitar.'], 422);
+      // o outro lado já tinha pedido pra mim: aceita na hora, os dois queriam mesmo
+      bd()->prepare('UPDATE amizades SET status = \'aceita\' WHERE id = ?')->execute([$existente['id']]);
+      responder(['ok' => true, 'status' => 'aceita']);
+    }
+    bd()->prepare('INSERT INTO amizades (solicitante_id, destinatario_id) VALUES (?, ?)')->execute([$id, $destinoId]);
+    responder(['ok' => true, 'status' => 'pendente']);
+  }
+
+  if ($acao === 'amizade_responder') {
+    $d = corpo();
+    $solicitante = buscarJogadorPorApelido(trim((string)($d['solicitanteApelido'] ?? '')));
+    if (!$solicitante) responder(['erro' => 'Pedido não encontrado.'], 404);
+    $st = bd()->prepare('SELECT id FROM amizades WHERE solicitante_id = ? AND destinatario_id = ? AND status = \'pendente\'');
+    $st->execute([(int)$solicitante['id'], $id]);
+    $pedidoId = $st->fetchColumn();
+    if (!$pedidoId) responder(['erro' => 'Pedido não encontrado.'], 404);
+    if (!empty($d['aceitar'])) {
+      bd()->prepare('UPDATE amizades SET status = \'aceita\' WHERE id = ?')->execute([$pedidoId]);
+    } else {
+      bd()->prepare('DELETE FROM amizades WHERE id = ?')->execute([$pedidoId]);
+    }
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'amizade_remover') {
+    $outro = buscarJogadorPorApelido(trim((string)(corpo()['apelido'] ?? '')));
+    if (!$outro) responder(['erro' => 'Apelido inválido.'], 422);
+    bd()->prepare('DELETE FROM amizades WHERE (solicitante_id = ? AND destinatario_id = ?) OR (solicitante_id = ? AND destinatario_id = ?)')
+      ->execute([$id, (int)$outro['id'], (int)$outro['id'], $id]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'amizades_listar') {
+    $st = bd()->prepare("SELECT j.apelido, JSON_UNQUOTE(JSON_EXTRACT(j.estado, '$.tipo')) AS tipo
+      FROM amizades a JOIN jogadores j ON j.id = IF(a.solicitante_id = ?, a.destinatario_id, a.solicitante_id)
+      WHERE (a.solicitante_id = ? OR a.destinatario_id = ?) AND a.status = 'aceita'");
+    $st->execute([$id, $id, $id]);
+    $amigos = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    $st = bd()->prepare("SELECT j.apelido FROM amizades a JOIN jogadores j ON j.id = a.solicitante_id
+      WHERE a.destinatario_id = ? AND a.status = 'pendente'");
+    $st->execute([$id]);
+    $recebidos = $st->fetchAll(PDO::FETCH_COLUMN);
+
+    $st = bd()->prepare("SELECT j.apelido FROM amizades a JOIN jogadores j ON j.id = a.destinatario_id
+      WHERE a.solicitante_id = ? AND a.status = 'pendente'");
+    $st->execute([$id]);
+    $enviados = $st->fetchAll(PDO::FETCH_COLUMN);
+
+    responder([
+      'amigos' => array_map(fn($a) => ['apelido' => $a['apelido'], 'tipo' => $a['tipo'] ?: 'capivara'], $amigos),
+      'pedidosRecebidos' => $recebidos,
+      'pedidosEnviados' => $enviados,
+    ]);
+  }
+
+  /** true se $id e $outroId já são amigos aceitos, nos dois sentidos */
+  function saoAmigos(int $id, int $outroId): bool {
+    $st = bd()->prepare("SELECT 1 FROM amizades WHERE status = 'aceita'
+      AND ((solicitante_id = ? AND destinatario_id = ?) OR (solicitante_id = ? AND destinatario_id = ?))");
+    $st->execute([$id, $outroId, $outroId, $id]);
+    return (bool)$st->fetchColumn();
+  }
+
+  if ($acao === 'mensagem_enviar') {
+    $d = corpo();
+    $destino = buscarJogadorPorApelido(trim((string)($d['apelidoDestino'] ?? '')));
+    if (!$destino) responder(['erro' => 'Não achamos ninguém com esse apelido.'], 404);
+    $destinoId = (int)$destino['id'];
+    if (!saoAmigos($id, $destinoId)) responder(['erro' => 'Vocês precisam ser amigos pra trocar mensagem.'], 403);
+
+    $texto = trim((string)($d['texto'] ?? ''));
+    if ($texto === '' || mb_strlen($texto) > 300) responder(['erro' => 'A mensagem precisa ter de 1 a 300 caracteres.'], 422);
+    $motivo = textoProibido($texto);
+    if ($motivo) responder(['erro' => $motivo], 422);
+
+    bd()->prepare('INSERT INTO mensagens (remetente_id, destinatario_id, texto) VALUES (?, ?, ?)')
+      ->execute([$id, $destinoId, $texto]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'conversa_obter') {
+    $outro = buscarJogadorPorApelido(trim((string)($_GET['apelido'] ?? '')));
+    if (!$outro) responder(['erro' => 'Apelido inválido.'], 422);
+    $outroId = (int)$outro['id'];
+    if (!saoAmigos($id, $outroId)) responder(['erro' => 'Vocês precisam ser amigos pra ver essa conversa.'], 403);
+
+    bd()->prepare('UPDATE mensagens SET lida = 1 WHERE remetente_id = ? AND destinatario_id = ? AND lida = 0')
+      ->execute([$outroId, $id]);
+    $st = bd()->prepare('SELECT id, remetente_id, texto, criado_em, removida FROM mensagens
+      WHERE (remetente_id = ? AND destinatario_id = ?) OR (remetente_id = ? AND destinatario_id = ?)
+      ORDER BY id DESC LIMIT 100');
+    $st->execute([$id, $outroId, $outroId, $id]);
+    $mensagens = array_reverse($st->fetchAll(PDO::FETCH_ASSOC));
+    responder(['mensagens' => array_map(fn($m) => [
+      'id' => (int)$m['id'], 'deMim' => (int)$m['remetente_id'] === $id,
+      'texto' => $m['removida'] ? '[mensagem removida pelo professor]' : $m['texto'],
+      'quando' => $m['criado_em'],
+    ], $mensagens)]);
+  }
+
+  if ($acao === 'conversas_listar') {
+    $st = bd()->prepare("SELECT j.apelido, JSON_UNQUOTE(JSON_EXTRACT(j.estado, '$.tipo')) AS tipo
+      FROM amizades a JOIN jogadores j ON j.id = IF(a.solicitante_id = ?, a.destinatario_id, a.solicitante_id)
+      WHERE (a.solicitante_id = ? OR a.destinatario_id = ?) AND a.status = 'aceita'");
+    $st->execute([$id, $id, $id]);
+    $amigos = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    $conversas = [];
+    foreach ($amigos as $amigo) {
+      $outro = buscarJogadorPorApelido($amigo['apelido']);
+      if (!$outro) continue;
+      $outroId = (int)$outro['id'];
+      $st = bd()->prepare('SELECT texto, remetente_id, criado_em, removida FROM mensagens
+        WHERE (remetente_id = ? AND destinatario_id = ?) OR (remetente_id = ? AND destinatario_id = ?)
+        ORDER BY id DESC LIMIT 1');
+      $st->execute([$id, $outroId, $outroId, $id]);
+      $ultima = $st->fetch(PDO::FETCH_ASSOC);
+      $st = bd()->prepare('SELECT COUNT(*) FROM mensagens WHERE remetente_id = ? AND destinatario_id = ? AND lida = 0');
+      $st->execute([$outroId, $id]);
+      $naoLidas = (int)$st->fetchColumn();
+      $conversas[] = [
+        'apelido' => $amigo['apelido'], 'tipo' => $amigo['tipo'] ?: 'capivara',
+        'ultimaMensagem' => $ultima ? ($ultima['removida'] ? '[mensagem removida]' : $ultima['texto']) : null,
+        'ultimaDeMim' => $ultima ? (int)$ultima['remetente_id'] === $id : null,
+        'quando' => $ultima['criado_em'] ?? null,
+        'naoLidas' => $naoLidas,
+      ];
+    }
+    // conversa com mensagem mais recente primeiro
+    usort($conversas, fn($a, $b) => strcmp((string)$b['quando'], (string)$a['quando']));
+    responder(['conversas' => $conversas]);
+  }
+
+  if ($acao === 'mensagem_denunciar') {
+    $mensagemId = (int)(corpo()['id'] ?? 0);
+    $st = bd()->prepare('UPDATE mensagens SET denunciada = 1 WHERE id = ? AND (remetente_id = ? OR destinatario_id = ?)');
+    $st->execute([$mensagemId, $id, $id]);
+    if ($st->rowCount() === 0) responder(['erro' => 'Mensagem não encontrada.'], 404);
+    responder(['ok' => true]);
+  }
+
+  /* ---------- Fórum de dúvidas (por lição) ----------
+     Publica na hora (sem esperar aprovação) — o filtro de palavra/link/telefone barra o
+     óbvio antes de gravar, e qualquer um pode denunciar um post pra revisão do professor
+     na aba Moderação do painel. Sempre atrelado a uma lição: é "tirar dúvida sobre ESSA
+     atividade", não um mural solto. */
+
+  if ($acao === 'forum_postar') {
+    $d = corpo();
+    $licaoId = trim((string)($d['licaoId'] ?? ''));
+    if ($licaoId === '' || mb_strlen($licaoId) > 24) responder(['erro' => 'Lição inválida.'], 422);
+    $texto = trim((string)($d['texto'] ?? ''));
+    if ($texto === '' || mb_strlen($texto) > 500) responder(['erro' => 'O comentário precisa ter de 1 a 500 caracteres.'], 422);
+    $motivo = textoProibido($texto);
+    if ($motivo) responder(['erro' => $motivo], 422);
+
+    $respostaA = !empty($d['respostaA']) ? (int)$d['respostaA'] : null;
+    if ($respostaA !== null) {
+      $st = bd()->prepare('SELECT 1 FROM forum_posts WHERE id = ? AND licao_id = ? AND removido = 0');
+      $st->execute([$respostaA, $licaoId]);
+      if (!$st->fetchColumn()) responder(['erro' => 'Comentário original não encontrado.'], 404);
+    }
+
+    bd()->prepare('INSERT INTO forum_posts (autor_id, licao_id, texto, resposta_a) VALUES (?, ?, ?, ?)')
+      ->execute([$id, $licaoId, $texto, $respostaA]);
+    responder(['ok' => true, 'id' => (int)bd()->lastInsertId()]);
+  }
+
+  if ($acao === 'forum_listar') {
+    $licaoId = trim((string)($_GET['licaoId'] ?? ''));
+    if ($licaoId === '') responder(['erro' => 'Lição inválida.'], 422);
+    $st = bd()->prepare("SELECT f.id, f.autor_id, f.texto, f.resposta_a, f.criado_em, j.apelido,
+        JSON_UNQUOTE(JSON_EXTRACT(j.estado, '$.tipo')) AS tipo
+      FROM forum_posts f JOIN jogadores j ON j.id = f.autor_id
+      WHERE f.licao_id = ? AND f.removido = 0 ORDER BY f.id ASC");
+    $st->execute([$licaoId]);
+    responder(['posts' => array_map(fn($p) => [
+      'id' => (int)$p['id'], 'texto' => $p['texto'], 'respostaA' => $p['resposta_a'] ? (int)$p['resposta_a'] : null,
+      'quando' => $p['criado_em'], 'autor' => $p['apelido'], 'tipo' => $p['tipo'] ?: 'capivara',
+      'deMim' => (int)$p['autor_id'] === $id,
+    ], $st->fetchAll(PDO::FETCH_ASSOC))]);
+  }
+
+  if ($acao === 'forum_denunciar') {
+    $postId = (int)(corpo()['id'] ?? 0);
+    $st = bd()->prepare('UPDATE forum_posts SET denunciado = 1 WHERE id = ? AND removido = 0');
+    $st->execute([$postId]);
+    if ($st->rowCount() === 0) responder(['erro' => 'Comentário não encontrado.'], 404);
+    responder(['ok' => true]);
   }
 
   if ($acao === 'salvar') {

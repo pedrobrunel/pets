@@ -21,6 +21,14 @@
      GET  ?acao=jogadores_listar      [?busca=]
      POST ?acao=jogador_resetar_senha {id, novaSenha}
      POST ?acao=jogador_excluir       {id}
+     GET  ?acao=moderacao_listar      -> mensagens privadas e posts do fórum denunciados
+     POST ?acao=moderacao_mensagem_remover {id} -> some com o texto (fica "[mensagem removida]")
+     POST ?acao=moderacao_mensagem_ignorar {id} -> falso positivo, some da fila mas mantém a mensagem
+     POST ?acao=moderacao_post_remover {id}     -> remove o comentário do fórum
+     POST ?acao=moderacao_post_ignorar {id}     -> falso positivo, some da fila mas mantém o post
+     GET  ?acao=palavras_proibidas_listar
+     POST ?acao=palavra_proibida_adicionar {palavra}
+     POST ?acao=palavra_proibida_remover   {palavra}
      GET  ?acao=metricas
      GET  ?acao=exportar
      POST ?acao=importar              {mundos:[...]}   (mesmo formato do exportar)
@@ -782,6 +790,73 @@ try {
   if ($acao === 'jogador_excluir') {
     $d = corpo();
     bd()->prepare('DELETE FROM jogadores WHERE id = ?')->execute([(int)($d['id'] ?? 0)]);
+    responder(['ok' => true]);
+  }
+
+  /* ---------- Moderação: mensagens privadas e comentários do fórum denunciados ---------- */
+
+  if ($acao === 'moderacao_listar') {
+    $mensagens = bd()->query("SELECT m.id, m.texto, m.criado_em,
+        jr.apelido AS remetente, jd.apelido AS destinatario
+      FROM mensagens m
+      JOIN jogadores jr ON jr.id = m.remetente_id
+      JOIN jogadores jd ON jd.id = m.destinatario_id
+      WHERE m.denunciada = 1 AND m.removida = 0 ORDER BY m.criado_em DESC")->fetchAll(PDO::FETCH_ASSOC);
+
+    $posts = bd()->query("SELECT f.id, f.texto, f.licao_id, f.criado_em, j.apelido AS autor,
+        l.titulo AS licao_titulo
+      FROM forum_posts f
+      JOIN jogadores j ON j.id = f.autor_id
+      LEFT JOIN licoes l ON l.id = f.licao_id
+      WHERE f.denunciado = 1 AND f.removido = 0 ORDER BY f.criado_em DESC")->fetchAll(PDO::FETCH_ASSOC);
+
+    responder([
+      'mensagens' => array_map(fn($m) => [
+        'id' => (int)$m['id'], 'texto' => $m['texto'], 'quando' => $m['criado_em'],
+        'remetente' => $m['remetente'], 'destinatario' => $m['destinatario'],
+      ], $mensagens),
+      'posts' => array_map(fn($p) => [
+        'id' => (int)$p['id'], 'texto' => $p['texto'], 'quando' => $p['criado_em'],
+        'autor' => $p['autor'], 'licao' => $p['licao_titulo'] ?: $p['licao_id'],
+      ], $posts),
+    ]);
+  }
+
+  if ($acao === 'moderacao_mensagem_remover') {
+    bd()->prepare('UPDATE mensagens SET removida = 1, denunciada = 0 WHERE id = ?')->execute([(int)(corpo()['id'] ?? 0)]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'moderacao_mensagem_ignorar') {
+    bd()->prepare('UPDATE mensagens SET denunciada = 0 WHERE id = ?')->execute([(int)(corpo()['id'] ?? 0)]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'moderacao_post_remover') {
+    bd()->prepare('UPDATE forum_posts SET removido = 1, denunciado = 0 WHERE id = ?')->execute([(int)(corpo()['id'] ?? 0)]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'moderacao_post_ignorar') {
+    bd()->prepare('UPDATE forum_posts SET denunciado = 0 WHERE id = ?')->execute([(int)(corpo()['id'] ?? 0)]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'palavras_proibidas_listar') {
+    responder(['palavras' => bd()->query('SELECT palavra FROM palavras_proibidas ORDER BY palavra')->fetchAll(PDO::FETCH_COLUMN)]);
+  }
+
+  if ($acao === 'palavra_proibida_adicionar') {
+    $palavra = trim(mb_strtolower((string)(corpo()['palavra'] ?? '')));
+    if ($palavra === '' || mb_strlen($palavra) > 60) responder(['erro' => '"palavra" precisa ter de 1 a 60 caracteres.'], 422);
+    bd()->prepare('INSERT INTO palavras_proibidas (palavra, normalizada) VALUES (?, ?) ON DUPLICATE KEY UPDATE normalizada = VALUES(normalizada)')
+      ->execute([$palavra, normalizarTexto($palavra)]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'palavra_proibida_remover') {
+    $palavra = trim(mb_strtolower((string)(corpo()['palavra'] ?? '')));
+    bd()->prepare('DELETE FROM palavras_proibidas WHERE palavra = ?')->execute([$palavra]);
     responder(['ok' => true]);
   }
 
