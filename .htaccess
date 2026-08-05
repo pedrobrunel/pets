@@ -30,3 +30,18 @@
 
 # 5. Some com a listagem de diretórios
 Options -Indexes
+
+# 6. Cabeçalhos de segurança
+<IfModule mod_headers.c>
+  # HSTS: depois do primeiro acesso HTTPS, o navegador nunca mais tenta HTTP de novo
+  # nesse domínio (nem se alguém digitar http:// na mão) — 1 ano, já valendo pra subdomínios
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  # navegador não tenta "adivinhar" o tipo de um arquivo por conteúdo — evita truque de
+  # disfarçar um upload malicioso de imagem/áudio como script
+  Header always set X-Content-Type-Options "nosniff"
+  # o site nunca precisa ser embutido em <iframe> de outra página — bloqueia clickjacking
+  Header always set X-Frame-Options "SAMEORIGIN"
+  # não vaza a URL completa (com apelido etc na query, se algum dia tiver) pra terceiros
+  # quando o aluno clica num link que sai do site
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

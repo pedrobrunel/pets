@@ -714,6 +714,11 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
       <div class="grade-3" id="grade-bichos"></div>
     </div>
     <div class="sticker">
+      <label style="display:block;font-family:'Baloo 2';font-size:20px;margin-bottom:6px">Você já tem conta?</label>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button type="button" class="bloco" id="btn-modo-criar" aria-pressed="true" style="flex:1">🆕 Não, criar conta</button>
+        <button type="button" class="bloco" id="btn-modo-entrar" aria-pressed="false" style="flex:1">🔑 Sim, já tenho</button>
+      </div>
       <label for="campo-nome" style="display:block;font-family:'Baloo 2';font-size:20px;margin-bottom:6px">Como seu bicho se chama?</label>
       <input id="campo-nome" maxlength="14" placeholder="Ex.: Tobias"
         style="width:100%;font-family:'Nunito';font-weight:800;font-size:22px;padding:10px 14px;border:4px solid var(--contorno);border-radius:16px;background:#fff;color:inherit">
@@ -721,8 +726,8 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
       <label for="campo-senha" style="display:block;font-family:'Baloo 2';font-size:20px;margin-bottom:6px">Senha</label>
       <input id="campo-senha" type="password" maxlength="60" placeholder="Pelo menos 4 letras/números"
         style="width:100%;font-family:'Nunito';font-weight:800;font-size:22px;padding:10px 14px;border:4px solid var(--contorno);border-radius:16px;background:#fff;color:inherit">
-      <p style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Digite pra criar sua conta ou entrar numa que já existe. Deixe em branco pra jogar sem salvar.</p>
-      <button class="btn grande" id="btn-comecar">Começar a aventura</button>
+      <p id="dica-senha-conta" style="font-size:12px;font-weight:700;opacity:.7;margin:8px 0 14px">Crie uma senha pra guardar seu progresso nesse usuário. Deixe em branco pra jogar sem salvar.</p>
+      <button class="btn grande" id="btn-comecar">Criar conta e começar</button>
       <p id="aviso-conta" class="aviso" style="margin-top:12px;display:none"></p>
     </div>
   </section>
@@ -3175,6 +3180,22 @@ function montarEscolha(){
   });
 }
 montarEscolha();
+// "criar conta" (padrão, pra quem tá chegando agora) x "já tenho conta" — desde que o
+// login parou de criar conta sozinho quando o nome não existe (proteção contra alguém
+// "roubar" um apelido ainda não usado), o app precisa saber qual dos dois fluxos chamar
+let modoConta = 'criar';
+function atualizarModoConta(modo){
+  modoConta = modo;
+  $('#btn-modo-criar').setAttribute('aria-pressed', modo === 'criar' ? 'true' : 'false');
+  $('#btn-modo-entrar').setAttribute('aria-pressed', modo === 'entrar' ? 'true' : 'false');
+  $('#campo-senha').placeholder = modo === 'criar' ? 'Pelo menos 4 letras/números' : 'Sua senha';
+  $('#dica-senha-conta').textContent = modo === 'criar'
+    ? 'Crie uma senha pra guardar seu progresso nesse usuário. Deixe em branco pra jogar sem salvar.'
+    : 'Digite a senha da sua conta. Deixe em branco pra jogar sem salvar (não carrega seu progresso).';
+  $('#btn-comecar').textContent = modo === 'criar' ? 'Criar conta e começar' : 'Entrar e continuar';
+}
+$('#btn-modo-criar').onclick = () => atualizarModoConta('criar');
+$('#btn-modo-entrar').onclick = () => atualizarModoConta('entrar');
 $('#btn-comecar').onclick = async () => {
   const nome = $('#campo-nome').value.trim();
   const senha = $('#campo-senha').value;
@@ -3189,12 +3210,12 @@ $('#btn-comecar').onclick = async () => {
     $('#btn-comecar').disabled = true;
     aviso.style.display = 'none';
     try{
-      await entrarNoServidor(estado.apelido, senha);
+      await (modoConta === 'criar' ? cadastrarNoServidor : entrarNoServidor)(estado.apelido, senha);
       await carregarDoServidor();
       logado = true;
     }catch(e){
       $('#btn-comecar').disabled = false;
-      aviso.textContent = e.message || 'Não deu pra entrar. Confira a senha ou tente sem ela.';
+      aviso.textContent = e.message || 'Não deu pra continuar. Confira o usuário e a senha, ou tente sem senha.';
       aviso.style.display = 'block';
       return;
     }
@@ -3250,6 +3271,15 @@ async function carregarConteudo(){
 // dispara já no carregamento da página — some com a espera perceptível, porque
 // roda em paralelo com o aluno digitando o apelido na tela de onboarding
 const conteudoPronto = carregarConteudo();
+async function cadastrarNoServidor(apelido, senha){
+  const r = await fetch('api/estado.php?acao=cadastrar', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({apelido, senha})
+  });
+  const dados = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(dados.erro || 'Não deu pra criar a conta. Tente de novo.');
+  return dados;
+}
 async function entrarNoServidor(apelido, senha){
   const r = await fetch('api/estado.php?acao=entrar', {
     method:'POST', headers:{'Content-Type':'application/json'},
