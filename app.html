@@ -3523,6 +3523,15 @@ RENDER.perfil = () => {
       <h2>${esc(estado.apelido)}</h2>
       <p class="sub-perfil">${BICHOS[estado.tipo].nome} da Bichoteca</p>
     </div>
+
+    <div class="titulo-secao" style="margin:6px 4px 8px"><h2 style="font-size:18px">Social</h2></div>
+    <div class="grade" style="margin-bottom:6px">
+      <button class="btn branco pequeno" onclick="ir('amigos')">👥 Amigos</button>
+      <button class="btn branco pequeno" onclick="ir('mensagens')">💬 Mensagens</button>
+      <button class="btn branco pequeno" onclick="abrirRanking()">🏆 Ranking</button>
+      <button class="btn branco pequeno" onclick="compartilhar()">🔗 Compartilhar</button>
+    </div>
+
     ${blocoNpcsDaTela('perfil')}
     ${blocoMinhasMissoes()}
 
@@ -3543,11 +3552,6 @@ RENDER.perfil = () => {
     }).join('')}</div>
 
     <div class="perfil-rodape">
-      <p class="rotulo-grupo-perfil">Social</p>
-      <button class="btn branco pequeno" onclick="ir('amigos')">👥 Amigos</button>
-      <button class="btn branco pequeno" onclick="ir('mensagens')">💬 Mensagens</button>
-      <button class="btn branco pequeno" onclick="abrirRanking()">🏆 Ranking</button>
-      <button class="btn branco pequeno" onclick="compartilhar()">🔗 Compartilhar</button>
       <p class="rotulo-grupo-perfil">Ajustes</p>
       <button class="btn branco pequeno" id="btn-lembrete" onclick="alternarLembrete()" hidden>🔔 Lembrete diário</button>
       <button class="btn branco pequeno" id="btn-sair-conta" onclick="sairDaConta()" hidden>🚪 Sair da conta</button>
