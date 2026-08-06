@@ -165,6 +165,31 @@ try {
     INDEX (denunciada)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
+  // clube: grupo aberto (lista pública, entra na hora, sem convite) com um líder que
+  // enxerga o progresso dos membros — é o "clube"/"associação" que dá ao líder algo
+  // parecido com o painel de um professor, mas sem parecer escola. jogador_id é PRIMARY
+  // KEY em clube_membros de propósito: garante 1 clube por jogador direto no banco, sem
+  // precisar checar na aplicação. Se o líder sai, a aplicação promove o membro mais
+  // antigo que sobrar (ou apaga o clube, se ficar vazio) — ver "clube_sair" em estado.php.
+  $pdo->exec('CREATE TABLE IF NOT EXISTS clubes (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    nome        VARCHAR(40) NOT NULL UNIQUE,
+    emoji       VARCHAR(8) NOT NULL DEFAULT \'🏅\',
+    descricao   VARCHAR(160) NOT NULL DEFAULT \'\',
+    lider_id    INT NOT NULL,
+    criado_em   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (lider_id) REFERENCES jogadores(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+  $pdo->exec('CREATE TABLE IF NOT EXISTS clube_membros (
+    jogador_id INT NOT NULL PRIMARY KEY,
+    clube_id   INT NOT NULL,
+    entrou_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (clube_id) REFERENCES clubes(id) ON DELETE CASCADE,
+    FOREIGN KEY (jogador_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    INDEX (clube_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
   // inscrições de notificação push (lembrete de sequência) — um jogador pode ter mais de
   // uma (celular + computador, por exemplo). endpoint é a URL única que o navegador dá
   // pra cada inscrição; sem UNIQUE por causa do tamanho em utf8mb4, resolvido na aplicação

@@ -289,6 +289,7 @@ body.conectando-fluxo{cursor:crosshair}
       <button data-aba="licoes">📚 Lições</button>
       <button data-aba="jogadores">🧒 Jogadores</button>
       <button data-aba="moderacao">🛡️ Moderação</button>
+      <button data-aba="clubes">🏅 Clubes</button>
       <button data-aba="backup">💾 Backup</button>
     </nav>
     <div class="rodape-lateral">
@@ -1119,6 +1120,12 @@ pergunta     { p: "...", alts: [string,...], certa: índice numérico da alterna
       <div id="lista-palavras-proibidas"></div>
     </section>
 
+    <section id="aba-clubes" class="oculto">
+      <h2>🏅 Clubes</h2>
+      <p class="sub">clubes criados pelos jogadores — lista aberta, qualquer um entra sem convite. Nome e descrição já passam pelo filtro de palavra proibida ao criar/editar; use "Dissolver" aqui pra remover um que passou batido ou virou problema.</p>
+      <div class="painel"><table id="tabela-clubes"></table></div>
+    </section>
+
     <section id="aba-backup" class="oculto">
       <h2>Backup</h2>
       <p class="sub">exporte tudo (mundos + lições) como um JSON, ou restaure a partir de um</p>
@@ -1208,6 +1215,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   if(b.dataset.aba === 'licoes') carregarLicoes();
   if(b.dataset.aba === 'jogadores') carregarJogadores();
   if(b.dataset.aba === 'moderacao') carregarModeracao();
+  if(b.dataset.aba === 'clubes') carregarClubes();
   if(b.dataset.aba === 'painel') carregarPainel();
   if(b.dataset.aba === 'mapas') carregarCenas();
   if(b.dataset.aba === 'npcs') carregarNpcs();
@@ -2432,6 +2440,27 @@ $('#form-artigo').addEventListener('submit', async (e) => {
     carregarJornal();
   }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
 });
+
+/* ---------- Clubes ---------- */
+async function carregarClubes(){
+  const d = await api('clubes_listar').catch(() => ({clubes:[]}));
+  $('#tabela-clubes').innerHTML = `
+    <tr><th>Clube</th><th>Líder</th><th>Membros</th><th>Criado em</th><th></th></tr>
+    ${d.clubes.map(c => `<tr>
+      <td>${esc(c.emoji)} <b>${esc(c.nome)}</b>${c.descricao ? `<br><span style="font-size:12px;color:#7F8C8D">${esc(c.descricao)}</span>` : ''}</td>
+      <td>${esc(c.lider)}</td>
+      <td>${c.totalMembros}</td>
+      <td>${esc((c.criadoEm||'').slice(0,10))}</td>
+      <td class="acoes">
+        <button class="btn linha erro" onclick="excluirClube(${c.id},'${esc(c.nome)}')">Dissolver</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="5">Nenhum clube criado ainda.</td></tr>'}`;
+}
+window.excluirClube = async (id, nome) => {
+  if(!confirm(`Dissolver o clube "${nome}"? Todo mundo que tava nele fica sem clube.`)) return;
+  await api('clube_excluir', {method:'POST', corpo:{id}});
+  carregarClubes();
+};
 
 /* ---------- Itens colecionáveis (objetos soltos no mapa) ---------- */
 let itensCache = [];
