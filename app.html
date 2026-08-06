@@ -958,6 +958,8 @@ html.pagina-jornal::-webkit-scrollbar-thumb:hover{background:#6b5d3f}
   <section id="tela-grupoconversa" class="tela"></section>
   <!-- ====== PERFIL ====== -->
   <section id="tela-perfil" class="tela"></section>
+  <!-- ====== CLUBE ====== -->
+  <section id="tela-clube" class="tela"></section>
 </div>
 
 <nav class="rodape" id="rodape" hidden>
@@ -1770,6 +1772,9 @@ const acharMovel = id => MOVEIS.find(m => m.id === id);
 // artigos do Jornal (Neoiatimes, aba Jornal) — cada um pode ter um mundo (vira seção) e
 // um colunista (NPC de verdade, com diálogo clicável) ou só um nome de autor solto
 let JORNAL = [];
+// clube do jogador (não fica no "estado" salvo — é sempre buscado do servidor, que é a
+// fonte da verdade de quem tá em qual clube); null = não faz parte de nenhum
+let clubeAtual = null;
 let CASA_CONFIG = {fundoUrl:'', precoCasa:5000};
 // capas de cabeçalho das telas fixas sem entidade própria no banco (Loja de Móveis, Mural)
 // — mesmo sistema visual dos mundos/lojas genéricas, configurado direto em "configuracoes"
@@ -3644,6 +3649,142 @@ async function adicionarMembroGrupoConfirmar(apelido){
   }
 }
 
+/* ---------- Clube — diferente do grupo (fechado, só quem é convidado), o clube é
+   aberto: lista pública, qualquer um entra na hora sem convite, mais perto de escolher
+   um time. Cada jogador só está em 1 por vez. O líder (quem criou, ou o membro mais
+   antigo promovido se o líder original sair) vê o progresso de cada membro — nível,
+   sequência, lições — um resumo parecido com o de um professor, só que de um clube. */
+async function carregarClubeAtual(){
+  try{ clubeAtual = (await chamarSocial('clube_meu', null, 'GET')).clube; }
+  catch(e){ clubeAtual = null; }
+}
+RENDER.clube = async () => {
+  $('#tela-clube').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('perfil')">Voltar</button>
+    <div class="titulo-secao"><h2>🏅 Clube</h2></div>
+    <p class="aviso" style="margin-top:12px">Carregando...</p>`;
+  await carregarClubeAtual();
+  if(clubeAtual) await pintarMeuClube();
+  else await pintarListaClubes();
+};
+async function pintarListaClubes(){
+  let clubes = [];
+  try{ clubes = (await chamarSocial('clubes_listar', null, 'GET')).clubes; }catch(e){ /* segue vazio */ }
+  $('#tela-clube').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('perfil')">Voltar</button>
+    <div class="titulo-secao"><h2>🏅 Clube</h2></div>
+    <p class="sub" style="margin:0 4px 12px">Entre num clube pra jogar em equipe, ou crie o seu. Cada jogador só pode estar em 1 clube por vez.</p>
+    <button class="btn grande" style="margin-bottom:14px" onclick="abrirFormClube()">✨ Criar um clube</button>
+    ${clubes.length ? clubes.map(c => `
+      <div class="sticker" style="margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:28px">${esc(c.emoji)}</span>
+          <div style="flex:1;min-width:0">
+            <b>${esc(c.nome)}</b>
+            ${c.descricao ? `<p class="sub" style="margin:2px 0 0">${esc(c.descricao)}</p>` : ''}
+            <p class="aviso-mini" style="margin:4px 0 0">Líder: ${esc(c.lider)} · ${c.totalMembros} membro${c.totalMembros===1?'':'s'}</p>
+          </div>
+          <button class="btn pequeno" onclick="entrarNoClube(${c.id})">Entrar</button>
+        </div>
+      </div>`).join('') : '<p class="sub" style="margin:0 4px">Nenhum clube criado ainda. Que tal ser o primeiro?</p>'}`;
+}
+function abrirFormClube(edicao){
+  const c = edicao ? clubeAtual : null;
+  modal(`
+    <h2 style="font-size:22px">${c ? '✏️ Editar clube' : '✨ Criar clube'}</h2>
+    <label style="display:block;font-weight:800;margin:10px 0 4px;text-align:left">Emoji</label>
+    <input id="campo-clube-emoji" maxlength="4" value="${c ? esc(c.emoji) : '🏅'}"
+      style="width:100%;padding:10px 12px;border:3px solid var(--contorno);border-radius:12px;font-weight:800;font-size:20px;text-align:center">
+    <label style="display:block;font-weight:800;margin:10px 0 4px;text-align:left">Nome</label>
+    <input id="campo-clube-nome" maxlength="40" value="${c ? esc(c.nome) : ''}" placeholder="ex.: Águias da Bichoteca"
+      style="width:100%;padding:10px 12px;border:3px solid var(--contorno);border-radius:12px;font-weight:800">
+    <label style="display:block;font-weight:800;margin:10px 0 4px;text-align:left">Descrição <span style="font-weight:700;opacity:.7">(opcional)</span></label>
+    <textarea id="campo-clube-descricao" maxlength="160" placeholder="do que se trata esse clube?"
+      style="width:100%;padding:10px 12px;border:3px solid var(--contorno);border-radius:12px;font-weight:700;min-height:70px">${c ? esc(c.descricao) : ''}</textarea>
+    <p id="aviso-clube-form" class="aviso" style="display:none;margin-top:8px;text-align:left"></p>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn grande" onclick="${c ? 'salvarEdicaoClube()' : 'criarClube()'}">${c ? 'Salvar' : 'Criar'}</button>
+      <button class="btn branco grande" onclick="fecharModal()">Cancelar</button>
+    </div>`);
+}
+function lerFormClube(){
+  return {
+    nome: $('#campo-clube-nome').value.trim(),
+    emoji: $('#campo-clube-emoji').value.trim() || '🏅',
+    descricao: $('#campo-clube-descricao').value.trim(),
+  };
+}
+async function criarClube(){
+  const {nome, emoji, descricao} = lerFormClube();
+  const aviso = $('#aviso-clube-form');
+  if(!nome){ aviso.textContent = 'Dá um nome pro clube.'; aviso.style.display = 'block'; return; }
+  try{
+    await chamarSocial('clube_criar', {nome, emoji, descricao});
+    fecharModal();
+    brinde(`🎉 Clube "${nome}" criado!`);
+    RENDER.clube();
+  }catch(e){ aviso.textContent = e.message; aviso.style.display = 'block'; }
+}
+async function salvarEdicaoClube(){
+  const {nome, emoji, descricao} = lerFormClube();
+  const aviso = $('#aviso-clube-form');
+  if(!nome){ aviso.textContent = 'Dá um nome pro clube.'; aviso.style.display = 'block'; return; }
+  try{
+    await chamarSocial('clube_editar', {nome, emoji, descricao});
+    fecharModal();
+    RENDER.clube();
+  }catch(e){ aviso.textContent = e.message; aviso.style.display = 'block'; }
+}
+async function entrarNoClube(clubeId){
+  try{ await chamarSocial('clube_entrar', {clubeId}); brinde('Bem-vindo(a) ao clube! 🎉'); RENDER.clube(); }
+  catch(e){ alert(e.message); }
+}
+async function pintarMeuClube(){
+  const c = clubeAtual;
+  let membros = [];
+  if(c.souLider){
+    try{ membros = (await chamarSocial('clube_membros_listar', null, 'GET')).membros; }catch(e){ /* segue vazio */ }
+  }
+  $('#tela-clube').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('perfil')">Voltar</button>
+    <div class="titulo-secao"><h2>🏅 Clube</h2></div>
+    <div class="sticker" style="text-align:center;margin-bottom:14px">
+      <span style="font-size:44px;display:block">${esc(c.emoji)}</span>
+      <h2 style="margin:6px 0 2px">${esc(c.nome)}</h2>
+      ${c.descricao ? `<p class="sub" style="margin:0 0 6px">${esc(c.descricao)}</p>` : ''}
+      <p class="aviso-mini">${c.totalMembros} membro${c.totalMembros===1?'':'s'}${c.souLider ? ' · você é o líder 👑' : ''}</p>
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:center;flex-wrap:wrap">
+        ${c.souLider ? `<button class="btn branco pequeno" onclick="abrirFormClube(true)">✏️ Editar</button>` : ''}
+        <button class="btn branco pequeno" onclick="sairDoClube()">🚪 Sair do clube</button>
+      </div>
+    </div>
+    ${c.souLider ? `
+      <div class="titulo-secao"><h2 style="font-size:18px">Membros</h2></div>
+      ${membros.length ? membros.map(m => `
+        <div class="sticker" style="margin-bottom:8px;padding:10px 14px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:22px">${emojiDoTipo(m.tipo)}</span>
+            <div style="flex:1;min-width:0">
+              <b>${esc(m.apelido)}</b>
+              <p class="aviso-mini" style="margin:2px 0 0">Nível ${m.nivel} · 🔥 ${m.streakAtual}d (melhor ${m.streakMelhor}d) · 📚 ${m.licoesFeitas} lições</p>
+            </div>
+            ${m.apelido !== estado.apelido ? `<button class="btn branco pequeno" onclick="removerDoClube('${esc(m.apelido)}')">Remover</button>` : ''}
+          </div>
+        </div>`).join('') : '<p class="sub" style="margin:0 4px">Só você por enquanto — divulgue o clube pra galera entrar!</p>'}` : ''}`;
+}
+async function sairDoClube(){
+  if(!confirm(clubeAtual && clubeAtual.souLider && clubeAtual.totalMembros > 1
+    ? 'Sair do clube? Como você é o líder, outro membro assume no seu lugar.'
+    : 'Sair do clube?')) return;
+  try{ await chamarSocial('clube_sair'); }catch(e){ alert(e.message); return; }
+  RENDER.clube();
+}
+async function removerDoClube(apelido){
+  if(!confirm(`Remover ${apelido} do clube?`)) return;
+  try{ await chamarSocial('clube_membro_remover', {apelido}); }catch(e){ alert(e.message); return; }
+  pintarMeuClube();
+}
+
 /* ---------- Fórum de dúvidas/comentários — sempre atrelado a uma lição ---------- */
 function horaCurta(dataHora){
   try{ return new Date(dataHora.replace(' ', 'T')).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}); }
@@ -3723,7 +3864,8 @@ const MEDALHAS = [
   {id:'reflexo',  emoji:'⚡', nome:'10 pontos na Toca', ok:()=>estado.recordes.toca>=10},
   {id:'ouvido',   emoji:'🎵', nome:'8 rodadas na Sequência', ok:()=>estado.recordes.sequencia>=8},
   {id:'chama',    emoji:'🔥', nome:'7 dias seguidos', ok:()=>estado.streak.melhor>=7},
-  {id:'estiloso', emoji:'😎', nome:'Bicho estiloso', ok:()=>estado.equipado.length>=1}
+  {id:'estiloso', emoji:'😎', nome:'Bicho estiloso', ok:()=>estado.equipado.length>=1},
+  {id:'clube',    emoji:'🏅', nome:'Em um clube', ok:()=>!!clubeAtual}
 ];
 RENDER.perfil = () => {
   const totalLicoes = TRILHAS.flatMap(t=>t.licoes).length;
@@ -3743,6 +3885,7 @@ RENDER.perfil = () => {
       <button class="btn branco pequeno" onclick="ir('amigos')">👥 Amigos</button>
       <button class="btn branco pequeno" onclick="ir('mensagens')">💬 Mensagens</button>
       <button class="btn branco pequeno" onclick="abrirRanking()">🏆 Ranking</button>
+      <button class="btn branco pequeno" onclick="ir('clube')">${clubeAtual ? esc(clubeAtual.emoji) : '🏅'} Clube</button>
       <button class="btn branco pequeno" onclick="compartilhar()">🔗 Compartilhar</button>
     </div>
 
@@ -4067,6 +4210,7 @@ async function salvarNoServidor(){
     $('#topo').hidden = false; $('#rodape').hidden = false;
     atualizarHud();
     iniciarMusicaFundo();
+    carregarClubeAtual();
     ir('casa');
   } else if(carregarLocal() && estado.apelido){
     salvandoLocal = true;

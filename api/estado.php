@@ -32,6 +32,14 @@
      GET  ?acao=grupo_conversa_obter ?grupoId=xx        -> mensagens + lista de membros
      GET  ?acao=grupos_listar                          -> grupos que você faz parte, com prévia
      POST ?acao=grupo_mensagem_denunciar {id}          -> vai pra Moderação
+     GET  ?acao=clubes_listar                          -> clubes públicos (nome, emoji, descrição, total de membros)
+     POST ?acao=clube_criar     {nome, emoji, descricao} -> cria e já entra como líder; só se ainda não tiver clube
+     POST ?acao=clube_entrar    {clubeId}               -> entra na hora, sem convite; só se ainda não tiver clube
+     POST ?acao=clube_sair                              -> sai a qualquer momento; promove o mais antigo, ou apaga se ficar vazio
+     GET  ?acao=clube_meu                               -> seu clube atual (ou null), com "souLider"
+     POST ?acao=clube_editar    {nome, emoji, descricao} -> só o líder
+     GET  ?acao=clube_membros_listar                    -> só o líder: cada membro com nível/streak/lições (tipo "resumo do professor")
+     POST ?acao=clube_membro_remover {apelido}          -> só o líder, tira alguém do clube
      GET  ?acao=ranking                                -> top 10 por nível e por sequência (só apelido/bicho/número)
      POST ?acao=push_inscrever  {endpoint, p256dh, auth} -> ativa lembrete de sequência nesse aparelho
      POST ?acao=push_desinscrever {endpoint}            -> desativa nesse aparelho
@@ -674,6 +682,159 @@ try {
     $grupoId = $st->fetchColumn();
     if (!$grupoId || !souMembroDoGrupo($id, (int)$grupoId)) responder(['erro' => 'Mensagem não encontrada.'], 404);
     bd()->prepare('UPDATE grupo_mensagens SET denunciada = 1 WHERE id = ?')->execute([$mensagemId]);
+    responder(['ok' => true]);
+  }
+
+  /* ---------- Clube ----------
+     Diferente do grupo (fechado, só entra quem é convidado por um amigo), o clube é
+     aberto: aparece numa lista pública e qualquer um entra na hora, sem convite — mais
+     perto de escolher um time do que de uma conversa privada. Cada jogador só pode
+     estar em 1 clube por vez (garantido pela PRIMARY KEY em clube_membros, não só na
+     aplicação). O líder (quem criou, ou o membro mais antigo promovido depois que o
+     líder original saiu) enxerga o progresso dos membros — nível, sequência, lições —
+     algo como um "resumo do professor", mas dentro de um clube, não de uma turma. */
+
+  $CLUBE_MAX_MEMBROS = 40; // const não pode ir aqui dentro (dentro de try/if), só no topo do arquivo
+
+  function clubeDoJogador(int $id): ?array {
+    $st = bd()->prepare('SELECT c.id, c.nome, c.emoji, c.descricao, c.lider_id
+      FROM clube_membros m JOIN clubes c ON c.id = m.clube_id WHERE m.jogador_id = ?');
+    $st->execute([$id]);
+    return $st->fetch(PDO::FETCH_ASSOC) ?: null;
+  }
+  function validarNomeClube(string $nome): ?string {
+    if ($nome === '' || mb_strlen($nome) > 40) return 'O nome do clube precisa ter de 1 a 40 caracteres.';
+    return textoProibido($nome);
+  }
+  function validarDescricaoClube(string $descricao): ?string {
+    if (mb_strlen($descricao) > 160) return 'A descrição pode ter no máximo 160 caracteres.';
+    return $descricao === '' ? null : textoProibido($descricao);
+  }
+
+  if ($acao === 'clubes_listar') {
+    $st = bd()->query('SELECT c.id, c.nome, c.emoji, c.descricao, j.apelido AS lider,
+        (SELECT COUNT(*) FROM clube_membros WHERE clube_id = c.id) AS total_membros
+      FROM clubes c JOIN jogadores j ON j.id = c.lider_id ORDER BY total_membros DESC, c.nome');
+    responder(['clubes' => array_map(fn($c) => [
+      'id' => (int)$c['id'], 'nome' => $c['nome'], 'emoji' => $c['emoji'], 'descricao' => $c['descricao'],
+      'lider' => $c['lider'], 'totalMembros' => (int)$c['total_membros'],
+    ], $st->fetchAll(PDO::FETCH_ASSOC))]);
+  }
+
+  if ($acao === 'clube_meu') {
+    $clube = clubeDoJogador($id);
+    if (!$clube) responder(['clube' => null]);
+    $st = bd()->prepare('SELECT COUNT(*) FROM clube_membros WHERE clube_id = ?');
+    $st->execute([(int)$clube['id']]);
+    responder(['clube' => [
+      'id' => (int)$clube['id'], 'nome' => $clube['nome'], 'emoji' => $clube['emoji'], 'descricao' => $clube['descricao'],
+      'souLider' => (int)$clube['lider_id'] === $id, 'totalMembros' => (int)$st->fetchColumn(),
+    ]]);
+  }
+
+  if ($acao === 'clube_criar') {
+    if (clubeDoJogador($id)) responder(['erro' => 'Você já faz parte de um clube. Saia dele antes de criar outro.'], 422);
+    $d = corpo();
+    $nome = trim((string)($d['nome'] ?? ''));
+    $erro = validarNomeClube($nome);
+    if ($erro) responder(['erro' => $erro], 422);
+    $emoji = trim((string)($d['emoji'] ?? '')) ?: '🏅';
+    if (mb_strlen($emoji) > 8) responder(['erro' => 'Emoji inválido.'], 422);
+    $descricao = trim((string)($d['descricao'] ?? ''));
+    $erro = validarDescricaoClube($descricao);
+    if ($erro) responder(['erro' => $erro], 422);
+
+    $st = bd()->prepare('SELECT 1 FROM clubes WHERE nome = ?');
+    $st->execute([$nome]);
+    if ($st->fetchColumn()) responder(['erro' => 'Já existe um clube com esse nome.'], 422);
+
+    bd()->prepare('INSERT INTO clubes (nome, emoji, descricao, lider_id) VALUES (?, ?, ?, ?)')
+      ->execute([$nome, $emoji, $descricao, $id]);
+    $clubeId = (int)bd()->lastInsertId();
+    bd()->prepare('INSERT INTO clube_membros (jogador_id, clube_id) VALUES (?, ?)')->execute([$id, $clubeId]);
+    responder(['ok' => true, 'clubeId' => $clubeId]);
+  }
+
+  if ($acao === 'clube_entrar') {
+    if (clubeDoJogador($id)) responder(['erro' => 'Você já faz parte de um clube. Saia dele antes de entrar em outro.'], 422);
+    $clubeId = (int)(corpo()['clubeId'] ?? 0);
+    $st = bd()->prepare('SELECT 1 FROM clubes WHERE id = ?');
+    $st->execute([$clubeId]);
+    if (!$st->fetchColumn()) responder(['erro' => 'Clube não encontrado.'], 404);
+    $st = bd()->prepare('SELECT COUNT(*) FROM clube_membros WHERE clube_id = ?');
+    $st->execute([$clubeId]);
+    if ((int)$st->fetchColumn() >= $CLUBE_MAX_MEMBROS) responder(['erro' => 'Esse clube já está cheio.'], 422);
+    bd()->prepare('INSERT INTO clube_membros (jogador_id, clube_id) VALUES (?, ?)')->execute([$id, $clubeId]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'clube_sair') {
+    $clube = clubeDoJogador($id);
+    if (!$clube) responder(['ok' => true]);
+    $clubeId = (int)$clube['id'];
+    bd()->prepare('DELETE FROM clube_membros WHERE jogador_id = ?')->execute([$id]);
+    if ((int)$clube['lider_id'] === $id) {
+      // líder saiu: promove o membro mais antigo que sobrou; se não sobrou ninguém, o
+      // clube deixa de existir (sem líder, um clube não faz sentido)
+      $st = bd()->prepare('SELECT jogador_id FROM clube_membros WHERE clube_id = ? ORDER BY entrou_em LIMIT 1');
+      $st->execute([$clubeId]);
+      $proximoLider = $st->fetchColumn();
+      if ($proximoLider) {
+        bd()->prepare('UPDATE clubes SET lider_id = ? WHERE id = ?')->execute([$proximoLider, $clubeId]);
+      } else {
+        bd()->prepare('DELETE FROM clubes WHERE id = ?')->execute([$clubeId]);
+      }
+    }
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'clube_editar') {
+    $clube = clubeDoJogador($id);
+    if (!$clube || (int)$clube['lider_id'] !== $id) responder(['erro' => 'Só o líder do clube pode editar.'], 403);
+    $d = corpo();
+    $nome = trim((string)($d['nome'] ?? ''));
+    $erro = validarNomeClube($nome);
+    if ($erro) responder(['erro' => $erro], 422);
+    $emoji = trim((string)($d['emoji'] ?? '')) ?: '🏅';
+    if (mb_strlen($emoji) > 8) responder(['erro' => 'Emoji inválido.'], 422);
+    $descricao = trim((string)($d['descricao'] ?? ''));
+    $erro = validarDescricaoClube($descricao);
+    if ($erro) responder(['erro' => $erro], 422);
+    $st = bd()->prepare('SELECT 1 FROM clubes WHERE nome = ? AND id != ?');
+    $st->execute([$nome, (int)$clube['id']]);
+    if ($st->fetchColumn()) responder(['erro' => 'Já existe um clube com esse nome.'], 422);
+    bd()->prepare('UPDATE clubes SET nome = ?, emoji = ?, descricao = ? WHERE id = ?')
+      ->execute([$nome, $emoji, $descricao, (int)$clube['id']]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'clube_membros_listar') {
+    $clube = clubeDoJogador($id);
+    if (!$clube || (int)$clube['lider_id'] !== $id) responder(['erro' => 'Só o líder do clube vê essa lista.'], 403);
+    $st = bd()->prepare('SELECT j.apelido, j.estado, m.entrou_em FROM clube_membros m
+      JOIN jogadores j ON j.id = m.jogador_id WHERE m.clube_id = ? ORDER BY m.entrou_em');
+    $st->execute([(int)$clube['id']]);
+    $membros = array_map(function($m) {
+      $e = json_decode((string)$m['estado'], true) ?: [];
+      $xp = (int)($e['xp'] ?? 0);
+      return [
+        'apelido' => $m['apelido'], 'tipo' => (string)($e['tipo'] ?? 'capivara'),
+        'nivel' => intdiv($xp, 120) + 1, 'xp' => $xp, 'moedas' => (int)($e['moedas'] ?? 0),
+        'streakAtual' => (int)($e['streak']['atual'] ?? 0), 'streakMelhor' => (int)($e['streak']['melhor'] ?? 0),
+        'licoesFeitas' => count($e['licoesFeitas'] ?? []), 'entrouEm' => $m['entrou_em'],
+      ];
+    }, $st->fetchAll(PDO::FETCH_ASSOC));
+    responder(['membros' => $membros]);
+  }
+
+  if ($acao === 'clube_membro_remover') {
+    $clube = clubeDoJogador($id);
+    if (!$clube || (int)$clube['lider_id'] !== $id) responder(['erro' => 'Só o líder do clube pode remover alguém.'], 403);
+    $alvo = buscarJogadorPorApelido(trim((string)(corpo()['apelido'] ?? '')));
+    if (!$alvo) responder(['erro' => 'Jogador não encontrado.'], 404);
+    if ((int)$alvo['id'] === $id) responder(['erro' => 'Use "sair do clube" pra você mesmo.'], 422);
+    bd()->prepare('DELETE FROM clube_membros WHERE jogador_id = ? AND clube_id = ?')
+      ->execute([(int)$alvo['id'], (int)$clube['id']]);
     responder(['ok' => true]);
   }
 

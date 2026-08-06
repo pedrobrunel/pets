@@ -32,6 +32,8 @@
      GET  ?acao=palavras_proibidas_listar
      POST ?acao=palavra_proibida_adicionar {palavra}
      POST ?acao=palavra_proibida_remover   {palavra}
+     GET  ?acao=clubes_listar         -> todos os clubes (nome, líder, total de membros)
+     POST ?acao=clube_excluir         {id} -> dissolve um clube (ex.: nome/descrição impróprios)
      GET  ?acao=metricas
      GET  ?acao=exportar
      POST ?acao=importar              {mundos:[...]}   (mesmo formato do exportar)
@@ -884,6 +886,25 @@ try {
 
   if ($acao === 'moderacao_grupo_mensagem_ignorar') {
     bd()->prepare('UPDATE grupo_mensagens SET denunciada = 0 WHERE id = ?')->execute([(int)(corpo()['id'] ?? 0)]);
+    responder(['ok' => true]);
+  }
+
+  /* clubes: nome/descrição já passam pelo filtro de palavra proibida na criação/edição
+     (ver clube_criar/clube_editar em estado.php) — isso aqui é a rede de segurança do
+     Hostmaster pra casos que passaram batido, ou um clube que virou problema por outro
+     motivo (não tem "denúncia" de clube, só dissolver). */
+  if ($acao === 'clubes_listar') {
+    $st = bd()->query('SELECT c.id, c.nome, c.emoji, c.descricao, c.criado_em, j.apelido AS lider,
+        (SELECT COUNT(*) FROM clube_membros WHERE clube_id = c.id) AS total_membros
+      FROM clubes c JOIN jogadores j ON j.id = c.lider_id ORDER BY c.criado_em DESC');
+    responder(['clubes' => array_map(fn($c) => [
+      'id' => (int)$c['id'], 'nome' => $c['nome'], 'emoji' => $c['emoji'], 'descricao' => $c['descricao'],
+      'lider' => $c['lider'], 'totalMembros' => (int)$c['total_membros'], 'criadoEm' => $c['criado_em'],
+    ], $st->fetchAll(PDO::FETCH_ASSOC))]);
+  }
+
+  if ($acao === 'clube_excluir') {
+    bd()->prepare('DELETE FROM clubes WHERE id = ?')->execute([(int)(corpo()['id'] ?? 0)]);
     responder(['ok' => true]);
   }
 
