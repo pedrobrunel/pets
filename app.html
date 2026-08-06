@@ -547,11 +547,42 @@ body.tela-cheia #app{padding:0;max-width:none}
 
 /* ---------- loja ---------- */
 .item-loja{background:#fff;border:var(--borda) solid var(--contorno);border-bottom-width:6px;border-radius:18px;
-  padding:12px 8px;text-align:center}
+  padding:12px 8px;text-align:center;position:relative}
 .item-loja .emoji{font-size:32px;display:block}
 .item-loja b{display:block;font-size:13px;margin:4px 0 6px}
 .item-loja select.select-variante{width:100%;font-size:12px;padding:4px 6px;border-radius:8px;
   border:2px solid var(--contorno);margin-bottom:6px;font-family:inherit}
+
+/* botão "+" no canto do cartão do inventário: abre Saiba mais/Presentear com a mesma
+   "pipoca com molinha" do popup do menu Casa (ver .popup-casa acima), só que descendo
+   do canto superior direito em vez de subir do botão de baixo — não tem espaço embaixo
+   do cartão, mas tem em cima. Alinhado à direita (não centralizado) pelo mesmo motivo do
+   popup da Casa: o botão fica na borda, então abrir pra fora da borda cortaria o popup
+   num cartão perto da direita da tela. Só que o cartão do inventário é bem mais estreito
+   que o botão Casa (grade de 3 colunas) — mais estreito até que o próprio popup, então
+   ancorar por CSS puro (tipo o popup da Casa) vaza da tela pra cartão da coluna da
+   esquerda. Por isso aqui é position:fixed com left/top calculados em JS
+   (alternarMenuItem), sempre garantindo que sobra pelo menos 8px de cada lado da tela. */
+.item-loja-menu-btn{
+  position:absolute;top:6px;right:6px;z-index:2;width:24px;height:24px;padding:0;
+  border-radius:50%;background:#fff;border:3px solid var(--contorno);border-bottom-width:4px;
+  display:grid;place-items:center;font-size:15px;font-weight:900;line-height:1;color:var(--tinta);
+}
+.item-loja-menu-btn:active{transform:translateY(2px);border-bottom-width:1px}
+.item-loja-popup{
+  position:fixed;width:132px;z-index:50;
+  display:flex;flex-direction:column;gap:6px;
+  pointer-events:none;
+}
+.item-loja-popup-item{
+  width:100%;justify-content:flex-start;box-shadow:0 6px 14px rgba(0,0,0,.18);font-size:12px;padding:8px 10px;
+  transform-origin:top right;
+  opacity:0;transform:scale(.4) rotate(8deg) translateY(-6px);
+  transition:transform .38s cubic-bezier(.34,1.76,.64,1), opacity .18s ease;
+}
+.item-loja-popup.aberto .item-loja-popup-item{opacity:1;pointer-events:auto;transform:scale(1) rotate(0) translateY(0)}
+.item-loja-popup-item:nth-child(1){transition-delay:0s}
+.item-loja-popup-item:nth-child(2){transition-delay:.06s}
 
 /* ---------- mural ---------- */
 .recado{background:#fff;border:var(--borda) solid var(--contorno);border-bottom-width:6px;border-radius:18px;
@@ -2995,15 +3026,58 @@ function cartaoMochilaLoja({chave, it, variante}){
   const nome = variante ? it.nome + ' (' + variante.nome + ')' : it.nome;
   const imagem = (variante && variante.imagemUrl) || it.imagemUrl;
   const temEfeito = it.fome > 0 || it.alegria > 0;
+  const idPopup = 'popup-item-' + chave.replace(/[^a-zA-Z0-9_-]/g, '_');
   return `<div class="item-loja">
+    <button type="button" class="item-loja-menu-btn" onclick="event.stopPropagation();alternarMenuItem('${idPopup}', this)" aria-label="Mais opções">+</button>
+    <div class="item-loja-popup" id="${idPopup}">
+      <button type="button" class="btn branco pequeno item-loja-popup-item" onclick="fecharTodosMenusItem();abrirSobreItem('${chave}')">📖 Saiba mais</button>
+      <button type="button" class="btn branco pequeno item-loja-popup-item" onclick="fecharTodosMenusItem();abrirPresentear('${chave}')">🎁 Presentear</button>
+    </div>
     ${imagem ? `<img src="${esc(imagem)}" alt="" style="width:32px;height:32px;object-fit:contain">` : `<span class="emoji">${esc(it.emoji)}</span>`}
     <b>${esc(nome)}</b>
     <small style="font-weight:900;color:#7F8C8D">tem ${estado.inventario[chave]}</small>
-    <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
-      ${temEfeito ? `<button class="btn pequeno laranja" onclick="consumirItemLoja('${chave}')">Dar pro bicho</button>` : ''}
-      <button class="btn pequeno branco" onclick="abrirPresentear('${chave}')">🎁 Presentear</button>
-    </div>
+    ${temEfeito ? `<div style="margin-top:6px"><button class="btn pequeno laranja" onclick="consumirItemLoja('${chave}')">Dar pro bicho</button></div>` : ''}
   </div>`;
+}
+// menu "+" de cada item do inventário: mesma ideia do popup do botão Casa (ver
+// .popup-casa), mas um por cartão — só um aberto por vez, fecha ao clicar fora, ao
+// rolar a tela ou ao trocar de tela (ver fecharTodosMenusItem() dentro de ir()).
+// position:fixed com left/top calculados aqui (não no CSS): o cartão do inventário é
+// bem mais estreito que os 2 botões do popup (grade de 3 colunas), então um popup
+// ancorado só por CSS relativo ao cartão vazava da tela pros cartões da esquerda.
+function alternarMenuItem(id, botao){
+  const alvo = $('#' + id);
+  const jaAberto = alvo.classList.contains('aberto');
+  fecharTodosMenusItem();
+  if(jaAberto) return;
+  const r = botao.getBoundingClientRect();
+  const largura = 132;
+  const esquerda = Math.min(r.right - largura, window.innerWidth - largura - 8);
+  alvo.style.left = Math.max(8, esquerda) + 'px';
+  alvo.style.top = (r.bottom + 6) + 'px';
+  alvo.classList.add('aberto');
+}
+function fecharTodosMenusItem(){
+  document.querySelectorAll('.item-loja-popup.aberto').forEach(el => el.classList.remove('aberto'));
+}
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('.item-loja')) fecharTodosMenusItem();
+});
+window.addEventListener('scroll', fecharTodosMenusItem, {passive:true});
+function abrirSobreItem(chave){
+  const itemId = chave.split('__')[0];
+  const it = ITENS_LOJA.find(x => x.id === itemId);
+  if(!it) return;
+  const [, varianteId] = chave.split('__');
+  const variante = varianteId ? (it.variantes||[]).find(v => v.id === varianteId) : null;
+  const nome = variante ? it.nome + ' (' + variante.nome + ')' : it.nome;
+  const imagem = (variante && variante.imagemUrl) || it.imagemUrl;
+  modal(`
+    <h2 style="font-size:22px">${esc(it.emoji)} ${esc(nome)}</h2>
+    ${imagem ? `<img src="${esc(imagem)}" alt="" style="width:64px;height:64px;object-fit:contain;margin:10px auto;display:block">` : ''}
+    ${it.fome > 0 || it.alegria > 0 ? `<p style="margin:6px 0">${it.fome > 0 ? `🍖 +${it.fome} de fome` : ''}${it.fome > 0 && it.alegria > 0 ? ' · ' : ''}${it.alegria > 0 ? `😄 +${it.alegria} de alegria` : ''}</p>` : ''}
+    <p style="margin:6px 0;font-weight:700;color:#7F8C8D">Você tem ${estado.inventario[chave] || 0}.</p>
+    <button class="btn grande branco" style="margin-top:8px" onclick="fecharModal()">Fechar</button>`);
 }
 function consumirItemLoja(chave){
   const itemId = chave.split('__')[0];
