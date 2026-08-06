@@ -546,8 +546,13 @@ body.tela-cheia #app{padding:0;max-width:none}
   text-decoration:line-through;border-color:var(--mata-rim)}
 
 /* ---------- loja ---------- */
+/* flex-column: o grid já estica todo item da mesma linha pra mesma altura (comportamento
+   padrão de grid). Com o cartão em flex-column, "margin-top:auto" no botão de ação (ver
+   cartaoMochilaLoja) empurra ele pro fundo do cartão sempre — não importa se o nome do
+   item ocupa 1, 2 ou 3 linhas, o botão fica alinhado com o dos outros cartões da mesma
+   fileira, em vez de "flutuar" na altura que sobrar depois do texto. */
 .item-loja{background:#fff;border:var(--borda) solid var(--contorno);border-bottom-width:6px;border-radius:18px;
-  padding:12px 8px;text-align:center;position:relative}
+  padding:12px 8px;text-align:center;position:relative;display:flex;flex-direction:column}
 .item-loja .emoji{font-size:32px;display:block}
 .item-loja b{display:block;font-size:13px;margin:4px 0 6px}
 .item-loja select.select-variante{width:100%;font-size:12px;padding:4px 6px;border-radius:8px;
@@ -3022,6 +3027,15 @@ function itensLojaNaMochila(){
     })
     .filter(Boolean);
 }
+// o rótulo do botão de usar combina com o que o item realmente faz: dá fome -> "Comer",
+// só dá alegria (sem fome) -> "Brincar" — em vez de sempre dizer a mesma coisa genérica
+// pra tudo. "Usar" é só uma sobra defensiva: hoje todo item sem fome nem alegria já nem
+// mostra botão (ver temEfeito abaixo), então esse terceiro caso não acontece na prática.
+function rotuloAcaoItemLoja(it){
+  if(it.fome > 0) return 'Comer';
+  if(it.alegria > 0) return 'Brincar';
+  return 'Usar';
+}
 function cartaoMochilaLoja({chave, it, variante}){
   const nome = variante ? it.nome + ' (' + variante.nome + ')' : it.nome;
   const imagem = (variante && variante.imagemUrl) || it.imagemUrl;
@@ -3036,7 +3050,7 @@ function cartaoMochilaLoja({chave, it, variante}){
     ${imagem ? `<img src="${esc(imagem)}" alt="" style="width:32px;height:32px;object-fit:contain">` : `<span class="emoji">${esc(it.emoji)}</span>`}
     <b>${esc(nome)}</b>
     <small style="font-weight:900;color:#7F8C8D">tem ${estado.inventario[chave]}</small>
-    ${temEfeito ? `<div style="margin-top:6px"><button class="btn pequeno laranja" onclick="consumirItemLoja('${chave}')">Dar pro bicho</button></div>` : ''}
+    ${temEfeito ? `<div style="margin-top:auto;padding-top:6px"><button class="btn pequeno laranja" onclick="consumirItemLoja('${chave}')">${rotuloAcaoItemLoja(it)}</button></div>` : ''}
   </div>`;
 }
 // menu "+" de cada item do inventário: mesma ideia do popup do botão Casa (ver
@@ -3086,7 +3100,8 @@ function consumirItemLoja(chave){
   estado.inventario[chave]--;
   estado.fome = lim(estado.fome + it.fome);
   estado.felicidade = lim(estado.felicidade + it.alegria);
-  brinde(it.emoji + ' Nhac! Fome em ' + lim(estado.fome) + '.');
+  const msg = it.fome > 0 ? 'Nhac! Fome em ' + estado.fome + '.' : 'Que alegria! Alegria em ' + estado.felicidade + '.';
+  brinde(it.emoji + ' ' + msg);
   atualizarHud(); RENDER.inventario();
   agendarSalvar();
 }
