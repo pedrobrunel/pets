@@ -1,5 +1,11 @@
-/* Service worker da Bichoteca — cache simples, funciona offline depois da 1ª visita */
-const CACHE = 'bichoteca-v1';
+/* Service worker da Bichoteca — funciona offline depois da 1ª visita.
+   Rede primeiro, cache só como fallback (offline OU a rede falhar): ao contrário de
+   "cache primeiro", isso nunca deixa alguém preso numa versão antiga só porque o app já
+   tinha sido cacheado antes — toda vez que tem internet, pega a versão nova e atualiza o
+   cache por baixo dos panos. "bichoteca-v2" (e o filtro no "activate") existem só pra
+   limpar de vez o cache antigo de quem ficou preso na estratégia velha; não precisa
+   trocar esse número a cada deploy daqui pra frente. */
+const CACHE = 'bichoteca-v2';
 const ARQUIVOS = ['./', './index.html', './app.html', './manifest.json', './icone-192.png', './icone-512.png'];
 
 self.addEventListener('install', e => {
@@ -13,11 +19,11 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   if (e.request.url.includes('/api/')) return; // dados da conta: sempre da rede, nunca em cache
   e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
+    fetch(e.request).then(res => {
       const copia = res.clone();
       caches.open(CACHE).then(c => c.put(e.request, copia)).catch(() => {});
       return res;
-    }).catch(() => caches.match('./app.html')))
+    }).catch(() => caches.match(e.request).then(hit => hit || caches.match('./app.html')))
   );
 });
 
