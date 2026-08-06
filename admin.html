@@ -584,7 +584,7 @@ body.conectando-fluxo{cursor:crosshair}
 
     <section id="aba-jornal" class="oculto">
       <h2>📰 Jornal (Neoiatimes)</h2>
-      <p class="sub">artigos do jornal temático da vila — geral, ligado a um mundo (vira seção daquele assunto) ou assinado por um colunista de verdade (um NPC já cadastrado; a assinatura no jornal abre o diálogo dele). Só é alcançável por um ponto tipo "tela" num mapa (aba Mapas), que você coloca manualmente.</p>
+      <p class="sub">artigos do jornal temático da vila — geral, ligado a um mundo (vira seção daquele assunto, com a cor do mundo) ou assinado por um colunista de verdade (um NPC já cadastrado; a assinatura no jornal abre o diálogo dele). O Jornal tem aba própria no menu inferior do jogo.</p>
       <button class="btn" id="btn-novo-artigo" style="margin-bottom:14px">+ Novo artigo</button>
 
       <form id="form-artigo" class="oculto">
@@ -603,7 +603,7 @@ body.conectando-fluxo{cursor:crosshair}
         <label>nome do autor <span style="font-weight:700;color:#7F8C8D">(usado se não tiver colunista; ex.: "Redação")</span></label>
         <input type="text" id="artigo-autor" placeholder="ex.: Redação" maxlength="60">
 
-        <label style="margin-top:10px">imagem <span style="font-weight:700;color:#7F8C8D">(opcional)</span></label>
+        <label style="margin-top:10px">imagem de capa <span style="font-weight:700;color:#7F8C8D">(opcional, mas deixa o artigo bem mais chamativo no feed e na manchete)</span></label>
         <div class="upload" id="zona-upload-artigo">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
         <input type="file" id="input-artigo" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="preview-artigo"></div>
