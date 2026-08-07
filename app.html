@@ -244,7 +244,7 @@ body.tela-cheia #app{padding:0;max-width:none}
 #tela-arcade.ativa, #tela-licao.ativa{
   background:var(--papel);padding:calc(env(safe-area-inset-top,0px) + 60px) 16px 24px;
 }
-#tela-arcade.ativa{overflow:hidden}
+#tela-arcade.ativa{overflow-y:auto;-webkit-overflow-scrolling:touch}
 #tela-licao.ativa{overflow-y:auto;-webkit-overflow-scrolling:touch}
 .cena-scroll{
   width:100%;height:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
@@ -3552,6 +3552,7 @@ function jogoPescaria(){
 /* --- minigame 9: bolha de sabão (ref: quebra-cabeça de mira e cores clássico de SNES) --- */
 function jogoBolha(){
   const COLS = 7, LINHAS = 10, INICIAL_LINHAS = 4, MIN_GRUPO = 3;
+  const CORES_BOLHA = ['manga','rosa','mata','ceu','jabuti','moeda']; // mesma ordem das classes .corN
   let grade = Array(COLS*LINHAS).fill(null);
   for(let l=0; l<INICIAL_LINHAS; l++){
     for(let c=0; c<COLS; c++) grade[l*COLS+c] = Math.floor(Math.random()*6);
@@ -3612,7 +3613,10 @@ function jogoBolha(){
   function pinta(marcadas){
     $('#grade-bolhas').innerHTML = grade.map((c,i) =>
       `<div class="bolha-cel${c!==null?' cor'+c:''}${marcadas && marcadas.has(i)?' estourando':''}"></div>`).join('');
-    $('#bolha-atual').className = 'bolha-preview cor' + corAtual;
+    // o botão de atirar já mostra a cor da bolha atual — sem precisar de um indicador à parte
+    const nomeCor = CORES_BOLHA[corAtual];
+    const btn = $('#btn-atirar-bolha');
+    if(btn){ btn.style.setProperty('--bg', `var(--${nomeCor})`); btn.style.setProperty('--edge', `var(--${nomeCor}-rim)`); }
     $('#bolha-proxima').className = 'bolha-preview pequena cor' + corProxima;
     $('#placar-bolhas').textContent = pontos;
     pintarMira();
@@ -3714,8 +3718,7 @@ function jogoBolha(){
     </div>
     <div class="mira-faixa"><div id="mira-bolha" class="mira-bolha">▼</div></div>
     <div class="canhao-bolha">
-      <span class="bolha-preview" id="bolha-atual"></span>
-      <button class="btn grande amarelo" onclick="window._atirarBolha()">Atirar!</button>
+      <button id="btn-atirar-bolha" class="btn grande" onclick="window._atirarBolha()">Atirar!</button>
       <span>próxima: <span class="bolha-preview pequena" id="bolha-proxima"></span></span>
     </div>
     <p class="aviso" style="margin-top:10px">Espere a mira ▼ passar pela coluna certa e toque em "Atirar!". 3 ou mais bolhas da mesma cor encostadas estouram!</p>`;
