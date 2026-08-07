@@ -858,16 +858,24 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .ultimo-peixe-pescaria{text-align:center;font-weight:900;font-size:14px;margin:10px 0;min-height:18px}
 
 /* ---------- bolha de sabão (minigame 9, ref: quebra-cabeça de mira e cores clássico de SNES) ---------- */
+/* o campo é quem define a largura/centralização (280px) — a grade e a faixa da mira só
+   herdam 100%/mesmo max-width dele, assim os dois ficam com a borda esquerda EXATAMENTE
+   alinhada (mesma referência pra calibrar a mira e pra animar o tiro voando) */
+.bolha-campo{position:relative;max-width:280px;margin:0 auto}
 .grade-bolhas{display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(10,1fr);gap:3px;
-  max-width:280px;aspect-ratio:7/10;margin:0 auto;background:linear-gradient(180deg,#EAF2F8 0%,#fff 60%);
+  width:100%;aspect-ratio:7/10;background:linear-gradient(180deg,#EAF2F8 0%,#fff 60%);
   border:var(--borda) solid var(--contorno);border-bottom-width:6px;border-radius:var(--r);padding:6px}
 .bolha-cel{border-radius:50%;background:transparent;transition:transform .12s ease}
-.bolha-cel.cor0,.bolha-preview.cor0{background:var(--manga);border:2px solid var(--manga-rim)}
-.bolha-cel.cor1,.bolha-preview.cor1{background:var(--rosa);border:2px solid var(--rosa-rim)}
-.bolha-cel.cor2,.bolha-preview.cor2{background:var(--mata);border:2px solid var(--mata-rim)}
-.bolha-cel.cor3,.bolha-preview.cor3{background:var(--ceu);border:2px solid var(--ceu-rim)}
-.bolha-cel.cor4,.bolha-preview.cor4{background:var(--jabuti);border:2px solid var(--jabuti-rim)}
-.bolha-cel.cor5,.bolha-preview.cor5{background:var(--moeda);border:2px solid var(--moeda-rim)}
+.bolha-cel.estourando{animation:estourarBolha .26s ease-out forwards}
+@keyframes estourarBolha{0%{transform:scale(1);opacity:1}55%{transform:scale(1.35);opacity:.85}100%{transform:scale(.15);opacity:0}}
+.bolha-voando{position:absolute;width:26px;height:26px;border-radius:50%;transform:translate(-50%,-50%);
+  pointer-events:none;z-index:5;opacity:0}
+.bolha-cel.cor0,.bolha-preview.cor0,.bolha-voando.cor0{background:var(--manga);border:2px solid var(--manga-rim)}
+.bolha-cel.cor1,.bolha-preview.cor1,.bolha-voando.cor1{background:var(--rosa);border:2px solid var(--rosa-rim)}
+.bolha-cel.cor2,.bolha-preview.cor2,.bolha-voando.cor2{background:var(--mata);border:2px solid var(--mata-rim)}
+.bolha-cel.cor3,.bolha-preview.cor3,.bolha-voando.cor3{background:var(--ceu);border:2px solid var(--ceu-rim)}
+.bolha-cel.cor4,.bolha-preview.cor4,.bolha-voando.cor4{background:var(--jabuti);border:2px solid var(--jabuti-rim)}
+.bolha-cel.cor5,.bolha-preview.cor5,.bolha-voando.cor5{background:var(--moeda);border:2px solid var(--moeda-rim)}
 .mira-faixa{position:relative;max-width:280px;height:16px;margin:4px auto 0}
 .mira-bolha{position:absolute;top:0;transform:translateX(-50%);font-size:13px;color:var(--tinta);transition:left .15s linear}
 .canhao-bolha{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:8px;font-size:12px;font-weight:800}
@@ -3551,77 +3559,138 @@ function jogoBolha(){
   let corAtual = Math.floor(Math.random()*6);
   let corProxima = Math.floor(Math.random()*6);
   let colunaAlvo = Math.floor(COLS/2), direcaoMira = 1;
-  let pontos = 0, bolhasEstouradas = 0, rodando = true, miraTimer = null;
+  let pontos = 0, bolhasEstouradas = 0, rodando = true, disparando = false;
+  let miraTimer = null, timerVoo = null, timerEstouro = null;
+  let posicoesColunas = []; // centro (em px, relativo ao #campo-bolhas) de cada coluna — medido de verdade no DOM
 
-  function grupoConectado(inicio){
-    const cor = grade[inicio];
+  function grupoConectado(g, inicio){
+    const cor = g[inicio];
     const visto = new Set([inicio]);
     const fila = [inicio];
     while(fila.length){
       const i = fila.pop();
       const col = i % COLS, lin = Math.floor(i/COLS);
       const vizinhos = [col>0?i-1:-1, col<COLS-1?i+1:-1, lin>0?i-COLS:-1, lin<LINHAS-1?i+COLS:-1];
-      vizinhos.forEach(v => { if(v>=0 && !visto.has(v) && grade[v]===cor){ visto.add(v); fila.push(v); } });
+      vizinhos.forEach(v => { if(v>=0 && !visto.has(v) && g[v]===cor){ visto.add(v); fila.push(v); } });
     }
     return visto;
   }
   // toda bolha precisa de um caminho até o teto (linha 0) pra continuar presa — sem apoio, ela
-  // cai e estoura também (mesma regra clássica de bolha de sabão)
-  function removerDesconectadas(){
+  // cai e estoura também (mesma regra clássica de bolha de sabão). Recebe uma cópia simulada
+  // da grade (sem mutar a de verdade) pra dar pra saber quem mais estoura ANTES de animar.
+  function indicesDesconectados(g){
     const ancoradas = new Set();
     const fila = [];
-    for(let c=0; c<COLS; c++){ if(grade[c]!==null){ ancoradas.add(c); fila.push(c); } }
+    for(let c=0; c<COLS; c++){ if(g[c]!==null){ ancoradas.add(c); fila.push(c); } }
     while(fila.length){
       const i = fila.pop();
       const col = i % COLS, lin = Math.floor(i/COLS);
       const vizinhos = [col>0?i-1:-1, col<COLS-1?i+1:-1, lin>0?i-COLS:-1, lin<LINHAS-1?i+COLS:-1];
-      vizinhos.forEach(v => { if(v>=0 && grade[v]!==null && !ancoradas.has(v)){ ancoradas.add(v); fila.push(v); } });
+      vizinhos.forEach(v => { if(v>=0 && g[v]!==null && !ancoradas.has(v)){ ancoradas.add(v); fila.push(v); } });
     }
-    let caidas = 0;
-    for(let i=0; i<grade.length; i++){
-      if(grade[i]!==null && !ancoradas.has(i)){ grade[i]=null; caidas++; }
-    }
-    return caidas;
+    const soltas = new Set();
+    for(let i=0; i<g.length; i++){ if(g[i]!==null && !ancoradas.has(i)) soltas.add(i); }
+    return soltas;
+  }
+  // mede a posição real de cada coluna no DOM (em vez de calcular por percentual) — a grade
+  // tem padding e gap, então uma conta ingênua desalinhava a mira das colunas de verdade
+  function calibrarMira(){
+    const campo = $('#campo-bolhas'), grid = $('#grade-bolhas');
+    if(!campo || !grid || !grid.children.length) return;
+    const campoRect = campo.getBoundingClientRect();
+    posicoesColunas = Array.from({length: COLS}, (_, c) => {
+      const r = grid.children[c].getBoundingClientRect();
+      return r.left + r.width/2 - campoRect.left;
+    });
   }
   function pintarMira(){
     const el = $('#mira-bolha');
-    if(el) el.style.left = `calc(${colunaAlvo} * (100% / ${COLS}) + (50% / ${COLS}))`;
+    if(!el) return;
+    if(!posicoesColunas.length) calibrarMira();
+    if(posicoesColunas.length) el.style.left = posicoesColunas[colunaAlvo] + 'px';
   }
-  function pinta(){
-    $('#grade-bolhas').innerHTML = grade.map(c => `<div class="bolha-cel${c!==null?' cor'+c:''}"></div>`).join('');
+  function pinta(marcadas){
+    $('#grade-bolhas').innerHTML = grade.map((c,i) =>
+      `<div class="bolha-cel${c!==null?' cor'+c:''}${marcadas && marcadas.has(i)?' estourando':''}"></div>`).join('');
     $('#bolha-atual').className = 'bolha-preview cor' + corAtual;
     $('#bolha-proxima').className = 'bolha-preview pequena cor' + corProxima;
     $('#placar-bolhas').textContent = pontos;
     pintarMira();
   }
+  // anima uma bolha voando do canhão até a célula-alvo (posição de verdade, medida no DOM)
+  // antes de mexer na grade — só depois que ela "chega" é que o estado do jogo é atualizado
+  function animarTiro(col, linAlvo, cor, aoTerminar){
+    const campo = $('#campo-bolhas'), grid = $('#grade-bolhas'), voando = $('#bolha-voando');
+    if(!campo || !grid || !voando || !grid.children.length) return aoTerminar();
+    const campoRect = campo.getBoundingClientRect();
+    const alvoRect = grid.children[linAlvo*COLS+col].getBoundingClientRect();
+    const destinoX = alvoRect.left + alvoRect.width/2 - campoRect.left;
+    const destinoY = alvoRect.top + alvoRect.height/2 - campoRect.top;
+    const origemX = posicoesColunas.length ? posicoesColunas[col] : destinoX;
+    const origemY = campoRect.height + 14; // logo abaixo da grade, de onde a mira aponta
+
+    voando.className = 'bolha-voando cor' + cor;
+    voando.style.transition = 'none';
+    voando.style.left = origemX + 'px';
+    voando.style.top = origemY + 'px';
+    voando.style.opacity = '1';
+    void voando.offsetWidth; // força o navegador aplicar a posição inicial antes de animar
+    voando.style.transition = 'left .22s ease-out, top .22s ease-out';
+    voando.style.left = destinoX + 'px';
+    voando.style.top = destinoY + 'px';
+    timerVoo = setTimeout(() => {
+      voando.style.opacity = '0';
+      if(rodando) aoTerminar();
+    }, 230);
+  }
+  function checarFimDeJogo(){
+    if(grade.slice((LINHAS-1)*COLS, LINHAS*COLS).some(c => c !== null)) encerra();
+  }
   window._atirarBolha = () => {
-    if(!rodando) return;
+    if(!rodando || disparando) return;
     const col = colunaAlvo;
     let fundo = -1;
     for(let l=0; l<LINHAS; l++){ if(grade[l*COLS+col]!==null) fundo = l; }
     const alvo = fundo === -1 ? 0 : fundo+1;
     if(alvo >= LINHAS) return; // coluna já tomada até embaixo (raríssimo, rede de segurança)
-    grade[alvo*COLS+col] = corAtual;
-    tocarEfeito('bolha', 'acerto');
+    disparando = true;
+    const corDoTiro = corAtual;
 
-    const grupo = grupoConectado(alvo*COLS+col);
-    if(grupo.size >= MIN_GRUPO){
-      grupo.forEach(g => { grade[g] = null; });
-      const caidas = removerDesconectadas();
-      bolhasEstouradas += grupo.size + caidas;
-      pontos += grupo.size*10 + caidas*15;
-    }
-    pontos += 3;
+    animarTiro(col, alvo, corDoTiro, () => {
+      grade[alvo*COLS+col] = corDoTiro;
+      tocarEfeito('bolha', 'acerto');
 
-    corAtual = corProxima;
-    corProxima = Math.floor(Math.random()*6);
-    pinta();
-
-    if(grade.slice((LINHAS-1)*COLS, LINHAS*COLS).some(c => c !== null)) encerra();
+      const grupo = grupoConectado(grade, alvo*COLS+col);
+      if(grupo.size >= MIN_GRUPO){
+        const copia = grade.slice();
+        grupo.forEach(i => { copia[i] = null; });
+        const desconectadas = indicesDesconectados(copia);
+        const todas = new Set([...grupo, ...desconectadas]);
+        bolhasEstouradas += todas.size;
+        pontos += grupo.size*10 + desconectadas.size*15 + 3;
+        pinta(todas); // mostra o pop antes de tirar de verdade da grade
+        timerEstouro = setTimeout(() => {
+          if(!rodando) return;
+          todas.forEach(i => { grade[i] = null; });
+          corAtual = corProxima;
+          corProxima = Math.floor(Math.random()*6);
+          pinta();
+          disparando = false;
+          checarFimDeJogo();
+        }, 260);
+      } else {
+        pontos += 3;
+        corAtual = corProxima;
+        corProxima = Math.floor(Math.random()*6);
+        pinta();
+        disparando = false;
+        checarFimDeJogo();
+      }
+    });
   };
   function encerra(){
     rodando = false;
-    clearInterval(miraTimer);
+    clearInterval(miraTimer); clearTimeout(timerVoo); clearTimeout(timerEstouro);
     if(pontos > estado.recordes.bolha) estado.recordes.bolha = pontos;
     const premio = Math.round(pontos/3);
     estado.energia = lim(estado.energia - 10);
@@ -3634,12 +3703,15 @@ function jogoBolha(){
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoBolha()">Jogar de novo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
-  pararLoops = () => { rodando = false; clearInterval(miraTimer); };
+  pararLoops = () => { rodando = false; clearInterval(miraTimer); clearTimeout(timerVoo); clearTimeout(timerEstouro); };
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
     <div class="titulo-secao"><h2>🎈 Bolha de Sabão</h2><small>pontos: <b id="placar-bolhas">0</b></small></div>
-    <div id="grade-bolhas" class="grade-bolhas"${estiloFundoMinigame('bolha')}></div>
+    <div id="campo-bolhas" class="bolha-campo">
+      <div id="grade-bolhas" class="grade-bolhas"${estiloFundoMinigame('bolha')}></div>
+      <div id="bolha-voando" class="bolha-voando"></div>
+    </div>
     <div class="mira-faixa"><div id="mira-bolha" class="mira-bolha">▼</div></div>
     <div class="canhao-bolha">
       <span class="bolha-preview" id="bolha-atual"></span>
