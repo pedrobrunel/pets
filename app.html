@@ -1470,12 +1470,6 @@ RENDER.casa = () => {
       <div class="camada-moveis"></div>
       ${svgBicho(estado.tipo,{equipado:estado.equipado, classe: h.min>=70?'feliz':''})}
     </div>
-    ${temFundo && !estado.casaDesbloqueada ? `<div class="sticker" style="margin-top:14px;text-align:center">
-      <span style="font-size:34px;display:block">🏠</span>
-      <b style="font-family:'Baloo 2';font-size:18px;display:block;margin-top:2px">Tenha sua própria casa!</b>
-      <p style="font-size:13px;margin:4px 0 10px">Desbloqueie pra decorar o quarto com os móveis que comprar.</p>
-      <button class="btn amarelo" onclick="desbloquearCasa()">Desbloquear por 🪙 ${CASA_CONFIG.precoCasa}</button>
-    </div>` : ''}
     ${temFundo && logado ? `<div class="sticker" style="margin-top:14px">
       <b style="font-family:'Baloo 2';font-size:16px;display:block;margin-bottom:6px">👀 Visitar a casa de um amigo</b>
       <div style="display:flex;gap:8px">
@@ -1504,8 +1498,8 @@ RENDER.casa = () => {
         <button class="carrossel-item" style="--cor:var(--mata);--cor-borda:var(--mata-rim)" onclick="ir('loja')">
           <span class="carrossel-emoji">🍉</span><span>Alimentar</span>
         </button>
-        ${casaAtiva ? `<button class="carrossel-item" style="--cor:var(--rosa);--cor-borda:var(--rosa-rim)" onclick="ir('editarcasa')">
-          <span class="carrossel-emoji">🎨</span><span>Editar Casa</span>
+        ${temFundo ? `<button class="carrossel-item" style="--cor:var(--rosa);--cor-borda:var(--rosa-rim)" onclick="abrirCasaCarrossel()">
+          <span class="carrossel-emoji">🏠</span><span>${estado.casaDesbloqueada ? 'Editar Casa' : 'Desbloquear'}</span>
         </button>` : ''}
         <button class="carrossel-item" style="--cor:var(--ceu);--cor-borda:var(--ceu-rim)" onclick="ir('trilhas')">
           <span class="carrossel-emoji">🗺️</span><span>Trilhas</span>
@@ -1535,6 +1529,23 @@ function desbloquearCasa(){
   brinde('🏠 Casa desbloqueada! Agora é só decorar.');
   ir(telaAtual === 'editarcasa' ? 'editarcasa' : 'casa');
   agendarSalvar();
+}
+// cartão "🏠 Casa" do carrossel de acessos rápidos: antes tinha um sticker grande e fixo
+// só pra convidar a desbloquear (ocupava a tela toda, mesmo pra quem só queria cuidar
+// do bicho) — agora esse convite mora num modal, aberto sob demanda pelo carrossel.
+function abrirCasaCarrossel(){
+  if(estado.casaDesbloqueada) return ir('editarcasa');
+  modal(`
+    <span style="font-size:34px;display:block">🏠</span>
+    <h2 style="font-size:20px;margin:6px 0 2px">Tenha sua própria casa!</h2>
+    <p style="font-size:13px;margin:4px 0 14px">Desbloqueie pra decorar o quarto com os móveis que comprar.</p>
+    <button class="btn amarelo grande" onclick="confirmarDesbloqueioCasa()">Desbloquear por 🪙 ${CASA_CONFIG.precoCasa}</button>
+    <button class="btn branco grande" style="margin-top:8px" onclick="fecharModal()">Agora não</button>
+  `);
+}
+function confirmarDesbloqueioCasa(){
+  desbloquearCasa();
+  fecharModal();
 }
 
 /* ---------- 4b. TELA: EDITAR CASA (decoração de verdade — arrastar, girar, remover) ----------
