@@ -878,6 +878,10 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .bolha-cel.cor5,.bolha-preview.cor5,.bolha-voando.cor5{background:var(--moeda);border:2px solid var(--moeda-rim)}
 .mira-faixa{position:relative;max-width:280px;height:16px;margin:4px auto 0}
 .mira-bolha{position:absolute;top:0;transform:translateX(-50%);font-size:13px;color:var(--tinta);transition:left .15s linear}
+/* pisca bem visível enquanto a mira está "estacionada" numa ponta — sem isso, dava pra
+   confundir "parada, pode atirar" com "só de passagem, vai continuar andando" */
+.mira-bolha.parada{color:var(--erro);animation:miraParada .5s ease-in-out infinite}
+@keyframes miraParada{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.5)}}
 .canhao-bolha{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:8px;font-size:12px;font-weight:800}
 .bolha-preview{display:inline-block;width:26px;height:26px;border-radius:50%;vertical-align:middle}
 .bolha-preview.pequena{width:18px;height:18px}
@@ -3604,11 +3608,12 @@ function jogoBolha(){
       return r.left + r.width/2 - campoRect.left;
     });
   }
-  function pintarMira(){
+  function pintarMira(parada){
     const el = $('#mira-bolha');
     if(!el) return;
     if(!posicoesColunas.length) calibrarMira();
     if(posicoesColunas.length) el.style.left = posicoesColunas[colunaAlvo] + 'px';
+    el.classList.toggle('parada', !!parada);
   }
   function pinta(marcadas){
     $('#grade-bolhas').innerHTML = grade.map((c,i) =>
@@ -3723,16 +3728,17 @@ function jogoBolha(){
     </div>
     <p class="aviso" style="margin-top:10px">Espere a mira ▼ passar pela coluna certa e toque em "Atirar!". 3 ou mais bolhas da mesma cor encostadas estouram!</p>`;
   pinta();
-  // nas pontas (coluna 0 e última) a mira ficava só 1 tick antes de já virar de volta — o
-  // tempo de reação da pessoa não alcançava, então a bolinha "nunca ia" pra primeira/última
-  // coluna. Agora ela pausa alguns ticks a mais bem na ponta antes de voltar.
+  // nas pontas (coluna 0 e última) a mira virava de volta rápido demais pro tempo de reação
+  // de quem está jogando — mesmo com uma pausa curta (640ms), continuava impossível de acertar
+  // a primeira/última coluna. Agora ela realmente PARA lá por quase 2 segundos antes de voltar.
   miraTimer = setInterval(() => {
     if(!rodando) return;
-    if(pausaMira > 0){ pausaMira--; return; }
+    if(pausaMira > 0){ pausaMira--; pintarMira(true); return; }
     colunaAlvo += direcaoMira;
-    if(colunaAlvo >= COLS-1 || colunaAlvo <= 0){ direcaoMira *= -1; pausaMira = 3; }
-    pintarMira();
-  }, 160);
+    const bateuBorda = colunaAlvo >= COLS-1 || colunaAlvo <= 0;
+    if(bateuBorda){ direcaoMira *= -1; pausaMira = 8; }
+    pintarMira(bateuBorda);
+  }, 200);
 }
 
 /* ---------- 9. TELA: LOJA DA VILA ----------
