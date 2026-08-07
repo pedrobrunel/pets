@@ -250,6 +250,44 @@ body.tela-cheia #app{padding:0;max-width:none}
 }
 .cena-scroll::-webkit-scrollbar{display:none} /* chrome/safari: idem */
 .cena-scroll.arrastando{cursor:grabbing;scroll-snap-type:none}
+
+/* carrossel do Social (Perfil): em vez da grade empilhada de botões brancos (parecia
+   painel de SaaS, não jogo), os atalhos viram cartões coloridos que deslizam com
+   scroll-snap — o de trás encolhe/apaga um pouco, o centralizado "pipoca" pro tamanho
+   cheio (ver .ativo, aplicado via JS conforme rola — não dá pra fazer só em CSS porque
+   depende de QUAL cartão está centralizado a cada instante). Arrasto com mouse reaproveita
+   ativarArrastoCena(), a mesma função da rolagem do mapa.
+   Os "espaços" nas pontas são <div> de verdade, não padding no container: padding no
+   final (lado de dentro) de um flex que rola some do scrollWidth em vários navegadores
+   (bug conhecido) — o carrossel nunca deslizava até centralizar o último cartão. Com um
+   elemento real, o navegador conta certo. gap não é usado por causa disso (viraria
+   padding do mesmo jeito nas pontas); a distância entre cartões é margin-right direto. */
+.carrossel-social{
+  overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;cursor:grab;
+  scroll-snap-type:x mandatory;scrollbar-width:none;-ms-overflow-style:none;
+  margin:0 -16px;padding:10px 0 6px;
+}
+.carrossel-social::-webkit-scrollbar{display:none}
+.carrossel-social.arrastando{cursor:grabbing;scroll-snap-type:none}
+.carrossel-social-trilha{display:flex}
+.carrossel-social-espaco{flex:none;width:calc(50% - 46px)}
+.carrossel-social-espaco.fim{width:calc(50% - 60px)} /* 14px a menos: o último cartão já
+  tem margin-right:14px, que soma na distância até o fim — sem isso o carrossel para
+  14px além do necessário e o último cartão nunca chega no centro exato */
+.carrossel-social-item{
+  scroll-snap-align:center;flex:none;width:92px;height:92px;padding:0;margin-right:14px;
+  border-radius:24px;background:var(--cor);border:none;border-bottom:6px solid var(--cor-borda);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  color:#fff;font-weight:900;font-size:12px;text-shadow:0 -2px var(--cor-borda);
+  transition:transform .3s cubic-bezier(.34,1.76,.64,1), opacity .3s ease, border-bottom-width .1s ease;
+  transform:scale(.8);opacity:.5;
+}
+.carrossel-social-item.ativo{transform:scale(1);opacity:1}
+.carrossel-social-item:active{transform:scale(.92)!important;border-bottom-width:2px}
+.carrossel-social-emoji{font-size:30px}
+.carrossel-social-pontos{display:flex;justify-content:center;gap:6px;margin:0 0 8px}
+.carrossel-social-ponto{width:6px;height:6px;border-radius:50%;background:var(--contorno);opacity:.3;padding:0;border:none;transition:opacity .2s ease,transform .2s ease}
+.carrossel-social-ponto.ativo{opacity:1;transform:scale(1.5)}
 .cena-quadro{position:relative;height:100%;display:inline-block;vertical-align:top;line-height:0}
 .cena-img{display:block;height:100%;width:auto;max-width:none;-webkit-user-drag:none;user-select:none;pointer-events:none}
 .predio{
@@ -3970,13 +4008,28 @@ RENDER.perfil = () => {
     </div>
 
     <div class="titulo-secao" style="margin:6px 4px 8px"><h2 style="font-size:18px">Social</h2></div>
-    <div class="grade" style="margin-bottom:6px">
-      <button class="btn branco pequeno" onclick="ir('amigos')">👥 Amigos</button>
-      <button class="btn branco pequeno" onclick="ir('mensagens')">💬 Mensagens</button>
-      <button class="btn branco pequeno" onclick="abrirRanking()">🏆 Ranking</button>
-      <button class="btn branco pequeno" onclick="ir('clube')">${clubeAtual ? esc(clubeAtual.emoji) : '🏅'} Clube</button>
-      <button class="btn branco pequeno" onclick="compartilhar()">🔗 Compartilhar</button>
+    <div class="carrossel-social" id="carrossel-social">
+      <div class="carrossel-social-trilha">
+        <div class="carrossel-social-espaco" aria-hidden="true"></div>
+        <button class="carrossel-social-item" style="--cor:var(--ceu);--cor-borda:var(--ceu-rim)" onclick="ir('amigos')">
+          <span class="carrossel-social-emoji">👥</span><span>Amigos</span>
+        </button>
+        <button class="carrossel-social-item" style="--cor:var(--rosa);--cor-borda:var(--rosa-rim)" onclick="ir('mensagens')">
+          <span class="carrossel-social-emoji">💬</span><span>Mensagens</span>
+        </button>
+        <button class="carrossel-social-item" style="--cor:var(--moeda);--cor-borda:var(--moeda-rim)" onclick="abrirRanking()">
+          <span class="carrossel-social-emoji">🏆</span><span>Ranking</span>
+        </button>
+        <button class="carrossel-social-item" style="--cor:var(--jabuti);--cor-borda:var(--jabuti-rim)" onclick="ir('clube')">
+          <span class="carrossel-social-emoji">${clubeAtual ? esc(clubeAtual.emoji) : '🏅'}</span><span>Clube</span>
+        </button>
+        <button class="carrossel-social-item" style="--cor:var(--mata);--cor-borda:var(--mata-rim)" onclick="compartilhar()">
+          <span class="carrossel-social-emoji">🔗</span><span>Compartilhar</span>
+        </button>
+        <div class="carrossel-social-espaco fim" aria-hidden="true"></div>
+      </div>
     </div>
+    <div class="carrossel-social-pontos" id="carrossel-social-pontos"></div>
 
     ${blocoNpcsDaTela('perfil')}
     ${blocoMinhasMissoes()}
@@ -4005,7 +4058,36 @@ RENDER.perfil = () => {
     </div>`;
   $('#btn-sair-conta').hidden = !logado;
   atualizarBotaoLembrete();
+  iniciarCarrosselSocial();
 };
+// carrossel do Social: marca o cartão mais perto do centro como .ativo (o CSS cuida da
+// animação de escala/opacidade) e reaproveita o arrasto por mouse do mapa (ativarArrastoCena)
+function iniciarCarrosselSocial(){
+  const trilho = $('#carrossel-social');
+  if(!trilho) return;
+  const itens = Array.from(trilho.querySelectorAll('.carrossel-social-item'));
+  const pontos = $('#carrossel-social-pontos');
+  pontos.innerHTML = itens.map(() => `<button type="button" class="carrossel-social-ponto" aria-label="Ir"></button>`).join('');
+  const pontosEls = Array.from(pontos.children);
+  pontosEls.forEach((p, i) => p.onclick = () => itens[i].scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'}));
+  let ticking = false;
+  function atualizar(){
+    const centro = trilho.scrollLeft + trilho.clientWidth / 2;
+    let maisPerto = 0, menorDist = Infinity;
+    itens.forEach((el, i) => {
+      const dist = Math.abs((el.offsetLeft + el.offsetWidth / 2) - centro);
+      if(dist < menorDist){ menorDist = dist; maisPerto = i; }
+    });
+    itens.forEach((el, i) => el.classList.toggle('ativo', i === maisPerto));
+    pontosEls.forEach((el, i) => el.classList.toggle('ativo', i === maisPerto));
+    ticking = false;
+  }
+  trilho.addEventListener('scroll', () => {
+    if(!ticking){ requestAnimationFrame(atualizar); ticking = true; }
+  }, {passive:true});
+  ativarArrastoCena(trilho);
+  atualizar();
+}
 // lembrete de sequência: avisa às 19h se o aluno ainda não jogou hoje (ver
 // api/cron-lembrete-streak.php) — opcional, só aparece se o Hostmaster configurou o
 // VAPID_PUBLIC_KEY e o navegador suporta Push. Estado real é sempre consultado no
