@@ -251,30 +251,31 @@ body.tela-cheia #app{padding:0;max-width:none}
 .cena-scroll::-webkit-scrollbar{display:none} /* chrome/safari: idem */
 .cena-scroll.arrastando{cursor:grabbing;scroll-snap-type:none}
 
-/* carrossel do Social (Perfil): em vez da grade empilhada de botões brancos (parecia
-   painel de SaaS, não jogo), os atalhos viram cartões coloridos que deslizam com
-   scroll-snap — o de trás encolhe/apaga um pouco, o centralizado "pipoca" pro tamanho
-   cheio (ver .ativo, aplicado via JS conforme rola — não dá pra fazer só em CSS porque
-   depende de QUAL cartão está centralizado a cada instante). Arrasto com mouse reaproveita
-   ativarArrastoCena(), a mesma função da rolagem do mapa.
+/* carrossel de atalhos (Social no Perfil, agora também os acessos rápidos da Casa): em
+   vez de botões empilhados tipo painel de SaaS, os atalhos viram cartões coloridos que
+   deslizam com scroll-snap — o de trás encolhe/apaga um pouco, o centralizado "pipoca"
+   pro tamanho cheio (ver .ativo, aplicado via JS conforme rola — não dá pra fazer só em
+   CSS porque depende de QUAL cartão está centralizado a cada instante). Reaproveitável:
+   qualquer tela chama iniciarCarrossel(idTrilho, idPontos) com essas classes prontas.
+   Arrasto com mouse reaproveita ativarArrastoCena(), a mesma função da rolagem do mapa.
    Os "espaços" nas pontas são <div> de verdade, não padding no container: padding no
    final (lado de dentro) de um flex que rola some do scrollWidth em vários navegadores
    (bug conhecido) — o carrossel nunca deslizava até centralizar o último cartão. Com um
    elemento real, o navegador conta certo. gap não é usado por causa disso (viraria
    padding do mesmo jeito nas pontas); a distância entre cartões é margin-right direto. */
-.carrossel-social{
+.carrossel{
   overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;cursor:grab;
   scroll-snap-type:x mandatory;scrollbar-width:none;-ms-overflow-style:none;
   margin:0 -16px;padding:10px 0 6px;
 }
-.carrossel-social::-webkit-scrollbar{display:none}
-.carrossel-social.arrastando{cursor:grabbing;scroll-snap-type:none}
-.carrossel-social-trilha{display:flex}
-.carrossel-social-espaco{flex:none;width:calc(50% - 46px)}
-.carrossel-social-espaco.fim{width:calc(50% - 60px)} /* 14px a menos: o último cartão já
+.carrossel::-webkit-scrollbar{display:none}
+.carrossel.arrastando{cursor:grabbing;scroll-snap-type:none}
+.carrossel-trilha{display:flex}
+.carrossel-espaco{flex:none;width:calc(50% - 46px)}
+.carrossel-espaco.fim{width:calc(50% - 60px)} /* 14px a menos: o último cartão já
   tem margin-right:14px, que soma na distância até o fim — sem isso o carrossel para
   14px além do necessário e o último cartão nunca chega no centro exato */
-.carrossel-social-item{
+.carrossel-item{
   scroll-snap-align:center;flex:none;width:92px;height:92px;padding:0;margin-right:14px;
   border-radius:24px;background:var(--cor);border:none;border-bottom:6px solid var(--cor-borda);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
@@ -282,12 +283,12 @@ body.tela-cheia #app{padding:0;max-width:none}
   transition:transform .3s cubic-bezier(.34,1.76,.64,1), opacity .3s ease, border-bottom-width .1s ease;
   transform:scale(.8);opacity:.5;
 }
-.carrossel-social-item.ativo{transform:scale(1);opacity:1}
-.carrossel-social-item:active{transform:scale(.92)!important;border-bottom-width:2px}
-.carrossel-social-emoji{font-size:30px}
-.carrossel-social-pontos{display:flex;justify-content:center;gap:6px;margin:0 0 8px}
-.carrossel-social-ponto{width:6px;height:6px;border-radius:50%;background:var(--contorno);opacity:.3;padding:0;border:none;transition:opacity .2s ease,transform .2s ease}
-.carrossel-social-ponto.ativo{opacity:1;transform:scale(1.5)}
+.carrossel-item.ativo{transform:scale(1);opacity:1}
+.carrossel-item:active{transform:scale(.92)!important;border-bottom-width:2px}
+.carrossel-emoji{font-size:30px}
+.carrossel-pontos{display:flex;justify-content:center;gap:6px;margin:0 0 8px}
+.carrossel-ponto{width:6px;height:6px;border-radius:50%;background:var(--contorno);opacity:.3;padding:0;border:none;transition:opacity .2s ease,transform .2s ease}
+.carrossel-ponto.ativo{opacity:1;transform:scale(1.5)}
 .cena-quadro{position:relative;height:100%;display:inline-block;vertical-align:top;line-height:0}
 .cena-img{display:block;height:100%;width:auto;max-width:none;-webkit-user-drag:none;user-select:none;pointer-events:none}
 .predio{
@@ -1457,9 +1458,6 @@ RENDER.casa = () => {
       <div class="camada-moveis"></div>
       ${svgBicho(estado.tipo,{equipado:estado.equipado, classe: h.min>=70?'feliz':''})}
     </div>
-    ${casaAtiva ? `<div style="text-align:center;margin-top:8px">
-      <button class="btn branco pequeno" onclick="ir('editarcasa')">🎨 Editar minha casa</button>
-    </div>` : ''}
     ${temFundo && !estado.casaDesbloqueada ? `<div class="sticker" style="margin-top:14px;text-align:center">
       <span style="font-size:34px;display:block">🏠</span>
       <b style="font-family:'Baloo 2';font-size:18px;display:block;margin-top:2px">Tenha sua própria casa!</b>
@@ -1487,10 +1485,34 @@ RENDER.casa = () => {
 
     ${blocoNpcsDaTela('casa')}
 
-    <div style="margin-top:14px">
-      <button class="btn roxo grande" onclick="ir('loja')">🍉 Alimentar</button>
-    </div>`;
+    <div class="titulo-secao" style="margin:16px 4px 0"><h2 style="font-size:18px">Acessos rápidos</h2></div>
+    <div class="carrossel" id="carrossel-casa">
+      <div class="carrossel-trilha">
+        <div class="carrossel-espaco" aria-hidden="true"></div>
+        <button class="carrossel-item" style="--cor:var(--mata);--cor-borda:var(--mata-rim)" onclick="ir('loja')">
+          <span class="carrossel-emoji">🍉</span><span>Alimentar</span>
+        </button>
+        ${casaAtiva ? `<button class="carrossel-item" style="--cor:var(--rosa);--cor-borda:var(--rosa-rim)" onclick="ir('editarcasa')">
+          <span class="carrossel-emoji">🎨</span><span>Editar Casa</span>
+        </button>` : ''}
+        <button class="carrossel-item" style="--cor:var(--ceu);--cor-borda:var(--ceu-rim)" onclick="ir('trilhas')">
+          <span class="carrossel-emoji">🗺️</span><span>Trilhas</span>
+        </button>
+        <button class="carrossel-item" style="--cor:var(--jabuti);--cor-borda:var(--jabuti-rim)" onclick="ir('arcade')">
+          <span class="carrossel-emoji">🕹️</span><span>Arcade</span>
+        </button>
+        <button class="carrossel-item" style="--cor:var(--moeda);--cor-borda:var(--moeda-rim)" onclick="ir('jornal')">
+          <span class="carrossel-emoji">📰</span><span>Jornal</span>
+        </button>
+        <button class="carrossel-item" style="--cor:var(--manga);--cor-borda:var(--manga-rim)" onclick="ir('inventario')">
+          <span class="carrossel-emoji">🎒</span><span>Inventário</span>
+        </button>
+        <div class="carrossel-espaco fim" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div class="carrossel-pontos" id="carrossel-casa-pontos"></div>`;
   if(casaAtiva) renderCamadaMoveis(false, 'casa'); // só pra ver — quem edita é a tela "Editar minha casa"
+  iniciarCarrossel('carrossel-casa', 'carrossel-casa-pontos', 2);
 };
 function desbloquearCasa(){
   if(estado.casaDesbloqueada) return;
@@ -4008,28 +4030,28 @@ RENDER.perfil = () => {
     </div>
 
     <div class="titulo-secao" style="margin:6px 4px 8px"><h2 style="font-size:18px">Social</h2></div>
-    <div class="carrossel-social" id="carrossel-social">
-      <div class="carrossel-social-trilha">
-        <div class="carrossel-social-espaco" aria-hidden="true"></div>
-        <button class="carrossel-social-item" style="--cor:var(--ceu);--cor-borda:var(--ceu-rim)" onclick="ir('amigos')">
-          <span class="carrossel-social-emoji">👥</span><span>Amigos</span>
+    <div class="carrossel" id="carrossel-social">
+      <div class="carrossel-trilha">
+        <div class="carrossel-espaco" aria-hidden="true"></div>
+        <button class="carrossel-item" style="--cor:var(--ceu);--cor-borda:var(--ceu-rim)" onclick="ir('amigos')">
+          <span class="carrossel-emoji">👥</span><span>Amigos</span>
         </button>
-        <button class="carrossel-social-item" style="--cor:var(--rosa);--cor-borda:var(--rosa-rim)" onclick="ir('mensagens')">
-          <span class="carrossel-social-emoji">💬</span><span>Mensagens</span>
+        <button class="carrossel-item" style="--cor:var(--rosa);--cor-borda:var(--rosa-rim)" onclick="ir('mensagens')">
+          <span class="carrossel-emoji">💬</span><span>Mensagens</span>
         </button>
-        <button class="carrossel-social-item" style="--cor:var(--moeda);--cor-borda:var(--moeda-rim)" onclick="abrirRanking()">
-          <span class="carrossel-social-emoji">🏆</span><span>Ranking</span>
+        <button class="carrossel-item" style="--cor:var(--moeda);--cor-borda:var(--moeda-rim)" onclick="abrirRanking()">
+          <span class="carrossel-emoji">🏆</span><span>Ranking</span>
         </button>
-        <button class="carrossel-social-item" style="--cor:var(--jabuti);--cor-borda:var(--jabuti-rim)" onclick="ir('clube')">
-          <span class="carrossel-social-emoji">${clubeAtual ? esc(clubeAtual.emoji) : '🏅'}</span><span>Clube</span>
+        <button class="carrossel-item" style="--cor:var(--jabuti);--cor-borda:var(--jabuti-rim)" onclick="ir('clube')">
+          <span class="carrossel-emoji">${clubeAtual ? esc(clubeAtual.emoji) : '🏅'}</span><span>Clube</span>
         </button>
-        <button class="carrossel-social-item" style="--cor:var(--mata);--cor-borda:var(--mata-rim)" onclick="compartilhar()">
-          <span class="carrossel-social-emoji">🔗</span><span>Compartilhar</span>
+        <button class="carrossel-item" style="--cor:var(--mata);--cor-borda:var(--mata-rim)" onclick="compartilhar()">
+          <span class="carrossel-emoji">🔗</span><span>Compartilhar</span>
         </button>
-        <div class="carrossel-social-espaco fim" aria-hidden="true"></div>
+        <div class="carrossel-espaco fim" aria-hidden="true"></div>
       </div>
     </div>
-    <div class="carrossel-social-pontos" id="carrossel-social-pontos"></div>
+    <div class="carrossel-pontos" id="carrossel-social-pontos"></div>
 
     ${blocoNpcsDaTela('perfil')}
     ${blocoMinhasMissoes()}
@@ -4058,16 +4080,20 @@ RENDER.perfil = () => {
     </div>`;
   $('#btn-sair-conta').hidden = !logado;
   atualizarBotaoLembrete();
-  iniciarCarrosselSocial();
+  iniciarCarrossel('carrossel-social', 'carrossel-social-pontos', 2);
 };
-// carrossel do Social: marca o cartão mais perto do centro como .ativo (o CSS cuida da
-// animação de escala/opacidade) e reaproveita o arrasto por mouse do mapa (ativarArrastoCena)
-function iniciarCarrosselSocial(){
-  const trilho = $('#carrossel-social');
+// carrossel de atalhos genérico — usado no Social (Perfil) e nos acessos rápidos da
+// Casa. indiceInicial evita nascer com um lado vazio (ver .carrossel-item no CSS).
+// POSICOES_CARROSSEL lembra onde cada um parou entre re-renders: a Casa re-renderiza
+// sozinha a cada 25s (desgaste passivo do bicho, ver setInterval mais abaixo) — sem
+// isso, o carrossel "pularia" de volta pro início toda vez que o jogador tá só olhando.
+const POSICOES_CARROSSEL = {};
+function iniciarCarrossel(idTrilho, idPontos, indiceInicial){
+  const trilho = $('#' + idTrilho);
   if(!trilho) return;
-  const itens = Array.from(trilho.querySelectorAll('.carrossel-social-item'));
-  const pontos = $('#carrossel-social-pontos');
-  pontos.innerHTML = itens.map(() => `<button type="button" class="carrossel-social-ponto" aria-label="Ir"></button>`).join('');
+  const itens = Array.from(trilho.querySelectorAll('.carrossel-item'));
+  const pontos = $('#' + idPontos);
+  pontos.innerHTML = itens.map(() => `<button type="button" class="carrossel-ponto" aria-label="Ir"></button>`).join('');
   const pontosEls = Array.from(pontos.children);
   pontosEls.forEach((p, i) => p.onclick = () => itens[i].scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'}));
   let ticking = false;
@@ -4080,20 +4106,23 @@ function iniciarCarrosselSocial(){
     });
     itens.forEach((el, i) => el.classList.toggle('ativo', i === maisPerto));
     pontosEls.forEach((el, i) => el.classList.toggle('ativo', i === maisPerto));
+    POSICOES_CARROSSEL[idTrilho] = trilho.scrollLeft;
     ticking = false;
   }
   trilho.addEventListener('scroll', () => {
     if(!ticking){ requestAnimationFrame(atualizar); ticking = true; }
   }, {passive:true});
   ativarArrastoCena(trilho);
-  // nesse ponto a tela ainda tá com display:none — RENDER.perfil roda antes de ir()
-  // marcar a seção como .ativa, então offsetLeft/clientWidth ainda leem tudo zerado.
-  // Espera o próximo frame (já com a seção visível) pra calcular posição de verdade.
+  // nesse ponto a tela ainda tá com display:none — ir() só marca a seção como .ativa
+  // DEPOIS de chamar RENDER[tela](), então offsetLeft/clientWidth ainda leem tudo
+  // zerado. Espera o próximo frame (já com a seção visível) pra calcular de verdade.
   requestAnimationFrame(() => {
-    // começa centralizado no 3º cartão (índice 2), não no 1º — assim já entra com um
-    // cartão espiando de cada lado, em vez de nascer com o lado esquerdo vazio
-    const inicial = itens[Math.min(2, itens.length - 1)];
-    trilho.scrollLeft = inicial.offsetLeft + inicial.offsetWidth / 2 - trilho.clientWidth / 2;
+    if(idTrilho in POSICOES_CARROSSEL){
+      trilho.scrollLeft = POSICOES_CARROSSEL[idTrilho];
+    } else {
+      const inicial = itens[Math.min(indiceInicial, itens.length - 1)];
+      trilho.scrollLeft = inicial.offsetLeft + inicial.offsetWidth / 2 - trilho.clientWidth / 2;
+    }
     atualizar();
   });
 }
