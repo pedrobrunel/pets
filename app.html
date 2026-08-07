@@ -878,10 +878,6 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .bolha-cel.cor5,.bolha-preview.cor5,.bolha-voando.cor5{background:var(--moeda);border:2px solid var(--moeda-rim)}
 .mira-faixa{position:relative;max-width:280px;height:16px;margin:4px auto 0}
 .mira-bolha{position:absolute;top:0;transform:translateX(-50%);font-size:13px;color:var(--tinta);transition:left .15s linear}
-/* pisca bem visível enquanto a mira está "estacionada" numa ponta — sem isso, dava pra
-   confundir "parada, pode atirar" com "só de passagem, vai continuar andando" */
-.mira-bolha.parada{color:var(--erro);animation:miraParada .5s ease-in-out infinite}
-@keyframes miraParada{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.5)}}
 .canhao-bolha{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:8px;font-size:12px;font-weight:800}
 .bolha-preview{display:inline-block;width:26px;height:26px;border-radius:50%;vertical-align:middle}
 .bolha-preview.pequena{width:18px;height:18px}
@@ -3563,10 +3559,13 @@ function jogoBolha(){
   }
   let corAtual = Math.floor(Math.random()*6);
   let corProxima = Math.floor(Math.random()*6);
-  let colunaAlvo = Math.floor(COLS/2), direcaoMira = 1, pausaMira = 0;
+  const MARGEM_MIRA = 3; // quantos "passos" ela sai pra fora da grade nas pontas antes de voltar
+  let colunaAlvo = Math.floor(COLS/2); // coluna de verdade (sempre 0..COLS-1) usada pro tiro
+  let posVirtual = colunaAlvo, direcaoMira = 1; // posição da seta, que pode passar da borda (saidinha)
   let pontos = 0, bolhasEstouradas = 0, rodando = true, disparando = false;
   let miraTimer = null, timerVoo = null, timerEstouro = null;
   let posicoesColunas = []; // centro (em px, relativo ao #campo-bolhas) de cada coluna — medido de verdade no DOM
+  let espacamentoColuna = 40; // distância entre colunas (medida no DOM), usada só pra extrapolar a saidinha
 
   function grupoConectado(g, inicio){
     const cor = g[inicio];
@@ -3607,13 +3606,20 @@ function jogoBolha(){
       const r = grid.children[c].getBoundingClientRect();
       return r.left + r.width/2 - campoRect.left;
     });
+    if(posicoesColunas.length > 1) espacamentoColuna = posicoesColunas[1] - posicoesColunas[0];
   }
-  function pintarMira(parada){
+  // posição em px de um índice "virtual" — fora de 0..COLS-1 ele extrapola pra fora da grade
+  // (mesmo espaçamento medido de verdade), pra seta dar aquela saidinha nas pontas antes de voltar
+  function posicaoVirtual(v){
+    if(v < 0) return posicoesColunas[0] + v * espacamentoColuna;
+    if(v > COLS-1) return posicoesColunas[COLS-1] + (v-(COLS-1)) * espacamentoColuna;
+    return posicoesColunas[v];
+  }
+  function pintarMira(){
     const el = $('#mira-bolha');
     if(!el) return;
     if(!posicoesColunas.length) calibrarMira();
-    if(posicoesColunas.length) el.style.left = posicoesColunas[colunaAlvo] + 'px';
-    el.classList.toggle('parada', !!parada);
+    if(posicoesColunas.length) el.style.left = posicaoVirtual(posVirtual) + 'px';
   }
   function pinta(marcadas){
     $('#grade-bolhas').innerHTML = grade.map((c,i) =>
@@ -3728,17 +3734,18 @@ function jogoBolha(){
     </div>
     <p class="aviso" style="margin-top:10px">Espere a mira ▼ passar pela coluna certa e toque em "Atirar!". 3 ou mais bolhas da mesma cor encostadas estouram!</p>`;
   pinta();
-  // nas pontas (coluna 0 e última) a mira virava de volta rápido demais pro tempo de reação
-  // de quem está jogando — mesmo com uma pausa curta (640ms), continuava impossível de acertar
-  // a primeira/última coluna. Agora ela realmente PARA lá por quase 2 segundos antes de voltar.
+  // nas pontas (coluna 0 e última) a mira virava de volta rápido demais pro tempo de reação de
+  // quem está jogando. Uma pausa parada ali ficou estranha — em vez disso, ela agora sai um
+  // pouco pra fora da grade (posVirtual passa de COLS-1 ou de 0) antes de voltar, sem nunca
+  // parar de se mexer; a coluna de verdade (colunaAlvo, sempre clampada 0..COLS-1) fica na
+  // ponta por vários ticks seguidos enquanto isso — o mesmo tempo extra, só que animado.
   miraTimer = setInterval(() => {
     if(!rodando) return;
-    if(pausaMira > 0){ pausaMira--; pintarMira(true); return; }
-    colunaAlvo += direcaoMira;
-    const bateuBorda = colunaAlvo >= COLS-1 || colunaAlvo <= 0;
-    if(bateuBorda){ direcaoMira *= -1; pausaMira = 8; }
-    pintarMira(bateuBorda);
-  }, 200);
+    posVirtual += direcaoMira;
+    if(posVirtual >= COLS-1+MARGEM_MIRA || posVirtual <= -MARGEM_MIRA) direcaoMira *= -1;
+    colunaAlvo = Math.max(0, Math.min(COLS-1, posVirtual));
+    pintarMira();
+  }, 160);
 }
 
 /* ---------- 9. TELA: LOJA DA VILA ----------
