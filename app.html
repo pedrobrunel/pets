@@ -3169,20 +3169,70 @@ function jogoCorrida(){
   })();
 }
 
-/* --- minigame 6: blocos do bicho (empilhar e limpar fileiras, ref: quebra-cabeça de blocos de SNES) --- */
+/* --- minigame 6: blocos do bicho (empilhar e combinar cores, ref: quebra-cabeça de blocos coloridos de SNES) --- */
 function jogoBlocos(){
-  const COLS = 6, LINHAS = 10;
+  const COLS = 6, LINHAS = 10, MIN_GRUPO = 3;
   let grade = Array(COLS*LINHAS).fill(null); // null | índice de cor (0-5)
   let pecaAtual = Math.floor(Math.random()*6);
   let pecaProxima = Math.floor(Math.random()*6);
-  let linhasFeitas = 0, blocosColocados = 0, rodando = true;
+  let gruposFeitos = 0, blocosRemovidos = 0, blocosColocados = 0, rodando = true;
 
-  function pontosAtuais(){ return blocosColocados*2 + linhasFeitas*100; }
+  function pontosAtuais(){ return blocosColocados*2 + blocosRemovidos*15; }
+  // busca em largura: todas as células ligadas (cima/baixo/esquerda/direita) da mesma cor
+  function grupoConectado(inicio){
+    const cor = grade[inicio];
+    const visto = new Set([inicio]);
+    const fila = [inicio];
+    while(fila.length){
+      const i = fila.pop();
+      const col = i % COLS, lin = Math.floor(i/COLS);
+      const vizinhos = [col>0?i-1:-1, col<COLS-1?i+1:-1, lin>0?i-COLS:-1, lin<LINHAS-1?i+COLS:-1];
+      vizinhos.forEach(v => {
+        if(v>=0 && !visto.has(v) && grade[v]===cor){ visto.add(v); fila.push(v); }
+      });
+    }
+    return visto;
+  }
+  // depois de um clear, os blocos acima de cada buraco caem — mesma gravidade de Puyo Puyo/Dr. Mario
+  function aplicarGravidade(){
+    for(let col = 0; col < COLS; col++){
+      const pilha = [];
+      for(let lin = 0; lin < LINHAS; lin++){
+        const v = grade[lin*COLS+col];
+        if(v !== null) pilha.push(v);
+      }
+      for(let lin = LINHAS-1, k = pilha.length-1; lin >= 0; lin--, k--){
+        grade[lin*COLS+col] = k >= 0 ? pilha[k] : null;
+      }
+    }
+  }
+  // limpa todo grupo de 3+ encontrado, reaplica gravidade e repete (reação em cadeia),
+  // até não sobrar nenhum grupo grande o bastante na tela
+  function resolverGrupos(){
+    let removeuAlgo = false, achouNesteRound = true;
+    while(achouNesteRound){
+      achouNesteRound = false;
+      const jaChecado = new Set();
+      for(let i = 0; i < grade.length; i++){
+        if(grade[i] === null || jaChecado.has(i)) continue;
+        const grupo = grupoConectado(i);
+        grupo.forEach(g => jaChecado.add(g));
+        if(grupo.size >= MIN_GRUPO){
+          grupo.forEach(g => { grade[g] = null; });
+          blocosRemovidos += grupo.size;
+          gruposFeitos++;
+          removeuAlgo = true; achouNesteRound = true;
+        }
+      }
+      if(achouNesteRound) aplicarGravidade();
+    }
+    return removeuAlgo;
+  }
   function pinta(){
     $('#grade-blocos').innerHTML = grade.map((c,i) =>
       `<button class="bloco-cel${c!==null?' cor'+c:''}" onclick="window._dropCol(${i % COLS})"></button>`).join('');
     $('#peca-proxima').className = 'bloco-preview cor' + pecaProxima;
-    $('#placar-blocos-linhas').textContent = linhasFeitas;
+    $('#placar-blocos-grupos').textContent = gruposFeitos;
     $('#placar-blocos').textContent = pontosAtuais();
   }
   window._dropCol = col => {
@@ -3193,14 +3243,8 @@ function jogoBlocos(){
     }
     grade[linhaAlvo*COLS+col] = pecaAtual;
     blocosColocados++;
-    tocarEfeito('blocos', 'acerto');
+    tocarEfeito('blocos', resolverGrupos() ? 'acerto' : 'erro');
 
-    const inicio = linhaAlvo*COLS;
-    if(grade.slice(inicio, inicio+COLS).every(c => c !== null)){
-      grade.splice(inicio, COLS);
-      grade.unshift(...Array(COLS).fill(null));
-      linhasFeitas++;
-    }
     pecaAtual = pecaProxima;
     pecaProxima = Math.floor(Math.random()*6);
     pinta();
@@ -3216,7 +3260,7 @@ function jogoBlocos(){
     ganhar(premio, 15);
     tocarEfeito('blocos', 'erro');
     modal(`<h2 style="font-size:24px">Empilhou até o topo! 🧱</h2>
-      <p style="margin:6px 0 12px">${linhasFeitas} fileira(s) completa(s), ${pontos} ponto(s).</p>
+      <p style="margin:6px 0 12px">${gruposFeitos} combinação(ões), ${pontos} ponto(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoBlocos()">Jogar de novo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
@@ -3225,10 +3269,10 @@ function jogoBlocos(){
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <div class="titulo-secao"><h2>🧱 Blocos do Bicho</h2><small>fileiras: <b id="placar-blocos-linhas">0</b> · pontos: <b id="placar-blocos">0</b></small></div>
+    <div class="titulo-secao"><h2>🧱 Blocos do Bicho</h2><small>combos: <b id="placar-blocos-grupos">0</b> · pontos: <b id="placar-blocos">0</b></small></div>
     <p class="blocos-proximo">Próximo bloco: <span id="peca-proxima" class="bloco-preview"></span></p>
     <div id="grade-blocos" class="grade-blocos"${estiloFundoMinigame('blocos')}></div>
-    <p class="aviso" style="margin-top:12px">Toque numa coluna pra soltar o bloco. Encha uma fileira inteira (não importa a cor) pra ela sumir!</p>`;
+    <p class="aviso" style="margin-top:12px">Toque numa coluna pra soltar o bloco. 3 ou mais da mesma cor encostados somem!</p>`;
   pinta();
 }
 
