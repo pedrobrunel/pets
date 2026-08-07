@@ -849,12 +849,10 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 
 /* ---------- pescaria (minigame 8, ref: minigame de pesca clássico de SNES) ---------- */
 .placar-pescaria{text-align:center;font-weight:900;font-size:15px;margin:2px 0 6px}
-.cena-pescaria{background:linear-gradient(180deg,#AED6F1 0%,#3498DB 100%);border:var(--borda) solid var(--contorno);
-  border-bottom-width:8px;border-radius:var(--r);height:170px;display:grid;place-items:center;margin:0 auto;max-width:340px}
-.anzol-pescaria{font-size:54px;animation:boiaEspera 1.6s ease-in-out infinite}
-.anzol-pescaria.mordendo{animation:boiaMorde .18s ease-in-out infinite}
-@keyframes boiaEspera{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-@keyframes boiaMorde{0%,100%{transform:translate(0,0) rotate(0)}25%{transform:translate(-4px,3px) rotate(-8deg)}75%{transform:translate(4px,3px) rotate(8deg)}}
+.barra-puxada-wrap{max-width:340px;margin:6px auto 0}
+.barra-puxada{height:18px;background:#EDF0F1;border:3px solid var(--contorno);border-radius:999px;overflow:hidden}
+.barra-puxada-cheio{height:100%;width:0%;background:linear-gradient(90deg,var(--manga),var(--moeda));
+  border-radius:999px;transition:width .12s ease-out}
 .ultimo-peixe-pescaria{text-align:center;font-weight:900;font-size:14px;margin:10px 0;min-height:18px}
 
 /* ---------- bolha de sabão (minigame 9, ref: quebra-cabeça de mira e cores clássico de SNES) ---------- */
@@ -3457,67 +3455,112 @@ function jogoRua(){
   })();
 }
 
-/* --- minigame 8: pescaria (ref: minigame de pesca clássico de SNES) --- */
+/* --- minigame 8: pescaria (mar animado + fisgada + puxada, ref: minigame de pesca clássico de SNES) --- */
 function jogoPescaria(){
   const DURACAO = 40;
   const PEIXES = [
     {e:'🐟', valor:5}, {e:'🐠', valor:8}, {e:'🦐', valor:6}, {e:'🦞', valor:14}, {e:'🥾', valor:0},
   ];
-  let pontos = 0, capturas = 0, rodando = true, mordeu = false, peixeAtual = null;
-  let t0 = Date.now(), timerMordida = null, timerJanela = null, cronoTimer = null;
+  let pontos = 0, capturas = 0, rodando = true;
+  // fase: 'esperando' (nada mordeu ainda) -> 'mordeu' (janela curta pra fisgar) ->
+  // 'puxando' (minigame de puxar até a barra encher, senão o peixe foge)
+  let fase = 'esperando', peixeAtual = null, progresso = 0;
+  let t0 = Date.now(), timerMordida = null, timerJanela = null, timerPuxada = null, cronoTimer = null;
+  let evento = null; // {tipo:'sucesso'|'escapou', t0} — anima por cima da cena por um instante
 
-  function marcarAnzol(mordendo){
-    const el = $('#anzol-pescaria');
-    if(el) el.className = 'anzol-pescaria' + (mordendo ? ' mordendo' : '');
-  }
   function mensagem(txt){
     const el = $('#ultimo-peixe-pescaria');
     if(el) el.textContent = txt;
   }
+  function atualizarBarra(){
+    const el = $('#barra-puxada-cheio');
+    if(el) el.style.width = Math.max(0, Math.min(100, progresso)) + '%';
+  }
   function novaRodada(){
     if(!rodando) return;
-    mordeu = false; peixeAtual = null;
-    marcarAnzol(false);
+    fase = 'esperando'; peixeAtual = null; progresso = 0;
+    $('#barra-puxada-wrap').hidden = true;
+    mensagem('Observe a boia na água...');
     const espera = 1300 + Math.random()*2200;
     timerMordida = setTimeout(() => {
       if(!rodando) return;
-      mordeu = true;
+      fase = 'mordeu';
       peixeAtual = PEIXES[Math.floor(Math.random()*PEIXES.length)];
-      marcarAnzol(true);
+      mensagem('Mordeu! Toque em "Fisgar!"');
       tocarEfeito('pescaria', 'acerto');
       const janela = Math.max(480, 820 - capturas*12);
       timerJanela = setTimeout(() => {
-        if(!rodando || !mordeu) return;
-        mordeu = false;
+        if(!rodando || fase !== 'mordeu') return;
+        fase = 'esperando';
+        evento = {tipo:'escapou', t0:Date.now()};
         mensagem('Escapou! 💨');
-        marcarAnzol(false);
         tocarEfeito('pescaria', 'erro');
-        setTimeout(novaRodada, 500);
+        setTimeout(novaRodada, 700);
       }, janela);
     }, espera);
   }
+  // puxada: cada toque enche um pouco a barra, mas o peixe "briga" e ela esvazia sozinha —
+  // precisa encher até 100 antes do tempo acabar, senão a linha arrebenta e ele foge
+  function iniciarPuxada(){
+    fase = 'puxando';
+    progresso = 20;
+    $('#barra-puxada-wrap').hidden = false;
+    atualizarBarra();
+    mensagem('Continua tocando! 💪');
+    const inicio = Date.now();
+    const LIMITE = 5200;
+    timerPuxada = setInterval(() => {
+      if(!rodando) return;
+      progresso = Math.max(0, progresso - (3 + peixeAtual.valor*0.35));
+      atualizarBarra();
+      if(progresso <= 0 || Date.now()-inicio >= LIMITE){
+        clearInterval(timerPuxada);
+        finalizarPuxada(false);
+      }
+    }, 220);
+  }
+  function finalizarPuxada(sucesso){
+    fase = 'esperando';
+    $('#barra-puxada-wrap').hidden = true;
+    if(sucesso){
+      capturas++;
+      pontos += peixeAtual.valor;
+      tocarEfeito('pescaria', peixeAtual.valor > 0 ? 'acerto' : 'erro');
+      mensagem(peixeAtual.valor > 0 ? `${peixeAtual.e} fisgado! +${peixeAtual.valor}` : `${peixeAtual.e} só uma bota velha...`);
+      evento = {tipo:'sucesso', t0:Date.now(), peixe:peixeAtual};
+    } else {
+      tocarEfeito('pescaria', 'erro');
+      mensagem('A linha arrebentou, ele fugiu! 💦');
+      evento = {tipo:'escapou', t0:Date.now()};
+    }
+    const placar = $('#placar-pescaria'); if(placar) placar.textContent = pontos;
+    setTimeout(novaRodada, 750);
+  }
   window._puxarPescaria = () => {
     if(!rodando) return;
-    clearTimeout(timerJanela);
-    if(!mordeu){
+    if(fase === 'esperando'){
       mensagem('Ainda não mordeu... 🙈');
       tocarEfeito('pescaria', 'erro');
       clearTimeout(timerMordida);
       setTimeout(novaRodada, 500);
       return;
     }
-    mordeu = false;
-    marcarAnzol(false);
-    capturas++;
-    pontos += peixeAtual.valor;
-    tocarEfeito('pescaria', peixeAtual.valor > 0 ? 'acerto' : 'erro');
-    mensagem(peixeAtual.valor > 0 ? `${peixeAtual.e} pescado! +${peixeAtual.valor}` : `${peixeAtual.e} só uma bota velha...`);
-    const placar = $('#placar-pescaria'); if(placar) placar.textContent = pontos;
-    setTimeout(novaRodada, 550);
+    if(fase === 'mordeu'){
+      clearTimeout(timerJanela);
+      tocarEfeito('pescaria', 'acerto');
+      iniciarPuxada();
+      return;
+    }
+    if(fase === 'puxando'){
+      progresso = Math.min(100, progresso + 9 + Math.random()*5);
+      atualizarBarra();
+      tocarEfeito('pescaria', 'acerto');
+      if(progresso >= 100){ clearInterval(timerPuxada); finalizarPuxada(true); }
+    }
   };
   function encerra(){
     rodando = false;
-    clearTimeout(timerMordida); clearTimeout(timerJanela); clearInterval(cronoTimer);
+    clearTimeout(timerMordida); clearTimeout(timerJanela); clearInterval(timerPuxada); clearInterval(cronoTimer);
     if(pontos > estado.recordes.pescaria) estado.recordes.pescaria = pontos;
     const premio = pontos;
     estado.energia = lim(estado.energia - 10);
@@ -3529,18 +3572,108 @@ function jogoPescaria(){
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoPescaria()">Jogar de novo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
-  pararLoops = () => { rodando = false; clearTimeout(timerMordida); clearTimeout(timerJanela); clearInterval(cronoTimer); };
+  pararLoops = () => { rodando = false; clearTimeout(timerMordida); clearTimeout(timerJanela); clearInterval(timerPuxada); clearInterval(cronoTimer); };
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
     <div class="titulo-secao"><h2>🎣 Pescaria</h2><small id="cronometro-pescaria">${DURACAO}s</small></div>
     <div class="placar-pescaria">Pontos: <span id="placar-pescaria">0</span></div>
-    <div class="cena-pescaria"${estiloFundoMinigame('pescaria')}>
-      <div id="anzol-pescaria" class="anzol-pescaria">🎣</div>
+    <canvas id="tela-jogo"${estiloFundoMinigame('pescaria')}></canvas>
+    <div id="barra-puxada-wrap" class="barra-puxada-wrap" hidden>
+      <div class="barra-puxada"><div id="barra-puxada-cheio" class="barra-puxada-cheio"></div></div>
     </div>
-    <p id="ultimo-peixe-pescaria" class="ultimo-peixe-pescaria">Espere a linha se agitar...</p>
-    <button class="btn grande amarelo" onclick="window._puxarPescaria()">Puxar!</button>
-    <p class="aviso" style="margin-top:10px">Toque em "Puxar!" só quando a linha se agitar. Cedo demais e o peixe escapa!</p>`;
+    <p id="ultimo-peixe-pescaria" class="ultimo-peixe-pescaria">Observe a boia na água...</p>
+    <button id="btn-puxar-pescaria" class="btn grande amarelo" onclick="window._puxarPescaria()">Puxar!</button>
+    <p class="aviso" style="margin-top:10px">Toque em "Puxar!" quando a boia mergulhar. Depois continue tocando rápido pra fisgar o peixe antes que a linha arrebente!</p>`;
+
+  // cena do mar em canvas — mesmo cálculo de altura disponível usado nos outros minigames
+  const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
+  const secao = $('#tela-arcade');
+  const placarEl = secao.querySelector('.placar-pescaria');
+  const mensagemEl = secao.querySelector('.ultimo-peixe-pescaria');
+  const botaoEl = $('#btn-puxar-pescaria');
+  const avisoEl = secao.querySelector('.aviso');
+  const consumidoAntes = placarEl.getBoundingClientRect().bottom - secao.getBoundingClientRect().top;
+  const consumidoDepois = mensagemEl.getBoundingClientRect().height + botaoEl.getBoundingClientRect().height + avisoEl.getBoundingClientRect().height + 44;
+  const alturaDisponivel = secao.clientHeight - consumidoAntes - consumidoDepois - 8 - 20;
+  cv.width = Math.min(360, cv.parentElement.clientWidth);
+  cv.height = Math.max(190, Math.min(320, alturaDisponivel));
+
+  const emojiBicho = {capivara:'🦫', salsicha:'🐶', gato:'🐱'}[estado.tipo] || '🐾';
+  function desenharOnda(L, A, nivel, t, cor, opacidade, amplitude, freq, faseOffset){
+    ctx.beginPath();
+    ctx.moveTo(0, nivel);
+    for(let x = 0; x <= L; x += 8){
+      ctx.lineTo(x, nivel + Math.sin(x*freq + t*2 + faseOffset)*amplitude);
+    }
+    ctx.lineTo(L, A); ctx.lineTo(0, A); ctx.closePath();
+    ctx.globalAlpha = opacidade; ctx.fillStyle = cor; ctx.fill(); ctx.globalAlpha = 1;
+  }
+  function desenharBoia(x, y, alerta){
+    ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI*2);
+    ctx.fillStyle = alerta ? '#E74C3C' : '#EC7063'; ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y-4, 8, Math.PI, 0);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.strokeStyle = '#2C3E50'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+
+  (function laco(){
+    if(!rodando) return;
+    const agora = Date.now(), t = agora/1000;
+    const L = cv.width, A = cv.height, nivel = A*0.42;
+
+    ctx.clearRect(0, 0, L, A);
+    const ceu = ctx.createLinearGradient(0, 0, 0, nivel);
+    ceu.addColorStop(0, '#8ecfe8'); ceu.addColorStop(1, '#cdeefb');
+    ctx.fillStyle = ceu; ctx.fillRect(0, 0, L, nivel);
+    ctx.fillStyle = 'rgba(255,235,150,.9)';
+    ctx.beginPath(); ctx.arc(L*0.82, nivel*0.3, A*0.06, 0, Math.PI*2); ctx.fill();
+
+    desenharOnda(L, A, nivel, t, '#2E86C1', .85, 12, .055, 0);
+    desenharOnda(L, A, nivel, t, '#21618C', 1, 9, .07, 1.3);
+
+    const docaW = L*0.3, docaTopo = A*0.86;
+    ctx.fillStyle = '#A9754F'; ctx.fillRect(0, docaTopo, docaW, A-docaTopo);
+    ctx.fillStyle = '#8B5E3C';
+    for(let x = 8; x < docaW; x += 14) ctx.fillRect(x, docaTopo, 3, A-docaTopo);
+
+    ctx.font = Math.round(A*0.17)+'px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(emojiBicho, docaW*0.55, docaTopo+2);
+
+    const varaX = docaW*0.62, varaY = A*0.7, boiaXBase = L*0.62;
+    let bx = boiaXBase, by = nivel + Math.sin(t*1.6)*6;
+    if(fase === 'mordeu'){ by = nivel + 14 + Math.sin(t*15)*5; }
+    else if(fase === 'puxando'){
+      const alvoX = docaW*0.74;
+      bx = boiaXBase - (boiaXBase-alvoX) * Math.min(1, progresso/100);
+      by = nivel + 4 + Math.sin(t*10)*4;
+    }
+
+    let mostrarLinhaEBoia = true;
+    if(evento){
+      const dt = agora - evento.t0;
+      if(dt < 650){
+        if(evento.tipo === 'sucesso'){
+          mostrarLinhaEBoia = false;
+          const p = dt/650, px = bx + (docaW*0.55-bx)*p, py = by - Math.sin(p*Math.PI)*(A*0.22);
+          ctx.font = Math.round(A*0.14)+'px serif';
+          ctx.fillText(evento.peixe ? evento.peixe.e : '🐟', px, py);
+        } else {
+          const p = dt/650;
+          ctx.strokeStyle = `rgba(255,255,255,${1-p})`; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(bx, nivel, 8+p*28, 0, Math.PI*2); ctx.stroke();
+        }
+      } else evento = null;
+    }
+    if(mostrarLinhaEBoia){
+      ctx.strokeStyle = '#5D4037'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(varaX, varaY); ctx.lineTo(bx, by); ctx.stroke();
+      desenharBoia(bx, by, fase === 'mordeu');
+    }
+
+    requestAnimationFrame(laco);
+  })();
+
   novaRodada();
   cronoTimer = setInterval(() => {
     const restante = DURACAO - (Date.now()-t0)/1000;
