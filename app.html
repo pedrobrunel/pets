@@ -839,6 +839,41 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .bloco-cel.cor5,.bloco-preview.cor5{background:var(--moeda);border-color:var(--moeda-rim)}
 .bloco-cel.pop{animation:pop .15s ease-out}
 
+/* ---------- atravessar a rua (minigame 7, ref: travessia de fases clássica de SNES) ---------- */
+.dpad-rua{display:grid;grid-template-areas:". cima ." "esquerda . direita" ". baixo .";
+  grid-template-columns:52px 52px 52px;grid-template-rows:52px 52px 52px;gap:6px;justify-content:center;margin:10px auto 0}
+.btn-dpad{border:var(--borda) solid var(--contorno);border-bottom-width:6px;border-radius:14px;background:#fff;
+  font-size:20px;font-weight:900;display:grid;place-items:center;padding:0;
+  transition:transform .1s ease, border-bottom-width .1s ease}
+.btn-dpad:active{transform:translateY(4px);border-bottom-width:1px}
+
+/* ---------- pescaria (minigame 8, ref: minigame de pesca clássico de SNES) ---------- */
+.placar-pescaria{text-align:center;font-weight:900;font-size:15px;margin:2px 0 6px}
+.cena-pescaria{background:linear-gradient(180deg,#AED6F1 0%,#3498DB 100%);border:var(--borda) solid var(--contorno);
+  border-bottom-width:8px;border-radius:var(--r);height:170px;display:grid;place-items:center;margin:0 auto;max-width:340px}
+.anzol-pescaria{font-size:54px;animation:boiaEspera 1.6s ease-in-out infinite}
+.anzol-pescaria.mordendo{animation:boiaMorde .18s ease-in-out infinite}
+@keyframes boiaEspera{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes boiaMorde{0%,100%{transform:translate(0,0) rotate(0)}25%{transform:translate(-4px,3px) rotate(-8deg)}75%{transform:translate(4px,3px) rotate(8deg)}}
+.ultimo-peixe-pescaria{text-align:center;font-weight:900;font-size:14px;margin:10px 0;min-height:18px}
+
+/* ---------- bolha de sabão (minigame 9, ref: quebra-cabeça de mira e cores clássico de SNES) ---------- */
+.grade-bolhas{display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(10,1fr);gap:3px;
+  max-width:280px;aspect-ratio:7/10;margin:0 auto;background:linear-gradient(180deg,#EAF2F8 0%,#fff 60%);
+  border:var(--borda) solid var(--contorno);border-bottom-width:6px;border-radius:var(--r);padding:6px}
+.bolha-cel{border-radius:50%;background:transparent;transition:transform .12s ease}
+.bolha-cel.cor0,.bolha-preview.cor0{background:var(--manga);border:2px solid var(--manga-rim)}
+.bolha-cel.cor1,.bolha-preview.cor1{background:var(--rosa);border:2px solid var(--rosa-rim)}
+.bolha-cel.cor2,.bolha-preview.cor2{background:var(--mata);border:2px solid var(--mata-rim)}
+.bolha-cel.cor3,.bolha-preview.cor3{background:var(--ceu);border:2px solid var(--ceu-rim)}
+.bolha-cel.cor4,.bolha-preview.cor4{background:var(--jabuti);border:2px solid var(--jabuti-rim)}
+.bolha-cel.cor5,.bolha-preview.cor5{background:var(--moeda);border:2px solid var(--moeda-rim)}
+.mira-faixa{position:relative;max-width:280px;height:16px;margin:4px auto 0}
+.mira-bolha{position:absolute;top:0;transform:translateX(-50%);font-size:13px;color:var(--tinta);transition:left .15s linear}
+.canhao-bolha{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:8px;font-size:12px;font-weight:800}
+.bolha-preview{display:inline-block;width:26px;height:26px;border-radius:50%;vertical-align:middle}
+.bolha-preview.pequena{width:18px;height:18px}
+
 /* ---------- filtro de série nas trilhas ---------- */
 /* carrossel de séries: setas fixas nas pontas, a tira de chips rola por trás (arraste
    ou toque nas setas) — sem barra de rolagem visível poluindo o visual */
@@ -1181,7 +1216,7 @@ const estado = {
   moedas:60, xp:0,
   fome:72, felicidade:80, energia:90,
   equipado:[], mochila:[], inventario:{},
-  licoesFeitas:[], recordes:{memoria:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0},
+  licoesFeitas:[], recordes:{memoria:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0, rua:0, pescaria:0, bolha:0},
   missoes:{}, cenasVisitadas:[], gatilhosAtivos:[], itensColetados:[],
   moveisComprados:[], casaMoveis:[], casaDesbloqueada:false,
   streak:{atual:0, melhor:0, ultimoDia:null},
@@ -2761,6 +2796,12 @@ RENDER.arcade = () => {
         <span class="emoji">🏃</span><h3>Corrida do Bicho</h3><p>Pule os obstáculos correndo. Recorde: ${estado.recordes.corrida} pontos</p></button>
       <button class="cartao-trilha" onclick="jogoBlocos()">
         <span class="emoji">🧱</span><h3>Blocos do Bicho</h3><p>Empilhe e limpe fileiras. Recorde: ${estado.recordes.blocos} pontos</p></button>
+      <button class="cartao-trilha" onclick="jogoRua()">
+        <span class="emoji">🚸</span><h3>Atravessar a Rua</h3><p>Desvie dos carros até o topo. Recorde: ${estado.recordes.rua} pontos</p></button>
+      <button class="cartao-trilha" onclick="jogoPescaria()">
+        <span class="emoji">🎣</span><h3>Pescaria</h3><p>Fisgue na hora certa. Recorde: ${estado.recordes.pescaria} pontos</p></button>
+      <button class="cartao-trilha" onclick="jogoBolha()">
+        <span class="emoji">🎈</span><h3>Bolha de Sabão</h3><p>Mire e estoure grupos de cor. Recorde: ${estado.recordes.bolha} pontos</p></button>
     </div>
     <p class="aviso" style="margin-top:16px">Minigame gasta energia do bicho — mas ela volta sozinha com o tempo.</p>`;
 };
@@ -3274,6 +3315,345 @@ function jogoBlocos(){
     <div id="grade-blocos" class="grade-blocos"${estiloFundoMinigame('blocos')}></div>
     <p class="aviso" style="margin-top:12px">Toque numa coluna pra soltar o bloco. 3 ou mais da mesma cor encostados somem!</p>`;
   pinta();
+}
+
+/* --- minigame 7: atravessar a rua (ref: travessia de fases clássica de SNES) --- */
+function jogoRua(){
+  $('#tela-arcade').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <div class="titulo-secao"><h2>🚸 Atravessar a Rua</h2><small>vidas: <b id="placar-rua-vidas">3</b> · pontos: <b id="placar-rua">0</b></small></div>
+    <canvas id="tela-jogo"${estiloFundoMinigame('rua')}></canvas>
+    <div class="dpad-rua">
+      <button class="btn-dpad" style="grid-area:cima" onclick="window._moverRua('cima')">▲</button>
+      <button class="btn-dpad" style="grid-area:esquerda" onclick="window._moverRua('esquerda')">◀</button>
+      <button class="btn-dpad" style="grid-area:direita" onclick="window._moverRua('direita')">▶</button>
+      <button class="btn-dpad" style="grid-area:baixo" onclick="window._moverRua('baixo')">▼</button>
+    </div>
+    <p class="aviso" style="margin-top:10px">Atravesse a rua sem ser atropelado! Use as setas (ou ←↑↓→ no teclado).</p>`;
+  const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
+  // mesmo cálculo de altura disponível dos outros jogos de canvas — ver comentário na Chuva de Frutas
+  const secao = $('#tela-arcade');
+  const titulo = secao.querySelector('.titulo-secao');
+  const dpad = secao.querySelector('.dpad-rua');
+  const aviso = secao.querySelector('.aviso');
+  const consumidoAntes = titulo.getBoundingClientRect().bottom - secao.getBoundingClientRect().top;
+  const consumidoDepois = dpad.getBoundingClientRect().height + aviso.getBoundingClientRect().height + 24;
+  const bordaCanvas = 8;
+  const alturaDisponivel = secao.clientHeight - consumidoAntes - consumidoDepois - bordaCanvas - 20;
+  cv.width = Math.min(340, cv.parentElement.clientWidth);
+  cv.height = Math.max(260, Math.min(400, alturaDisponivel));
+  const L = cv.width, A = cv.height;
+  const COLS = 7, LINHAS = 9;
+  const cw = L/COLS, ch = A/LINHAS;
+  const emojiBicho = {capivara:'🦫', salsicha:'🐶', gato:'🐱'}[estado.tipo] || '🐾';
+  const CARROS = ['🚗','🚙','🚕','🚓'];
+
+  const tipoLane = lin => lin===0 ? 'meta' : lin===LINHAS-1 ? 'segura' : (lin%2===1 ? 'estrada' : 'segura');
+  let lanes = {};
+  for(let lin=1; lin<LINHAS-1; lin++){
+    if(tipoLane(lin) !== 'estrada') continue;
+    const dir = lin % 4 < 2 ? 1 : -1;
+    const n = 2 + (lin % 3 === 0 ? 1 : 0);
+    const espaco = L / n;
+    lanes[lin] = {
+      vel: (0.9 + lin*0.12) * dir,
+      carros: Array.from({length:n}, (_, i) => ({x: i*espaco + Math.random()*espaco*.4, e: CARROS[Math.floor(Math.random()*CARROS.length)]}))
+    };
+  }
+
+  let bicho = {col: Math.floor(COLS/2), lin: LINHAS-1};
+  let vidas = 3, pontos = 0, rodando = true;
+
+  function atualizarPontos(){
+    const linhaAlcancada = LINHAS-1 - bicho.lin;
+    pontos = Math.max(pontos, linhaAlcancada*10);
+    const el = $('#placar-rua'); if(el) el.textContent = pontos;
+  }
+  window._moverRua = dir => {
+    if(!rodando) return;
+    if(dir==='cima' && bicho.lin>0) bicho.lin--;
+    if(dir==='baixo' && bicho.lin<LINHAS-1) bicho.lin++;
+    if(dir==='esquerda' && bicho.col>0) bicho.col--;
+    if(dir==='direita' && bicho.col<COLS-1) bicho.col++;
+    atualizarPontos();
+    if(bicho.lin === 0){
+      pontos += 50;
+      tocarEfeito('rua', 'acerto');
+      Object.values(lanes).forEach(l => l.vel *= 1.08);
+      bicho = {col: Math.floor(COLS/2), lin: LINHAS-1};
+      atualizarPontos();
+    }
+  };
+  const tecla = e => {
+    const mapa = {ArrowUp:'cima', ArrowDown:'baixo', ArrowLeft:'esquerda', ArrowRight:'direita'};
+    if(mapa[e.key]){ e.preventDefault(); window._moverRua(mapa[e.key]); }
+  };
+  addEventListener('keydown', tecla);
+
+  function levarAtropelada(){
+    vidas--;
+    tocarEfeito('rua', 'erro');
+    const el = $('#placar-rua-vidas'); if(el) el.textContent = vidas;
+    if(vidas <= 0){ encerra(); return; }
+    bicho = {col: Math.floor(COLS/2), lin: LINHAS-1};
+  }
+  function encerra(){
+    rodando = false;
+    removeEventListener('keydown', tecla);
+    if(pontos > estado.recordes.rua) estado.recordes.rua = pontos;
+    const premio = Math.round(pontos/2);
+    estado.energia = lim(estado.energia - 12);
+    estado.felicidade = lim(estado.felicidade + 10);
+    ganhar(premio, 15);
+    modal(`<h2 style="font-size:24px">Atropelado! 🚗</h2>
+      <p style="margin:6px 0 12px">Você fez ${pontos} ponto(s).</p>
+      <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
+      <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoRua()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+  }
+  pararLoops = () => { rodando = false; removeEventListener('keydown', tecla); };
+
+  (function laco(){
+    if(!rodando) return;
+    ctx.clearRect(0,0,L,A);
+    for(let lin=0; lin<LINHAS; lin++){
+      const tipo = tipoLane(lin);
+      ctx.fillStyle = tipo==='meta' ? '#F1C40F' : tipo==='estrada' ? '#7F8C8D' : '#7DCEA0';
+      ctx.fillRect(0, lin*ch, L, ch);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 2;
+    for(let lin=1; lin<LINHAS; lin++){ ctx.beginPath(); ctx.moveTo(0,lin*ch); ctx.lineTo(L,lin*ch); ctx.stroke(); }
+
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    let atropelou = false;
+    Object.entries(lanes).forEach(([linStr, laneObj]) => {
+      const lin = Number(linStr);
+      ctx.font = Math.round(ch*.72)+'px serif';
+      laneObj.carros.forEach(c => {
+        c.x += laneObj.vel;
+        if(laneObj.vel > 0 && c.x > L+30) c.x = -30;
+        if(laneObj.vel < 0 && c.x < -30) c.x = L+30;
+        ctx.fillText(c.e, c.x, lin*ch + ch/2);
+        if(bicho.lin === lin){
+          const bx = bicho.col*cw + cw/2;
+          if(Math.abs(c.x - bx) < cw*0.62) atropelou = true;
+        }
+      });
+    });
+
+    ctx.font = Math.round(ch*.78)+'px serif';
+    ctx.fillText(emojiBicho, bicho.col*cw + cw/2, bicho.lin*ch + ch/2);
+
+    if(atropelou) levarAtropelada();
+    requestAnimationFrame(laco);
+  })();
+}
+
+/* --- minigame 8: pescaria (ref: minigame de pesca clássico de SNES) --- */
+function jogoPescaria(){
+  const DURACAO = 40;
+  const PEIXES = [
+    {e:'🐟', valor:5}, {e:'🐠', valor:8}, {e:'🦐', valor:6}, {e:'🦞', valor:14}, {e:'🥾', valor:0},
+  ];
+  let pontos = 0, capturas = 0, rodando = true, mordeu = false, peixeAtual = null;
+  let t0 = Date.now(), timerMordida = null, timerJanela = null, cronoTimer = null;
+
+  function marcarAnzol(mordendo){
+    const el = $('#anzol-pescaria');
+    if(el) el.className = 'anzol-pescaria' + (mordendo ? ' mordendo' : '');
+  }
+  function mensagem(txt){
+    const el = $('#ultimo-peixe-pescaria');
+    if(el) el.textContent = txt;
+  }
+  function novaRodada(){
+    if(!rodando) return;
+    mordeu = false; peixeAtual = null;
+    marcarAnzol(false);
+    const espera = 1300 + Math.random()*2200;
+    timerMordida = setTimeout(() => {
+      if(!rodando) return;
+      mordeu = true;
+      peixeAtual = PEIXES[Math.floor(Math.random()*PEIXES.length)];
+      marcarAnzol(true);
+      tocarEfeito('pescaria', 'acerto');
+      const janela = Math.max(480, 820 - capturas*12);
+      timerJanela = setTimeout(() => {
+        if(!rodando || !mordeu) return;
+        mordeu = false;
+        mensagem('Escapou! 💨');
+        marcarAnzol(false);
+        tocarEfeito('pescaria', 'erro');
+        setTimeout(novaRodada, 500);
+      }, janela);
+    }, espera);
+  }
+  window._puxarPescaria = () => {
+    if(!rodando) return;
+    clearTimeout(timerJanela);
+    if(!mordeu){
+      mensagem('Ainda não mordeu... 🙈');
+      tocarEfeito('pescaria', 'erro');
+      clearTimeout(timerMordida);
+      setTimeout(novaRodada, 500);
+      return;
+    }
+    mordeu = false;
+    marcarAnzol(false);
+    capturas++;
+    pontos += peixeAtual.valor;
+    tocarEfeito('pescaria', peixeAtual.valor > 0 ? 'acerto' : 'erro');
+    mensagem(peixeAtual.valor > 0 ? `${peixeAtual.e} pescado! +${peixeAtual.valor}` : `${peixeAtual.e} só uma bota velha...`);
+    const placar = $('#placar-pescaria'); if(placar) placar.textContent = pontos;
+    setTimeout(novaRodada, 550);
+  };
+  function encerra(){
+    rodando = false;
+    clearTimeout(timerMordida); clearTimeout(timerJanela); clearInterval(cronoTimer);
+    if(pontos > estado.recordes.pescaria) estado.recordes.pescaria = pontos;
+    const premio = pontos;
+    estado.energia = lim(estado.energia - 10);
+    estado.felicidade = lim(estado.felicidade + 10);
+    ganhar(premio, 15);
+    modal(`<h2 style="font-size:24px">Acabou o tempo! 🎣</h2>
+      <p style="margin:6px 0 12px">${capturas} peixe(s) fisgado(s), ${pontos} ponto(s).</p>
+      <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
+      <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoPescaria()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+  }
+  pararLoops = () => { rodando = false; clearTimeout(timerMordida); clearTimeout(timerJanela); clearInterval(cronoTimer); };
+
+  $('#tela-arcade').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <div class="titulo-secao"><h2>🎣 Pescaria</h2><small id="cronometro-pescaria">${DURACAO}s</small></div>
+    <div class="placar-pescaria">Pontos: <span id="placar-pescaria">0</span></div>
+    <div class="cena-pescaria"${estiloFundoMinigame('pescaria')}>
+      <div id="anzol-pescaria" class="anzol-pescaria">🎣</div>
+    </div>
+    <p id="ultimo-peixe-pescaria" class="ultimo-peixe-pescaria">Espere a linha se agitar...</p>
+    <button class="btn grande amarelo" onclick="window._puxarPescaria()">Puxar!</button>
+    <p class="aviso" style="margin-top:10px">Toque em "Puxar!" só quando a linha se agitar. Cedo demais e o peixe escapa!</p>`;
+  novaRodada();
+  cronoTimer = setInterval(() => {
+    const restante = DURACAO - (Date.now()-t0)/1000;
+    const el = $('#cronometro-pescaria'); if(el) el.textContent = Math.max(0,restante).toFixed(0)+'s';
+    if(restante <= 0) encerra();
+  }, 200);
+}
+
+/* --- minigame 9: bolha de sabão (ref: quebra-cabeça de mira e cores clássico de SNES) --- */
+function jogoBolha(){
+  const COLS = 7, LINHAS = 10, INICIAL_LINHAS = 4, MIN_GRUPO = 3;
+  let grade = Array(COLS*LINHAS).fill(null);
+  for(let l=0; l<INICIAL_LINHAS; l++){
+    for(let c=0; c<COLS; c++) grade[l*COLS+c] = Math.floor(Math.random()*6);
+  }
+  let corAtual = Math.floor(Math.random()*6);
+  let corProxima = Math.floor(Math.random()*6);
+  let colunaAlvo = Math.floor(COLS/2), direcaoMira = 1;
+  let pontos = 0, bolhasEstouradas = 0, rodando = true, miraTimer = null;
+
+  function grupoConectado(inicio){
+    const cor = grade[inicio];
+    const visto = new Set([inicio]);
+    const fila = [inicio];
+    while(fila.length){
+      const i = fila.pop();
+      const col = i % COLS, lin = Math.floor(i/COLS);
+      const vizinhos = [col>0?i-1:-1, col<COLS-1?i+1:-1, lin>0?i-COLS:-1, lin<LINHAS-1?i+COLS:-1];
+      vizinhos.forEach(v => { if(v>=0 && !visto.has(v) && grade[v]===cor){ visto.add(v); fila.push(v); } });
+    }
+    return visto;
+  }
+  // toda bolha precisa de um caminho até o teto (linha 0) pra continuar presa — sem apoio, ela
+  // cai e estoura também (mesma regra clássica de bolha de sabão)
+  function removerDesconectadas(){
+    const ancoradas = new Set();
+    const fila = [];
+    for(let c=0; c<COLS; c++){ if(grade[c]!==null){ ancoradas.add(c); fila.push(c); } }
+    while(fila.length){
+      const i = fila.pop();
+      const col = i % COLS, lin = Math.floor(i/COLS);
+      const vizinhos = [col>0?i-1:-1, col<COLS-1?i+1:-1, lin>0?i-COLS:-1, lin<LINHAS-1?i+COLS:-1];
+      vizinhos.forEach(v => { if(v>=0 && grade[v]!==null && !ancoradas.has(v)){ ancoradas.add(v); fila.push(v); } });
+    }
+    let caidas = 0;
+    for(let i=0; i<grade.length; i++){
+      if(grade[i]!==null && !ancoradas.has(i)){ grade[i]=null; caidas++; }
+    }
+    return caidas;
+  }
+  function pintarMira(){
+    const el = $('#mira-bolha');
+    if(el) el.style.left = `calc(${colunaAlvo} * (100% / ${COLS}) + (50% / ${COLS}))`;
+  }
+  function pinta(){
+    $('#grade-bolhas').innerHTML = grade.map(c => `<div class="bolha-cel${c!==null?' cor'+c:''}"></div>`).join('');
+    $('#bolha-atual').className = 'bolha-preview cor' + corAtual;
+    $('#bolha-proxima').className = 'bolha-preview pequena cor' + corProxima;
+    $('#placar-bolhas').textContent = pontos;
+    pintarMira();
+  }
+  window._atirarBolha = () => {
+    if(!rodando) return;
+    const col = colunaAlvo;
+    let fundo = -1;
+    for(let l=0; l<LINHAS; l++){ if(grade[l*COLS+col]!==null) fundo = l; }
+    const alvo = fundo === -1 ? 0 : fundo+1;
+    if(alvo >= LINHAS) return; // coluna já tomada até embaixo (raríssimo, rede de segurança)
+    grade[alvo*COLS+col] = corAtual;
+    tocarEfeito('bolha', 'acerto');
+
+    const grupo = grupoConectado(alvo*COLS+col);
+    if(grupo.size >= MIN_GRUPO){
+      grupo.forEach(g => { grade[g] = null; });
+      const caidas = removerDesconectadas();
+      bolhasEstouradas += grupo.size + caidas;
+      pontos += grupo.size*10 + caidas*15;
+    }
+    pontos += 3;
+
+    corAtual = corProxima;
+    corProxima = Math.floor(Math.random()*6);
+    pinta();
+
+    if(grade.slice((LINHAS-1)*COLS, LINHAS*COLS).some(c => c !== null)) encerra();
+  };
+  function encerra(){
+    rodando = false;
+    clearInterval(miraTimer);
+    if(pontos > estado.recordes.bolha) estado.recordes.bolha = pontos;
+    const premio = Math.round(pontos/3);
+    estado.energia = lim(estado.energia - 10);
+    estado.felicidade = lim(estado.felicidade + 10);
+    ganhar(premio, 15);
+    tocarEfeito('bolha', 'erro');
+    modal(`<h2 style="font-size:24px">As bolhas chegaram no canhão! 🎈</h2>
+      <p style="margin:6px 0 12px">${bolhasEstouradas} bolha(s) estourada(s), ${pontos} ponto(s).</p>
+      <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
+      <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoBolha()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+  }
+  pararLoops = () => { rodando = false; clearInterval(miraTimer); };
+
+  $('#tela-arcade').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <div class="titulo-secao"><h2>🎈 Bolha de Sabão</h2><small>pontos: <b id="placar-bolhas">0</b></small></div>
+    <div id="grade-bolhas" class="grade-bolhas"${estiloFundoMinigame('bolha')}></div>
+    <div class="mira-faixa"><div id="mira-bolha" class="mira-bolha">▼</div></div>
+    <div class="canhao-bolha">
+      <span class="bolha-preview" id="bolha-atual"></span>
+      <button class="btn grande amarelo" onclick="window._atirarBolha()">Atirar!</button>
+      <span>próxima: <span class="bolha-preview pequena" id="bolha-proxima"></span></span>
+    </div>
+    <p class="aviso" style="margin-top:10px">Espere a mira ▼ passar pela coluna certa e toque em "Atirar!". 3 ou mais bolhas da mesma cor encostadas estouram!</p>`;
+  pinta();
+  miraTimer = setInterval(() => {
+    if(!rodando) return;
+    colunaAlvo += direcaoMira;
+    if(colunaAlvo >= COLS-1 || colunaAlvo <= 0) direcaoMira *= -1;
+    pintarMira();
+  }, 160);
 }
 
 /* ---------- 9. TELA: LOJA DA VILA ----------
@@ -4269,6 +4649,9 @@ const MEDALHAS = [
   {id:'ouvido',   emoji:'🎵', nome:'8 rodadas na Sequência', ok:()=>estado.recordes.sequencia>=8},
   {id:'corredor', emoji:'🏃', nome:'80 pontos na Corrida', ok:()=>estado.recordes.corrida>=80},
   {id:'empilhador', emoji:'🧱', nome:'300 pontos nos Blocos', ok:()=>estado.recordes.blocos>=300},
+  {id:'atravessador', emoji:'🚸', nome:'80 pontos na Rua', ok:()=>estado.recordes.rua>=80},
+  {id:'pescador', emoji:'🎣', nome:'40 pontos na Pescaria', ok:()=>estado.recordes.pescaria>=40},
+  {id:'estourador', emoji:'🎈', nome:'100 pontos na Bolha', ok:()=>estado.recordes.bolha>=100},
   {id:'chama',    emoji:'🔥', nome:'7 dias seguidos', ok:()=>estado.streak.melhor>=7},
   {id:'estiloso', emoji:'😎', nome:'Bicho estiloso', ok:()=>estado.equipado.length>=1},
   {id:'clube',    emoji:'🏅', nome:'Em um clube', ok:()=>!!clubeAtual}
