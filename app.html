@@ -823,6 +823,22 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 @keyframes pop{0%{transform:scale(.4)}70%{transform:scale(1.15)}100%{transform:scale(1)}}
 .placar-toca{text-align:center;font-weight:900;font-size:15px;margin:2px 0 6px}
 
+/* ---------- blocos do bicho (minigame 6, ref: quebra-cabeça de blocos empilhados de SNES) ---------- */
+.blocos-proximo{text-align:center;font-weight:900;font-size:14px;margin:2px 0 8px;display:flex;align-items:center;justify-content:center;gap:8px}
+.grade-blocos{display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(10,1fr);gap:4px;
+  max-width:240px;aspect-ratio:6/10;margin:0 auto;background:#fff;border:var(--borda) solid var(--contorno);
+  border-bottom-width:6px;border-radius:var(--r);padding:6px}
+.bloco-cel{border-radius:5px;background:#EDF0F1;border:2px solid #D5DBDB;padding:0;transition:transform .1s ease}
+.bloco-cel:active{transform:scale(.92)}
+.bloco-preview{display:inline-block;width:22px;height:22px;border-radius:5px;border:2px solid #D5DBDB;vertical-align:middle}
+.bloco-cel.cor0,.bloco-preview.cor0{background:var(--manga);border-color:var(--manga-rim)}
+.bloco-cel.cor1,.bloco-preview.cor1{background:var(--rosa);border-color:var(--rosa-rim)}
+.bloco-cel.cor2,.bloco-preview.cor2{background:var(--mata);border-color:var(--mata-rim)}
+.bloco-cel.cor3,.bloco-preview.cor3{background:var(--ceu);border-color:var(--ceu-rim)}
+.bloco-cel.cor4,.bloco-preview.cor4{background:var(--jabuti);border-color:var(--jabuti-rim)}
+.bloco-cel.cor5,.bloco-preview.cor5{background:var(--moeda);border-color:var(--moeda-rim)}
+.bloco-cel.pop{animation:pop .15s ease-out}
+
 /* ---------- filtro de série nas trilhas ---------- */
 /* carrossel de séries: setas fixas nas pontas, a tira de chips rola por trás (arraste
    ou toque nas setas) — sem barra de rolagem visível poluindo o visual */
@@ -1165,7 +1181,7 @@ const estado = {
   moedas:60, xp:0,
   fome:72, felicidade:80, energia:90,
   equipado:[], mochila:[], inventario:{},
-  licoesFeitas:[], recordes:{memoria:null, chuva:0, toca:0, sequencia:0},
+  licoesFeitas:[], recordes:{memoria:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0},
   missoes:{}, cenasVisitadas:[], gatilhosAtivos:[], itensColetados:[],
   moveisComprados:[], casaMoveis:[], casaDesbloqueada:false,
   streak:{atual:0, melhor:0, ultimoDia:null},
@@ -2741,6 +2757,10 @@ RENDER.arcade = () => {
         <span class="emoji">🕳️</span><h3>Toca do Bicho</h3><p>Toque rápido, evite o raio. Recorde: ${estado.recordes.toca} pontos</p></button>
       <button class="cartao-trilha" onclick="jogoSequencia()">
         <span class="emoji">🎵</span><h3>Sequência do Bicho</h3><p>Repita a ordem certinha. Recorde: ${estado.recordes.sequencia} rodada(s)</p></button>
+      <button class="cartao-trilha" onclick="jogoCorrida()">
+        <span class="emoji">🏃</span><h3>Corrida do Bicho</h3><p>Pule os obstáculos correndo. Recorde: ${estado.recordes.corrida} pontos</p></button>
+      <button class="cartao-trilha" onclick="jogoBlocos()">
+        <span class="emoji">🧱</span><h3>Blocos do Bicho</h3><p>Empilhe e limpe fileiras. Recorde: ${estado.recordes.blocos} pontos</p></button>
     </div>
     <p class="aviso" style="margin-top:16px">Minigame gasta energia do bicho — mas ela volta sozinha com o tempo.</p>`;
 };
@@ -3042,6 +3062,174 @@ function jogoSequencia(){
     </div>
     <p class="aviso" style="margin-top:14px">Observe a ordem que acende e repita tocando nos mesmos quadrados.</p>`;
   proximaRodada();
+}
+
+/* --- minigame 5: corrida do bicho (endless runner, ref: corrida de plataforma clássica de SNES) --- */
+function jogoCorrida(){
+  $('#tela-arcade').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <div class="titulo-secao"><h2>🏃 Corrida do Bicho</h2><small>pontos: <b id="placar-corrida">0</b></small></div>
+    <canvas id="tela-jogo"${estiloFundoMinigame('corrida')}></canvas>
+    <p class="aviso" style="margin-top:12px">Toque na tela (ou aperte espaço/↑) pra pular os obstáculos!</p>`;
+  const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
+  // mesmo cálculo de altura disponível usado na Chuva de Frutas — ver comentário lá
+  const secao = $('#tela-arcade');
+  const titulo = secao.querySelector('.titulo-secao');
+  const aviso = secao.querySelector('.aviso');
+  const consumidoAntes = titulo.getBoundingClientRect().bottom - secao.getBoundingClientRect().top;
+  const consumidoDepois = aviso.getBoundingClientRect().height + 12;
+  const bordaCanvas = 8;
+  const alturaDisponivel = secao.clientHeight - consumidoAntes - consumidoDepois - bordaCanvas - 20;
+  cv.width = Math.min(360, cv.parentElement.clientWidth);
+  cv.height = Math.max(180, Math.min(320, alturaDisponivel));
+  const L = cv.width, A = cv.height;
+  const CHAO = A - 34, OBST_ALTURA = 30;
+  const emojiBicho = {capivara:'🦫', salsicha:'🐶', gato:'🐱'}[estado.tipo] || '🐾';
+  const OBSTACULOS = ['🌵','🪨','🍄'];
+  let bicho = {x:46, y:CHAO, vy:0, pulando:false};
+  const GRAVIDADE = 0.9, FORCA_PULO = -14.5;
+  let obstaculos = [], moedas = [], pontos = 0, distancia = 0, velocidade = 4.2;
+  let rodando = true, proxObstaculo = 60, proxMoeda = 140;
+
+  function pular(){
+    if(!rodando || bicho.pulando) return;
+    bicho.vy = FORCA_PULO; bicho.pulando = true;
+  }
+  const aoTocar = ev => { ev.preventDefault(); pular(); };
+  cv.addEventListener('pointerdown', aoTocar);
+  const tecla = e => { if(e.key===' '||e.key==='ArrowUp'){ e.preventDefault(); pular(); } };
+  addEventListener('keydown', tecla);
+
+  function encerra(){
+    rodando = false;
+    removeEventListener('keydown', tecla);
+    const premio = Math.max(0, pontos) * 2;
+    if(pontos > estado.recordes.corrida) estado.recordes.corrida = pontos;
+    estado.energia = lim(estado.energia - 14);
+    estado.felicidade = lim(estado.felicidade + 10);
+    estado.fome = lim(estado.fome - 5);
+    ganhar(premio, 15);
+    tocarEfeito('corrida', 'erro');
+    modal(`<h2 style="font-size:24px">Ai! 💥</h2>
+      <p style="margin:6px 0 12px">Você fez ${pontos} ponto(s) correndo.</p>
+      <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
+      <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoCorrida()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+  }
+  pararLoops = () => { rodando = false; removeEventListener('keydown', tecla); };
+
+  (function laco(){
+    if(!rodando) return;
+    velocidade = 4.2 + Math.min(4, distancia/900);
+    distancia += velocidade;
+    pontos = Math.floor(distancia/12);
+
+    bicho.vy += GRAVIDADE;
+    bicho.y += bicho.vy;
+    if(bicho.y >= CHAO){ bicho.y = CHAO; bicho.vy = 0; bicho.pulando = false; }
+
+    if(--proxObstaculo <= 0){
+      proxObstaculo = Math.max(46, 90 - velocidade*4 + Math.random()*40);
+      obstaculos.push({x:L+20, e: OBSTACULOS[Math.floor(Math.random()*OBSTACULOS.length)]});
+    }
+    if(--proxMoeda <= 0){
+      proxMoeda = 110 + Math.random()*90;
+      moedas.push({x:L+20, y:CHAO-46-Math.random()*34, pega:false});
+    }
+    obstaculos.forEach(o => o.x -= velocidade);
+    moedas.forEach(m => m.x -= velocidade);
+    obstaculos = obstaculos.filter(o => o.x > -30);
+    moedas = moedas.filter(m => m.x > -30 && !m.pega);
+
+    ctx.clearRect(0,0,L,A);
+    ctx.fillStyle = '#7DCEA0'; ctx.fillRect(0, CHAO+22, L, A-CHAO-22);
+    ctx.strokeStyle = '#2C3E50'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0,CHAO+22); ctx.lineTo(L,CHAO+22); ctx.stroke();
+
+    ctx.font = '30px serif'; ctx.textAlign = 'center';
+    obstaculos.forEach(o => ctx.fillText(o.e, o.x, CHAO+16));
+    moedas.forEach(m => ctx.fillText('🪙', m.x, m.y));
+
+    // colisão só conta se o bicho ainda estiver baixo o bastante pra não ter "pulado por cima"
+    for(const o of obstaculos){
+      const sobrepoeHoriz = o.x > bicho.x-20 && o.x < bicho.x+20;
+      const naoPulouAlto = bicho.y > CHAO - OBST_ALTURA;
+      if(sobrepoeHoriz && naoPulouAlto) return encerra();
+    }
+    moedas.forEach(m => {
+      if(!m.pega && Math.abs(m.x-bicho.x) < 24 && Math.abs(m.y-bicho.y) < 30){
+        m.pega = true; pontos += 5; tocarEfeito('corrida', 'acerto');
+      }
+    });
+
+    ctx.font = '38px serif';
+    ctx.fillText(emojiBicho, bicho.x, bicho.y);
+
+    const placar = $('#placar-corrida'); if(placar) placar.textContent = pontos;
+    requestAnimationFrame(laco);
+  })();
+}
+
+/* --- minigame 6: blocos do bicho (empilhar e limpar fileiras, ref: quebra-cabeça de blocos de SNES) --- */
+function jogoBlocos(){
+  const COLS = 6, LINHAS = 10;
+  let grade = Array(COLS*LINHAS).fill(null); // null | índice de cor (0-5)
+  let pecaAtual = Math.floor(Math.random()*6);
+  let pecaProxima = Math.floor(Math.random()*6);
+  let linhasFeitas = 0, blocosColocados = 0, rodando = true;
+
+  function pontosAtuais(){ return blocosColocados*2 + linhasFeitas*100; }
+  function pinta(){
+    $('#grade-blocos').innerHTML = grade.map((c,i) =>
+      `<button class="bloco-cel${c!==null?' cor'+c:''}" onclick="window._dropCol(${i % COLS})"></button>`).join('');
+    $('#peca-proxima').className = 'bloco-preview cor' + pecaProxima;
+    $('#placar-blocos-linhas').textContent = linhasFeitas;
+    $('#placar-blocos').textContent = pontosAtuais();
+  }
+  window._dropCol = col => {
+    if(!rodando || grade[col] !== null) return; // topo dessa coluna já ocupado
+    let linhaAlvo = -1;
+    for(let l = LINHAS-1; l >= 0; l--){
+      if(grade[l*COLS+col] === null){ linhaAlvo = l; break; }
+    }
+    grade[linhaAlvo*COLS+col] = pecaAtual;
+    blocosColocados++;
+    tocarEfeito('blocos', 'acerto');
+
+    const inicio = linhaAlvo*COLS;
+    if(grade.slice(inicio, inicio+COLS).every(c => c !== null)){
+      grade.splice(inicio, COLS);
+      grade.unshift(...Array(COLS).fill(null));
+      linhasFeitas++;
+    }
+    pecaAtual = pecaProxima;
+    pecaProxima = Math.floor(Math.random()*6);
+    pinta();
+    if(grade.slice(0, COLS).some(c => c !== null)) encerra();
+  };
+  function encerra(){
+    rodando = false;
+    const pontos = pontosAtuais();
+    if(pontos > estado.recordes.blocos) estado.recordes.blocos = pontos;
+    const premio = Math.round(pontos/4);
+    estado.energia = lim(estado.energia - 10);
+    estado.felicidade = lim(estado.felicidade + 10);
+    ganhar(premio, 15);
+    tocarEfeito('blocos', 'erro');
+    modal(`<h2 style="font-size:24px">Empilhou até o topo! 🧱</h2>
+      <p style="margin:6px 0 12px">${linhasFeitas} fileira(s) completa(s), ${pontos} ponto(s).</p>
+      <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
+      <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoBlocos()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+  }
+  pararLoops = () => { rodando = false; };
+
+  $('#tela-arcade').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <div class="titulo-secao"><h2>🧱 Blocos do Bicho</h2><small>fileiras: <b id="placar-blocos-linhas">0</b> · pontos: <b id="placar-blocos">0</b></small></div>
+    <p class="blocos-proximo">Próximo bloco: <span id="peca-proxima" class="bloco-preview"></span></p>
+    <div id="grade-blocos" class="grade-blocos"${estiloFundoMinigame('blocos')}></div>
+    <p class="aviso" style="margin-top:12px">Toque numa coluna pra soltar o bloco. Encha uma fileira inteira (não importa a cor) pra ela sumir!</p>`;
+  pinta();
 }
 
 /* ---------- 9. TELA: LOJA DA VILA ----------
@@ -4035,6 +4223,8 @@ const MEDALHAS = [
   {id:'memoria',  emoji:'🃏', nome:'Memória em 12 jogadas', ok:()=>estado.recordes.memoria!==null && estado.recordes.memoria<=12},
   {id:'reflexo',  emoji:'⚡', nome:'10 pontos na Toca', ok:()=>estado.recordes.toca>=10},
   {id:'ouvido',   emoji:'🎵', nome:'8 rodadas na Sequência', ok:()=>estado.recordes.sequencia>=8},
+  {id:'corredor', emoji:'🏃', nome:'80 pontos na Corrida', ok:()=>estado.recordes.corrida>=80},
+  {id:'empilhador', emoji:'🧱', nome:'300 pontos nos Blocos', ok:()=>estado.recordes.blocos>=300},
   {id:'chama',    emoji:'🔥', nome:'7 dias seguidos', ok:()=>estado.streak.melhor>=7},
   {id:'estiloso', emoji:'😎', nome:'Bicho estiloso', ok:()=>estado.equipado.length>=1},
   {id:'clube',    emoji:'🏅', nome:'Em um clube', ok:()=>!!clubeAtual}
