@@ -4086,7 +4086,16 @@ function iniciarCarrosselSocial(){
     if(!ticking){ requestAnimationFrame(atualizar); ticking = true; }
   }, {passive:true});
   ativarArrastoCena(trilho);
-  atualizar();
+  // nesse ponto a tela ainda tá com display:none — RENDER.perfil roda antes de ir()
+  // marcar a seção como .ativa, então offsetLeft/clientWidth ainda leem tudo zerado.
+  // Espera o próximo frame (já com a seção visível) pra calcular posição de verdade.
+  requestAnimationFrame(() => {
+    // começa centralizado no 3º cartão (índice 2), não no 1º — assim já entra com um
+    // cartão espiando de cada lado, em vez de nascer com o lado esquerdo vazio
+    const inicial = itens[Math.min(2, itens.length - 1)];
+    trilho.scrollLeft = inicial.offsetLeft + inicial.offsetWidth / 2 - trilho.clientWidth / 2;
+    atualizar();
+  });
 }
 // lembrete de sequência: avisa às 19h se o aluno ainda não jogou hoje (ver
 // api/cron-lembrete-streak.php) — opcional, só aparece se o Hostmaster configurou o
