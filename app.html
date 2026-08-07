@@ -3705,7 +3705,7 @@ function jogoBolha(){
   }
   let corAtual = Math.floor(Math.random()*6);
   let corProxima = Math.floor(Math.random()*6);
-  const MARGEM_MIRA = 3; // quantos "passos" ela sai pra fora da grade nas pontas antes de voltar
+  const MARGEM_MIRA = 1; // quantos "passos" ela sai pra fora da grade nas pontas antes de voltar
   let colunaAlvo = Math.floor(COLS/2); // coluna de verdade (sempre 0..COLS-1) usada pro tiro
   let posVirtual = colunaAlvo, direcaoMira = 1; // posição da seta, que pode passar da borda (saidinha)
   let pontos = 0, bolhasEstouradas = 0, rodando = true, disparando = false;
