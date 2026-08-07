@@ -3559,7 +3559,7 @@ function jogoBolha(){
   }
   let corAtual = Math.floor(Math.random()*6);
   let corProxima = Math.floor(Math.random()*6);
-  let colunaAlvo = Math.floor(COLS/2), direcaoMira = 1;
+  let colunaAlvo = Math.floor(COLS/2), direcaoMira = 1, pausaMira = 0;
   let pontos = 0, bolhasEstouradas = 0, rodando = true, disparando = false;
   let miraTimer = null, timerVoo = null, timerEstouro = null;
   let posicoesColunas = []; // centro (em px, relativo ao #campo-bolhas) de cada coluna — medido de verdade no DOM
@@ -3723,10 +3723,14 @@ function jogoBolha(){
     </div>
     <p class="aviso" style="margin-top:10px">Espere a mira ▼ passar pela coluna certa e toque em "Atirar!". 3 ou mais bolhas da mesma cor encostadas estouram!</p>`;
   pinta();
+  // nas pontas (coluna 0 e última) a mira ficava só 1 tick antes de já virar de volta — o
+  // tempo de reação da pessoa não alcançava, então a bolinha "nunca ia" pra primeira/última
+  // coluna. Agora ela pausa alguns ticks a mais bem na ponta antes de voltar.
   miraTimer = setInterval(() => {
     if(!rodando) return;
+    if(pausaMira > 0){ pausaMira--; return; }
     colunaAlvo += direcaoMira;
-    if(colunaAlvo >= COLS-1 || colunaAlvo <= 0) direcaoMira *= -1;
+    if(colunaAlvo >= COLS-1 || colunaAlvo <= 0){ direcaoMira *= -1; pausaMira = 3; }
     pintarMira();
   }, 160);
 }
