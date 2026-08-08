@@ -482,10 +482,61 @@ body.conectando-fluxo{cursor:crosshair}
               <option value="recado">Só um recado</option>
             </select>
             <button type="button" class="btn linha branco" id="btn-usar-modelo">Usar modelo</button>
+            <button type="button" class="btn linha branco" id="btn-importar-dialogo-json">📥 Importar JSON</button>
             <button type="button" class="btn linha branco" id="btn-testar-dialogo">🔍 Testar diálogo</button>
             <div style="margin-left:auto;display:flex;gap:6px">
               <button type="button" class="btn linha branco ativo" id="btn-modo-lista" data-modo="lista">📋 Lista</button>
               <button type="button" class="btn linha branco" id="btn-modo-fluxo" data-modo="fluxo">🕸️ Fluxograma</button>
+            </div>
+          </div>
+
+          <div id="npc-importar-dialogo-painel" class="npc-entrada oculto">
+            <b>📥 Importar diálogo de um JSON</b>
+            <p class="dica-editor">Cola (ou sobe) só a árvore de conversa — substitui o diálogo deste NPC. Nome, emoji e agenda continuam do jeito que já estão preenchidos na tela.</p>
+            <details class="ajuda">
+              <summary>formato esperado</summary>
+              <pre>{
+  "inicial":"oi",
+  "inicialRetorno":"oi_de_novo",
+  "condicoesEntrada":[{"estado":"fome_baixa","no":"comenta_fome"}],
+  "nos":{
+    "oi":{
+      "texto":"Oi! Tudo bem?",
+      "variantes":["E aí, como vai?","Olá! Precisando de algo?"],
+      "expressao":"feliz",
+      "opcoes":[
+        {"rotulo":"Quero uma missão!","proximo":"oferece_missao"},
+        {"rotulo":"Só passando","proximo":null}
+      ]
+    },
+    "oferece_missao":{
+      "texto":"Beleza! Traga 2 melancias pra mim.",
+      "opcoes":[
+        {"rotulo":"Aceito!","proximo":null,"acao":{"tipo":"oferecer","missaoId":"trazer-melancia"}},
+        {"rotulo":"Já trouxe!","proximo":null,
+         "acao":{"tipo":"entregar","missaoId":"trazer-melancia"},
+         "mostrarSe":{"estado":"missao_pronta","missaoId":"trazer-melancia"}}
+      ]
+    },
+    "oi_de_novo":{"texto":"Oi de novo! Bom te ver por aqui outra vez.","opcoes":[{"rotulo":"Oi!","proximo":"oi"}]},
+    "comenta_fome":{"texto":"Nossa, seu bicho tá com uma cara de fome...","expressao":"triste",
+      "opcoes":[{"rotulo":"Vou cuidar dele!","proximo":null}]}
+  }
+}</pre>
+              <p style="margin:8px 0 0">
+                Só <code>inicial</code> e <code>nos</code> são obrigatórios — o resto (<code>inicialRetorno</code>,
+                <code>condicoesEntrada</code>, <code>variantes</code>, <code>expressao</code>, <code>acao</code>,
+                <code>mostrarSe</code>) é opcional em cada nó/opção. Referências a missão (<code>missaoId</code>)
+                precisam já existir na aba Missões.
+              </p>
+            </details>
+            <div class="upload" id="zona-upload-dialogo-npc">📄 Arraste o arquivo .json aqui, ou clique pra escolher — ou cole direto no campo abaixo</div>
+            <input type="file" id="input-arquivo-dialogo-npc" accept=".json,application/json" class="oculto">
+            <textarea id="dialogo-json" spellcheck="false" placeholder='{"inicial":"oi","nos":{...}}' style="margin-top:10px;min-height:140px"></textarea>
+            <div id="dialogo-json-aviso" class="aviso-form"></div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button type="button" class="btn linha mata" id="btn-aplicar-dialogo-json">Aplicar diálogo</button>
+              <button type="button" class="btn linha branco" id="btn-cancelar-dialogo-json">Cancelar</button>
             </div>
           </div>
 
@@ -551,6 +602,69 @@ body.conectando-fluxo{cursor:crosshair}
       </form>
 
       <div class="painel"><table id="tabela-npcs"></table></div>
+
+      <div class="painel">
+        <h3 style="font-size:15px;margin-bottom:8px">Importar em massa</h3>
+        <p style="font-size:13px;color:#566573;margin:0 0 10px">
+          Cole (ou suba) um JSON com um array de NPCs — mesmos campos do formulário acima, diálogo inteiro
+          incluso. Sobrescreve quem já tiver o mesmo <code>id</code>. Ou tudo entra, ou nada muda.
+          <b>Imagem principal e expressões só funcionam se o arquivo já tiver sido enviado antes</b> (upload
+          de imagem não viaja dentro do JSON) — sem isso, o NPC usa o emoji até você subir a imagem depois,
+          editando ele normal na tela.
+        </p>
+        <details class="ajuda">
+          <summary>formato esperado (todos os campos opcionais estão marcados)</summary>
+          <pre>{"npcs": [
+  {"id":"lojista","nome":"Seu Lontra","emoji":"🦦",
+   "imagem":"","imagemTipo":"png",
+   "tela":"loja","diasSemana":"","horaInicio":"","horaFim":"","dataInicio":"","dataFim":"",
+   "publicado":true,"ordem":0,
+   "expressoes":{"feliz":"","triste":"","surpreso":""},
+   "dialogo":{
+     "inicial":"oi",
+     "inicialRetorno":"oi_de_novo",
+     "condicoesEntrada":[{"estado":"fome_baixa","no":"comenta_fome"}],
+     "nos":{
+       "oi":{
+         "texto":"Oi! Tudo bem?",
+         "variantes":["E aí, como vai?","Olá! Precisando de algo?"],
+         "expressao":"feliz",
+         "opcoes":[
+           {"rotulo":"Quero uma missão!","proximo":"oferece_missao"},
+           {"rotulo":"Só passando","proximo":null}
+         ]
+       },
+       "oferece_missao":{
+         "texto":"Beleza! Traga 2 melancias pra mim.",
+         "opcoes":[
+           {"rotulo":"Aceito!","proximo":null,"acao":{"tipo":"oferecer","missaoId":"trazer-melancia"}},
+           {"rotulo":"Já trouxe!","proximo":null,
+            "acao":{"tipo":"entregar","missaoId":"trazer-melancia"},
+            "mostrarSe":{"estado":"missao_pronta","missaoId":"trazer-melancia"}}
+         ]
+       },
+       "oi_de_novo":{"texto":"Oi de novo! Bom te ver por aqui outra vez.","opcoes":[{"rotulo":"Oi!","proximo":"oi"}]},
+       "comenta_fome":{"texto":"Nossa, seu bicho tá com uma cara de fome...","expressao":"triste",
+         "opcoes":[{"rotulo":"Vou cuidar dele!","proximo":null}]}
+     }
+   }}
+]}</pre>
+          <p style="margin:8px 0 0">
+            <b>id</b>: 2-24 letras minúsculas/números · <b>tela</b>: <code>casa</code>, <code>arcade</code>,
+            <code>loja</code>, <code>mural</code>, <code>perfil</code>, <code>lojamoveis</code>,
+            <code>loja:&lt;id-da-loja&gt;</code>, <code>mundo:&lt;id-do-mundo&gt;</code>, ou vazio ·
+            <b>expressao</b> (por nó) e as chaves de <b>expressoes</b>: <code>feliz</code>, <code>triste</code>,
+            <code>surpreso</code> · <b>condicoesEntrada[].estado</b>: <code>fome_baixa</code>,
+            <code>felicidade_baixa</code>, <code>energia_baixa</code> · <b>opcoes[].proximo</b>: chave de outro
+            nó, ou <code>null</code> pra encerrar a conversa.
+          </p>
+        </details>
+        <div class="upload" id="zona-upload-npcs">📄 Arraste o arquivo .json aqui, ou clique pra escolher — ou cole direto no campo abaixo</div>
+        <input type="file" id="input-arquivo-npcs" accept=".json,application/json" class="oculto">
+        <textarea id="npcs-json" spellcheck="false" placeholder='{"npcs":[{"id":"...", ...}]}' style="margin-top:10px"></textarea>
+        <div id="npcs-import-aviso" class="aviso-form"></div>
+        <button class="btn erro" id="btn-importar-npcs" style="margin-top:10px">Importar NPCs</button>
+      </div>
     </section>
 
     <section id="aba-missoes" class="oculto">
@@ -1749,6 +1863,42 @@ $('#btn-usar-modelo').onclick = () => {
   sincronizarDialogo();
 };
 
+/* importar só o diálogo (JSON) de um NPC específico — cola/sobe a árvore de conversa
+   inteira e ela substitui dialogoEdit; nome/emoji/agenda continuam do jeito que já
+   estão preenchidos na tela, e a validação de verdade acontece no servidor ao salvar */
+$('#btn-importar-dialogo-json').onclick = () => {
+  $('#dialogo-json-aviso').style.display = 'none';
+  $('#npc-importar-dialogo-painel').classList.toggle('oculto');
+};
+$('#btn-cancelar-dialogo-json').onclick = () => {
+  $('#npc-importar-dialogo-painel').classList.add('oculto');
+  $('#dialogo-json').value = '';
+  $('#dialogo-json-aviso').style.display = 'none';
+};
+$('#zona-upload-dialogo-npc').onclick = () => $('#input-arquivo-dialogo-npc').click();
+$('#input-arquivo-dialogo-npc').onchange = e => { if(e.target.files[0]) lerArquivoNoCampo(e.target.files[0], '#dialogo-json'); };
+['dragover','drop'].forEach(ev => $('#zona-upload-dialogo-npc').addEventListener(ev, e => e.preventDefault()));
+$('#zona-upload-dialogo-npc').addEventListener('drop', e => { if(e.dataTransfer.files[0]) lerArquivoNoCampo(e.dataTransfer.files[0], '#dialogo-json'); });
+$('#btn-aplicar-dialogo-json').onclick = () => {
+  const aviso = $('#dialogo-json-aviso');
+  aviso.style.display = 'none';
+  let novo;
+  try{ novo = JSON.parse($('#dialogo-json').value); }
+  catch(e){ aviso.className='aviso-form erro'; aviso.textContent = 'JSON inválido: ' + e.message; aviso.style.display='block'; return; }
+  if(!novo || typeof novo !== 'object' || !novo.nos || typeof novo.nos !== 'object' || !Object.keys(novo.nos).length){
+    aviso.className='aviso-form erro'; aviso.textContent = 'Formato inválido: esperado {"inicial":"...", "nos":{...}}.'; aviso.style.display='block'; return;
+  }
+  if(typeof novo.inicial !== 'string' || !novo.nos[novo.inicial]){
+    aviso.className='aviso-form erro'; aviso.textContent = '"inicial" precisa apontar pra uma chave que existe em "nos".'; aviso.style.display='block'; return;
+  }
+  if(Object.keys(dialogoEdit.nos).some(k => dialogoEdit.nos[k].texto) && !confirm('Isso substitui o diálogo atual deste NPC. Continuar?')) return;
+  dialogoEdit = novo;
+  nosOrdem = Object.keys(dialogoEdit.nos);
+  $('#npc-importar-dialogo-painel').classList.add('oculto');
+  $('#dialogo-json').value = '';
+  sincronizarDialogo();
+};
+
 function renderNos(){
   const opcoesNo = (atualChave, selecionado) => nosOrdem
     .filter(k => k !== atualChave)
@@ -2270,6 +2420,9 @@ function limparFormNpc(){
   renderExpressoesNpc();
   previewNo = null;
   $('#npc-preview').classList.add('oculto');
+  $('#npc-importar-dialogo-painel').classList.add('oculto');
+  $('#dialogo-json').value = '';
+  $('#dialogo-json-aviso').style.display = 'none';
 }
 $('#btn-novo-npc').onclick = () => {
   limparFormNpc();
@@ -2399,6 +2552,26 @@ window.removerExpressaoNpc = (chave) => {
   delete npcExpressoes[chave];
   delete npcExpressoesUrl[chave];
   renderExpressoesNpc();
+};
+
+/* importar NPCs em massa: mesmo padrão de upload/colar-JSON já usado nas missões, lições
+   e no backup */
+$('#zona-upload-npcs').onclick = () => $('#input-arquivo-npcs').click();
+$('#input-arquivo-npcs').onchange = e => { if(e.target.files[0]) lerArquivoNoCampo(e.target.files[0], '#npcs-json'); };
+['dragover','drop'].forEach(ev => $('#zona-upload-npcs').addEventListener(ev, e => e.preventDefault()));
+$('#zona-upload-npcs').addEventListener('drop', e => { if(e.dataTransfer.files[0]) lerArquivoNoCampo(e.dataTransfer.files[0], '#npcs-json'); });
+$('#btn-importar-npcs').onclick = async () => {
+  const aviso = $('#npcs-import-aviso');
+  aviso.style.display = 'none';
+  let dados;
+  try{ dados = JSON.parse($('#npcs-json').value); }
+  catch(e){ aviso.className='aviso-form erro'; aviso.textContent = 'JSON inválido: ' + e.message; aviso.style.display='block'; return; }
+  if(!confirm(`Isso cria/sobrescreve ${dados.npcs?.length ?? 0} NPC(s). Continuar?`)) return;
+  try{
+    const r = await api('npcs_importar', {method:'POST', corpo:dados});
+    aviso.className='aviso-form ok'; aviso.textContent = `Importado: ${r.npcs} NPC(s).`; aviso.style.display='block';
+    carregarNpcs();
+  }catch(e){ aviso.className='aviso-form erro'; aviso.textContent = e.message; aviso.style.display='block'; }
 };
 
 /* ---------- Missões (catálogo central — fora da página do NPC de propósito) ---------- */

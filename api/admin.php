@@ -55,6 +55,8 @@
      POST ?acao=npc_duplicar          {id, novoId} -> clona um NPC (fica como rascunho)
      POST ?acao=npc_imagem            (multipart: arquivo) -> sobe imagem pra assets/npcs/ (usado pra imagem
                                         principal E pras expressões extras — mesmo upload genérico pros dois)
+     POST ?acao=npcs_importar         {npcs:[...]} -> cria/atualiza vários de uma vez (mesmo formato do npc_salvar
+                                        em cada item; imagem/expressões só funcionam se o arquivo já existir)
      GET  ?acao=missoes_listar
      GET  ?acao=missao_obter          ?id=xx
      POST ?acao=missao_salvar         {id, titulo, descricao, tipo, objetivo:{...}, premio:{moedas,xp}, publicado, ordem}
@@ -523,6 +525,43 @@ function validarDialogo(array $d): ?string {
     if (!is_string($c['no'] ?? null) || !isset($d['nos'][$c['no']])) return 'Uma condição de entrada aponta pra um nó que não existe.';
   }
   return null;
+}
+
+/** valida um NPC completo (mesmo formato do npc_salvar) — usado tanto ali quanto no
+    import em massa, pra não ter duas checagens que podem desalinhar com o tempo.
+    @return string|null mensagem de erro, ou null se ok */
+function validarNpc(array $d): ?string {
+  if (!validarId((string)($d['id'] ?? ''))) return '"id" inválido: use de 2 a 24 letras minúsculas ou números.';
+  $nome = trim((string)($d['nome'] ?? ''));
+  if ($nome === '' || mb_strlen($nome) > 60) return '"nome" precisa ter de 1 a 60 caracteres.';
+  $emoji = (string)($d['emoji'] ?? '🧑');
+  if ($emoji === '' || mb_strlen($emoji) > 8) return '"emoji" é obrigatório.';
+  $imagemTipo = (string)($d['imagemTipo'] ?? 'png');
+  if (!in_array($imagemTipo, ['png', 'lottie'], true)) return '"imagemTipo" precisa ser "png" ou "lottie".';
+  $tela = trim((string)($d['tela'] ?? ''));
+  if (!telaNpcValida($tela)) return '"tela" precisa ser uma tela válida, uma loja existente ("loja:id"), ou vazio (só via ponto no mapa).';
+  $erroAgenda = validarAgenda($d);
+  if ($erroAgenda) return $erroAgenda;
+  $dialogo = $d['dialogo'] ?? null;
+  if (!is_array($dialogo)) return 'Formato de diálogo inválido.';
+  $erro = validarDialogo($dialogo);
+  if ($erro) return $erro;
+  // expressões extras: {chave: nome-do-arquivo} — só confere que a chave é do catálogo
+  // fechado; o arquivo em si é enviado à parte (upload de imagem não viaja dentro do JSON)
+  $expressoesEntrada = $d['expressoes'] ?? [];
+  if (!is_array($expressoesEntrada)) return 'Formato de expressões inválido.';
+  foreach ($expressoesEntrada as $chaveExpr => $arquivoExpr) {
+    if (!in_array($chaveExpr, EXPRESSOES_NPC, true)) return "Expressão \"$chaveExpr\" desconhecida.";
+  }
+  return null;
+}
+function expressoesLimpas(array $expressoesEntrada): array {
+  $expressoes = [];
+  foreach ($expressoesEntrada as $chaveExpr => $arquivoExpr) {
+    $arquivoExpr = trim((string)$arquivoExpr);
+    if ($arquivoExpr !== '') $expressoes[$chaveExpr] = $arquivoExpr;
+  }
+  return $expressoes;
 }
 
 /** valida uma missão. @return string|null mensagem de erro, ou null se ok */
@@ -1299,43 +1338,8 @@ try {
 
   if ($acao === 'npc_salvar') {
     $d = corpo();
-    $id = (string)($d['id'] ?? '');
-    if (!validarId($id)) responder(['erro' => '"id" inválido: use de 2 a 24 letras minúsculas ou números.'], 422);
-    $nome = trim((string)($d['nome'] ?? ''));
-    if ($nome === '' || mb_strlen($nome) > 60) responder(['erro' => '"nome" precisa ter de 1 a 60 caracteres.'], 422);
-    $emoji = (string)($d['emoji'] ?? '🧑');
-    if ($emoji === '' || mb_strlen($emoji) > 8) responder(['erro' => '"emoji" é obrigatório.'], 422);
-    $imagem = trim((string)($d['imagem'] ?? ''));
-    $imagemTipo = (string)($d['imagemTipo'] ?? 'png');
-    if (!in_array($imagemTipo, ['png', 'lottie'], true)) responder(['erro' => '"imagemTipo" precisa ser "png" ou "lottie".'], 422);
-    $tela = trim((string)($d['tela'] ?? ''));
-    if (!telaNpcValida($tela)) responder(['erro' => '"tela" precisa ser uma tela válida, uma loja existente ("loja:id"), ou vazio (só via ponto no mapa).'], 422);
-
-    $erroAgenda = validarAgenda($d);
-    if ($erroAgenda) responder(['erro' => $erroAgenda], 422);
-    $diasSemana = normalizarDiasSemana(trim((string)($d['diasSemana'] ?? '')));
-    $horaInicio = trim((string)($d['horaInicio'] ?? ''));
-    $horaFim = trim((string)($d['horaFim'] ?? ''));
-    $dataInicio = trim((string)($d['dataInicio'] ?? ''));
-    $dataFim = trim((string)($d['dataFim'] ?? ''));
-
-    $dialogo = $d['dialogo'] ?? null;
-    if (!is_array($dialogo)) responder(['erro' => 'Formato de diálogo inválido.'], 422);
-    $erro = validarDialogo($dialogo);
+    $erro = validarNpc($d);
     if ($erro) responder(['erro' => $erro], 422);
-
-    // expressões extras: {chave: nome-do-arquivo}, só as chaves do catálogo fechado acima —
-    // os arquivos em si já foram validados/gravados na hora do upload (mesma ação de sempre,
-    // npc_imagem), aqui só confere que não veio chave inventada
-    $expressoesEntrada = $d['expressoes'] ?? [];
-    if (!is_array($expressoesEntrada)) responder(['erro' => 'Formato de expressões inválido.'], 422);
-    $expressoes = [];
-    foreach ($expressoesEntrada as $chaveExpr => $arquivoExpr) {
-      if (!in_array($chaveExpr, EXPRESSOES_NPC, true)) responder(['erro' => "Expressão \"$chaveExpr\" desconhecida."], 422);
-      $arquivoExpr = trim((string)$arquivoExpr);
-      if ($arquivoExpr !== '') $expressoes[$chaveExpr] = $arquivoExpr;
-    }
-
     bd()->prepare('INSERT INTO npcs (id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, expressoes, publicado, ordem)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), imagem=VALUES(imagem), imagem_tipo=VALUES(imagem_tipo),
@@ -1343,11 +1347,52 @@ try {
         data_inicio=VALUES(data_inicio), data_fim=VALUES(data_fim),
         dialogo=VALUES(dialogo), expressoes=VALUES(expressoes), publicado=VALUES(publicado), ordem=VALUES(ordem)')
       ->execute([
-        $id, $nome, $emoji, $imagem, $imagemTipo, $tela, $diasSemana, $horaInicio, $horaFim, $dataInicio, $dataFim,
-        json_encode($dialogo, JSON_UNESCAPED_UNICODE), json_encode($expressoes, JSON_UNESCAPED_UNICODE),
+        (string)$d['id'], trim((string)$d['nome']), (string)($d['emoji'] ?? '🧑'), trim((string)($d['imagem'] ?? '')),
+        (string)($d['imagemTipo'] ?? 'png'), trim((string)($d['tela'] ?? '')), normalizarDiasSemana(trim((string)($d['diasSemana'] ?? ''))),
+        trim((string)($d['horaInicio'] ?? '')), trim((string)($d['horaFim'] ?? '')),
+        trim((string)($d['dataInicio'] ?? '')), trim((string)($d['dataFim'] ?? '')),
+        json_encode($d['dialogo'], JSON_UNESCAPED_UNICODE), json_encode(expressoesLimpas($d['expressoes'] ?? []), JSON_UNESCAPED_UNICODE),
         !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0),
       ]);
     responder(['ok' => true]);
+  }
+
+  if ($acao === 'npcs_importar') {
+    // pensado pra criar em massa: cola/sobe um array de NPCs completos (mesmo formato do
+    // npc_salvar, diálogo inteiro incluso) e grava tudo de uma vez — ou tudo entra, ou nada
+    // muda. Imagens (imagem/expressoes) não viajam no JSON — se referenciar um arquivo, ele
+    // precisa já ter sido enviado antes (ou é enviado depois, editando o NPC na tela)
+    $d = corpo();
+    $npcs = $d['npcs'] ?? null;
+    if (!is_array($npcs) || !$npcs) responder(['erro' => 'Formato inválido: esperado {"npcs": [...]} com ao menos 1 item.'], 422);
+    if (count($npcs) > 100) responder(['erro' => 'No máximo 100 NPCs por importação.'], 422);
+    foreach ($npcs as $i => $n) {
+      if (!is_array($n)) responder(['erro' => "NPC $i: precisa ser um objeto."], 422);
+      $erro = validarNpc($n);
+      if ($erro) responder(['erro' => "NPC \"" . ($n['id'] ?? '?') . "\": " . $erro], 422);
+    }
+    $bdc = bd();
+    $bdc->beginTransaction();
+    try {
+      $ins = $bdc->prepare('INSERT INTO npcs (id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, expressoes, publicado, ordem)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), imagem=VALUES(imagem), imagem_tipo=VALUES(imagem_tipo),
+          tela=VALUES(tela), dias_semana=VALUES(dias_semana), hora_inicio=VALUES(hora_inicio), hora_fim=VALUES(hora_fim),
+          data_inicio=VALUES(data_inicio), data_fim=VALUES(data_fim),
+          dialogo=VALUES(dialogo), expressoes=VALUES(expressoes), publicado=VALUES(publicado), ordem=VALUES(ordem)');
+      foreach ($npcs as $n) {
+        $ins->execute([
+          (string)$n['id'], trim((string)$n['nome']), (string)($n['emoji'] ?? '🧑'), trim((string)($n['imagem'] ?? '')),
+          (string)($n['imagemTipo'] ?? 'png'), trim((string)($n['tela'] ?? '')), normalizarDiasSemana(trim((string)($n['diasSemana'] ?? ''))),
+          trim((string)($n['horaInicio'] ?? '')), trim((string)($n['horaFim'] ?? '')),
+          trim((string)($n['dataInicio'] ?? '')), trim((string)($n['dataFim'] ?? '')),
+          json_encode($n['dialogo'], JSON_UNESCAPED_UNICODE), json_encode(expressoesLimpas($n['expressoes'] ?? []), JSON_UNESCAPED_UNICODE),
+          !empty($n['publicado']) ? 1 : 0, (int)($n['ordem'] ?? 0),
+        ]);
+      }
+      $bdc->commit();
+    } catch (Throwable $e) { $bdc->rollBack(); throw $e; }
+    responder(['ok' => true, 'npcs' => count($npcs)]);
   }
 
   if ($acao === 'npc_excluir') {
