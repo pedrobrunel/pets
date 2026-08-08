@@ -2252,7 +2252,10 @@ function avancarNpc(proximo){
 }
 function renderNpc(){
   const n = npcAberto, no = n.dialogo.nos[noNpcAtual];
-  const figura = n.imagemUrl ? `<img src="${esc(n.imagemUrl)}" alt="${esc(n.nome)}">` : (n.emoji || '🧑');
+  // um nó pode escolher uma expressão (feliz/triste/surpreso) pra trocar a imagem só
+  // naquela fala — sem escolha, cai na imagem principal do NPC de sempre
+  const imagemNo = (no.expressao && n.expressoesUrl && n.expressoesUrl[no.expressao]) || n.imagemUrl;
+  const figura = imagemNo ? `<img src="${esc(imagemNo)}" alt="${esc(n.nome)}">` : (n.emoji || '🧑');
   // botões condicionados a missão (mostrarSe) só aparecem quando a condição bate — é o
   // NPC "lembrando" do seu progresso, sem precisar duplicar nada da missão nele
   let visiveis = no.opcoes.map((op, i) => ({op, i})).filter(({op}) => opcaoVisivel(op));

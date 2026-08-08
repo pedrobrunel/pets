@@ -194,6 +194,18 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
 .opcao-linha input{flex:1}
 .opcao-linha select{flex:1}
 .opcao-linha button{flex:none}
+
+/* --- pré-visualização do diálogo (simula o que o aluno veria, sem sair do painel) --- */
+.npc-preview{background:#FFF9E6;border:1px solid #F1C40F;border-radius:10px;padding:12px 14px;margin-bottom:14px}
+.npc-preview-cabecalho{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px}
+.npc-preview-caixa{background:#fff;border:1px dashed var(--contorno);border-radius:10px;padding:14px}
+.npc-preview-linha{display:flex;gap:10px;align-items:flex-start}
+.npc-preview-figura{flex:none;width:52px;height:52px;border-radius:50%;background:#F4F6F7;border:1px solid var(--contorno);
+  display:grid;place-items:center;font-size:26px;overflow:hidden}
+.npc-preview-figura img{width:100%;height:100%;object-fit:cover}
+.npc-preview-balao{flex:1;background:#F4F6F7;border:1px solid var(--contorno);border-radius:10px;padding:8px 12px;font-size:13px}
+.npc-preview-opcoes{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.npc-preview-fim{font-size:12px;color:#7F8C8D;margin:10px 0 0;text-align:center}
 .opcao-missao{font-size:11px;color:#7F8C8D;font-weight:800;white-space:nowrap}
 .npc-thumb{width:34px;height:34px;border-radius:8px;object-fit:cover;vertical-align:-10px;margin-right:6px;background:#F4F6F7}
 .movel-thumb{width:96px;max-height:96px;object-fit:contain;border-radius:8px;background:#F4F6F7;border:1px solid var(--contorno);padding:6px;display:block;margin-bottom:8px}
@@ -416,6 +428,10 @@ body.conectando-fluxo{cursor:crosshair}
         <input type="text" id="npc-imagem" placeholder="nome do arquivo (preenchido pelo upload)" style="margin-top:8px">
         <p class="dica-editor">A imagem enviada fica em <code>assets/npcs/</code> no servidor.</p>
 
+        <label>expressões extras <span style="font-weight:700;color:#7F8C8D">(opcional)</span></label>
+        <p class="dica-editor">Um nó do diálogo pode escolher uma dessas pra trocar a imagem só naquela fala — sem escolher, usa sempre a imagem principal de cima.</p>
+        <div class="grade-sprites-minigame" id="npc-expressoes-grade"></div>
+
         <label>onde ele aparece</label>
         <select id="npc-tela"></select>
         <p class="dica-editor">
@@ -457,10 +473,20 @@ body.conectando-fluxo{cursor:crosshair}
               <option value="recado">Só um recado</option>
             </select>
             <button type="button" class="btn linha branco" id="btn-usar-modelo">Usar modelo</button>
+            <button type="button" class="btn linha branco" id="btn-testar-dialogo">🔍 Testar diálogo</button>
             <div style="margin-left:auto;display:flex;gap:6px">
               <button type="button" class="btn linha branco ativo" id="btn-modo-lista" data-modo="lista">📋 Lista</button>
               <button type="button" class="btn linha branco" id="btn-modo-fluxo" data-modo="fluxo">🕸️ Fluxograma</button>
             </div>
+          </div>
+
+          <div id="npc-preview" class="npc-preview oculto">
+            <div class="npc-preview-cabecalho">
+              <b>🔍 Pré-visualização (mostra todos os botões, sem checar missão de verdade)</b>
+              <button type="button" class="btn linha branco" id="btn-fechar-preview">✕</button>
+            </div>
+            <div id="npc-preview-caixa" class="npc-preview-caixa"></div>
+            <button type="button" class="btn linha branco" style="margin-top:8px" id="btn-reiniciar-preview">🔄 Reiniciar do começo</button>
           </div>
 
           <div id="npc-nos"></div>
@@ -1656,12 +1682,20 @@ function chaveNoLivre(base){
 }
 function novoNo(){
   const chave = chaveNoLivre('no');
-  dialogoEdit.nos[chave] = {texto:'', opcoes:[{rotulo:'Continuar', proximo:null}]};
+  dialogoEdit.nos[chave] = {texto:'', expressao:'', opcoes:[{rotulo:'Continuar', proximo:null}]};
   nosOrdem.push(chave);
   if(!dialogoEdit.inicial) dialogoEdit.inicial = chave;
   return chave;
 }
 $('#btn-add-no').onclick = () => { novoNo(); sincronizarDialogo(); };
+
+// catálogo de expressões — espelha EXPRESSOES_NPC do backend (api/admin.php); cada nó do
+// diálogo pode escolher uma pra trocar a imagem só naquela fala
+const EXPRESSOES_NPC = [
+  {chave:'feliz', rotulo:'😄 Feliz'},
+  {chave:'triste', rotulo:'😢 Triste'},
+  {chave:'surpreso', rotulo:'😮 Surpreso(a)'},
+];
 
 // pontos de partida prontos, pra não montar a árvore inteira do zero toda vez — quem
 // usa edita o texto e os botões depois, a estrutura (quantos nós, o que leva a onde) já vem pronta
@@ -1705,6 +1739,11 @@ function renderNos(){
       </div>
       <label style="margin:0">fala do NPC (balão)</label>
       <textarea maxlength="300" oninput="dialogoEdit.nos['${esc(chave)}'].texto=this.value" placeholder="O que o NPC diz aqui...">${esc(no.texto)}</textarea>
+      <label style="margin:8px 0 0">expressão nesse nó</label>
+      <select onchange="dialogoEdit.nos['${esc(chave)}'].expressao=this.value">
+        <option value="" ${!no.expressao?'selected':''}>Padrão (imagem principal)</option>
+        ${EXPRESSOES_NPC.map(e => `<option value="${esc(e.chave)}" ${no.expressao===e.chave?'selected':''}>${esc(e.rotulo)}</option>`).join('')}
+      </select>
       <label style="margin:8px 0 0">botões de resposta</label>
       ${no.opcoes.map((op, i) => {
         const acaoTipo = op.acao?.tipo || '';
@@ -1816,6 +1855,50 @@ function trocarModoDialogo(modo){
 }
 $('#btn-modo-lista').onclick = () => trocarModoDialogo('lista');
 $('#btn-modo-fluxo').onclick = () => trocarModoDialogo('fluxo');
+
+/* pré-visualização do diálogo — simula o que o aluno veria, lendo do estado AO VIVO do
+   formulário (não do que já está salvo), pra imagem recém-enviada aparecer sem precisar
+   salvar antes. Mostra todos os botões (mesmo os com "mostrar se") porque aqui não dá pra
+   simular o progresso de missão de um jogador de verdade — só marca os condicionais. */
+let previewNo = null;
+function urlNpcAssets(nomeArquivo){ return nomeArquivo ? 'assets/npcs/' + nomeArquivo : ''; }
+function iniciarPreviewDialogo(){
+  if(!dialogoEdit.inicial || !dialogoEdit.nos[dialogoEdit.inicial]){ alert('Defina um nó inicial antes de testar.'); return; }
+  previewNo = dialogoEdit.inicial;
+  $('#npc-preview').classList.remove('oculto');
+  renderPreviewDialogo();
+  $('#npc-preview').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function renderPreviewDialogo(){
+  const caixa = $('#npc-preview-caixa');
+  if(!previewNo){
+    caixa.innerHTML = `<p class="npc-preview-fim">— conversa encerrada —</p>`;
+    return;
+  }
+  const no = dialogoEdit.nos[previewNo];
+  if(!no){ caixa.innerHTML = `<p class="npc-preview-fim">— nó "${esc(previewNo)}" não existe mais —</p>`; return; }
+  const urlExpressao = no.expressao ? npcExpressoesUrl[no.expressao] : '';
+  const urlImagem = urlExpressao || urlNpcAssets($('#npc-imagem').value.trim());
+  const figura = urlImagem ? `<img src="${esc(urlImagem)}" alt="">` : ($('#npc-emoji').value.trim() || '🧑');
+  caixa.innerHTML = `
+    <div class="npc-preview-linha">
+      <div class="npc-preview-figura">${figura}</div>
+      <div class="npc-preview-balao">${esc(no.texto) || '<i>(sem texto ainda)</i>'}</div>
+    </div>
+    <div class="npc-preview-opcoes">
+      ${no.opcoes.map((op, i) => `<button type="button" class="btn linha branco" onclick="avancarPreviewDialogo(${i})">
+        ${esc(op.rotulo) || '(sem texto no botão)'}${op.mostrarSe ? ' <span style="opacity:.6">(condicional)</span>' : ''}
+      </button>`).join('')}
+    </div>`;
+}
+window.avancarPreviewDialogo = (i) => {
+  const op = dialogoEdit.nos[previewNo]?.opcoes[i];
+  previewNo = op ? op.proximo : null;
+  renderPreviewDialogo();
+};
+$('#btn-testar-dialogo').onclick = () => iniciarPreviewDialogo();
+$('#btn-reiniciar-preview').onclick = () => iniciarPreviewDialogo();
+$('#btn-fechar-preview').onclick = () => $('#npc-preview').classList.add('oculto');
 $$('#npc-fluxo-wrap [data-fzoom]').forEach(b => b.onclick = () => {
   fluxoZoom = Number(b.dataset.fzoom);
   $('#fluxo-canvas').style.transform = `scale(${fluxoZoom})`;
@@ -2076,6 +2159,11 @@ function limparFormNpc(){
   nosOrdem = [];
   diasSemanaSel = [];
   pintarDiasSemana();
+  npcExpressoes = {};
+  npcExpressoesUrl = {};
+  renderExpressoesNpc();
+  previewNo = null;
+  $('#npc-preview').classList.add('oculto');
 }
 $('#btn-novo-npc').onclick = () => {
   limparFormNpc();
@@ -2097,6 +2185,9 @@ window.editarNpc = async (id) => {
   $('#npc-imagem-tipo').value = n.imagemTipo;
   $('#npc-aviso-lottie').style.display = n.imagemTipo === 'lottie' ? 'block' : 'none';
   $('#npc-imagem').value = n.imagem;
+  npcExpressoes = {...(n.expressoes || {})};
+  npcExpressoesUrl = {...(n.expressoesUrl || {})};
+  renderExpressoesNpc();
   $('#npc-tela').value = n.tela || '';
   diasSemanaSel = n.diasSemana ? n.diasSemana.split(',').map(Number) : [];
   pintarDiasSemana();
@@ -2132,7 +2223,7 @@ $('#form-npc').addEventListener('submit', async e => {
       diasSemana: diasSemanaSel.join(','), horaInicio: $('#npc-hora-inicio').value.trim(), horaFim: $('#npc-hora-fim').value.trim(),
       dataInicio: $('#npc-data-inicio').value.trim(), dataFim: $('#npc-data-fim').value.trim(),
       publicado: $('#npc-publicado').checked, ordem: Number($('#npc-ordem').value) || 0,
-      dialogo: dialogoEdit,
+      dialogo: dialogoEdit, expressoes: npcExpressoes,
     }});
     $('#form-npc').classList.add('oculto');
     carregarNpcs();
@@ -2163,6 +2254,46 @@ async function enviarImagemNpc(arquivo){
     aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
   }finally{ zona.textContent = textoOriginal; }
 }
+
+/* expressões extras do NPC — {chave: nome-do-arquivo}, reaproveita a mesma ação de upload
+   da imagem principal (npc_imagem), só guarda o arquivo num slot diferente */
+let npcExpressoes = {}, npcExpressoesUrl = {};
+function renderExpressoesNpc(){
+  $('#npc-expressoes-grade').innerHTML = EXPRESSOES_NPC.map(e => {
+    const url = npcExpressoesUrl[e.chave] || '';
+    return `<div class="cartao-sprite-minigame">
+      <div class="preview-sprite-minigame" style="width:56px;height:56px">${url ? `<img src="${esc(url)}">` : `<span class="emoji-sprite-minigame">${e.rotulo.split(' ')[0]}</span>`}</div>
+      <p class="rotulo-sprite-minigame">${esc(e.rotulo)}</p>
+      <input type="file" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto" id="input-expressao-${e.chave}" onchange="enviarExpressaoNpc('${e.chave}', this.files[0])">
+      <button type="button" class="btn linha branco" onclick="$('#input-expressao-${e.chave}').click()">Trocar</button>
+      ${npcExpressoes[e.chave] ? `<button type="button" class="btn linha erro" onclick="removerExpressaoNpc('${e.chave}')">Remover</button>` : ''}
+    </div>`;
+  }).join('');
+}
+window.enviarExpressaoNpc = async (chave, arquivo) => {
+  if(!arquivo) return;
+  const aviso = $('#npc-aviso');
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    const r = await fetch('api/admin.php?acao=npc_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    npcExpressoes[chave] = d.imagem;
+    npcExpressoesUrl[chave] = d.imagemUrl;
+    renderExpressoesNpc();
+    aviso.className = 'aviso-form ok';
+    aviso.textContent = 'Expressão enviada. Agora salve o NPC.';
+    aviso.style.display = 'block';
+  }catch(e){
+    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
+  }
+};
+window.removerExpressaoNpc = (chave) => {
+  delete npcExpressoes[chave];
+  delete npcExpressoesUrl[chave];
+  renderExpressoesNpc();
+};
 
 /* ---------- Missões (catálogo central — fora da página do NPC de propósito) ---------- */
 const TIPOS_MISSAO = [
