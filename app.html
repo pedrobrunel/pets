@@ -777,6 +777,21 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
   padding:24px 20px;
 }
 
+/* ---------- contagem regressiva antes dos minigames + selo de recorde no fim ---------- */
+.contagem-overlay{position:absolute;inset:0;z-index:60;display:grid;place-items:center;
+  background:rgba(44,62,80,.4);pointer-events:none}
+.contagem-numero{font-family:'Baloo 2';font-size:64px;color:#fff;text-shadow:0 4px 0 rgba(0,0,0,.25);
+  animation:contagemPop .55s cubic-bezier(.34,1.56,.64,1)}
+@keyframes contagemPop{0%{transform:scale(.3);opacity:0}60%{transform:scale(1.3);opacity:1}100%{transform:scale(1);opacity:1}}
+.selo-recorde{display:inline-block;background:linear-gradient(160deg,#FFF9E6 0%,#FFE9A8 45%,#FFD166 100%);
+  border:3px solid var(--moeda-rim);border-radius:999px;padding:6px 16px;font-weight:900;font-size:14px;
+  margin-bottom:10px;position:relative;z-index:1;animation:seloRecordePop .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes seloRecordePop{0%{transform:scale(0) rotate(-8deg);opacity:0}60%{transform:scale(1.15) rotate(3deg);opacity:1}100%{transform:scale(1) rotate(0)}}
+.confete-chuva{position:relative;height:0;overflow:visible}
+.confete-item{position:absolute;top:-14px;width:8px;height:8px;border-radius:2px;animation-name:confeteCai;animation-timing-function:ease-in;animation-fill-mode:forwards}
+@keyframes confeteCai{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(120px) rotate(360deg);opacity:0}}
+.selo-trofeu-card{position:absolute;top:8px;right:8px;font-size:16px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}
+
 /* ---------- diálogo do NPC (balão + botões, estilo Duolingo — nunca texto livre) ---------- */
 #npc-fundo{align-items:flex-end}
 @media(min-width:560px){ #npc-fundo{align-items:center} }
@@ -2783,6 +2798,70 @@ const INICIAR_BLOCO = {
   pergunta: iniciarBlocoPergunta
 };
 
+/* ---------- infraestrutura compartilhada pelos 9 minigames ----------
+   contagem regressiva antes de começar, selo/confete de recorde novo no fim, e o
+   troféu nos cards do Arcade — em vez de reimplementar em cada um dos 9 jogos */
+
+// mostra "3, 2, 1, Vai!" flutuando por cima da cena e só chama aoComecar() depois disso —
+// dá um instante pra se preparar antes de um jogo de reflexo começar de verdade. Devolve uma
+// função de cancelar, que cada jogo guarda em pararLoops (senão, saindo da tela durante a
+// contagem, o jogo começaria escondido/rodando sozinho do outro lado)
+function contarRegressiva(aoComecar){
+  const container = $('#tela-arcade');
+  if(!container){ aoComecar(); return () => {}; }
+  const overlay = document.createElement('div');
+  overlay.className = 'contagem-overlay';
+  overlay.innerHTML = '<span class="contagem-numero"></span>';
+  container.appendChild(overlay);
+  const numeroEl = overlay.querySelector('.contagem-numero');
+  const passos = ['3', '2', '1', 'Vai!'];
+  let i = 0, timer = null, cancelado = false;
+  function passo(){
+    if(cancelado) return;
+    if(i >= passos.length){ overlay.remove(); aoComecar(); return; }
+    numeroEl.textContent = passos[i];
+    numeroEl.style.animation = 'none'; void numeroEl.offsetWidth; numeroEl.style.animation = '';
+    i++;
+    tocarNota(i < passos.length ? 700 : 1000, 0, .08, 'square', .12);
+    timer = setTimeout(passo, 550);
+  }
+  passo();
+  return () => { cancelado = true; clearTimeout(timer); overlay.remove(); };
+}
+// true (e já atualiza estado.recordes) se esse resultado bateu o recorde anterior — usado no
+// fim de cada minigame pra decidir se mostra o selo "novo recorde" + confete. menorMelhor é
+// só pra Memória, onde menos jogadas é melhor; todo o resto é "quanto mais pontos, melhor"
+function bateuRecorde(chave, valor, menorMelhor){
+  const atual = estado.recordes[chave];
+  const bateu = menorMelhor ? (atual === null || valor < atual) : (valor > atual);
+  if(bateu) estado.recordes[chave] = valor;
+  return bateu;
+}
+// confete + selo dourado pra colar no topo do modal de fim de jogo quando bateuRecorde()
+// voltou true — string vazia (não desenha nada) quando não bateu
+function celebracaoRecorde(bateu){
+  if(!bateu) return '';
+  const cores = ['manga','rosa','mata','ceu','jabuti','moeda'];
+  const confete = Array.from({length: 16}, (_, i) => {
+    const cor = cores[i % cores.length];
+    const left = Math.round(Math.random()*100);
+    const atraso = (Math.random()*.3).toFixed(2);
+    const duracao = (0.9 + Math.random()*.6).toFixed(2);
+    return `<span class="confete-item" style="left:${left}%;background:var(--${cor});animation-delay:${atraso}s;animation-duration:${duracao}s"></span>`;
+  }).join('');
+  return `<div class="confete-chuva">${confete}</div><div class="selo-recorde">🏆 Novo recorde!</div>`;
+}
+// mapa jogo -> id da conquista relacionada em MEDALHAS (chuva não tem uma própria)
+const MEDALHA_DO_JOGO = {
+  memoria:'memoria', toca:'reflexo', sequencia:'ouvido', corrida:'corredor',
+  blocos:'empilhador', rua:'atravessador', pescaria:'pescador', bolha:'estourador',
+};
+function seloTrofeuJogo(jogo){
+  const id = MEDALHA_DO_JOGO[jogo];
+  const medalha = id && MEDALHAS.find(m => m.id === id);
+  return medalha && medalha.ok() ? '<span class="selo-trofeu-card">🏆</span>' : '';
+}
+
 /* ---------- 8. TELA: ARCADE ---------- */
 RENDER.arcade = () => {
   $('#tela-arcade').innerHTML = `
@@ -2791,23 +2870,23 @@ RENDER.arcade = () => {
     ${blocoNpcsDaTela('arcade')}
     <div class="grade">
       <button class="cartao-trilha" onclick="jogoMemoria()">
-        <span class="emoji">🃏</span><h3>Memória do Bicho</h3><p>Ache os pares. Recorde: ${estado.recordes.memoria ?? '—'} jogadas</p></button>
+        ${seloTrofeuJogo('memoria')}<span class="emoji">🃏</span><h3>Memória do Bicho</h3><p>Ache os pares. Recorde: ${estado.recordes.memoria ?? '—'} jogadas</p></button>
       <button class="cartao-trilha" onclick="jogoChuva()">
         <span class="emoji">🍉</span><h3>Chuva de Frutas</h3><p>Recorde: ${estado.recordes.chuva} pontos</p></button>
       <button class="cartao-trilha" onclick="jogoToca()">
-        <span class="emoji">🕳️</span><h3>Toca do Bicho</h3><p>Toque rápido, evite o raio. Recorde: ${estado.recordes.toca} pontos</p></button>
+        ${seloTrofeuJogo('toca')}<span class="emoji">🕳️</span><h3>Toca do Bicho</h3><p>Toque rápido, evite o raio. Recorde: ${estado.recordes.toca} pontos</p></button>
       <button class="cartao-trilha" onclick="jogoSequencia()">
-        <span class="emoji">🎵</span><h3>Sequência do Bicho</h3><p>Repita a ordem certinha. Recorde: ${estado.recordes.sequencia} rodada(s)</p></button>
+        ${seloTrofeuJogo('sequencia')}<span class="emoji">🎵</span><h3>Sequência do Bicho</h3><p>Repita a ordem certinha. Recorde: ${estado.recordes.sequencia} rodada(s)</p></button>
       <button class="cartao-trilha" onclick="jogoCorrida()">
-        <span class="emoji">🏃</span><h3>Corrida do Bicho</h3><p>Pule os obstáculos correndo. Recorde: ${estado.recordes.corrida} pontos</p></button>
+        ${seloTrofeuJogo('corrida')}<span class="emoji">🏃</span><h3>Corrida do Bicho</h3><p>Pule os obstáculos correndo. Recorde: ${estado.recordes.corrida} pontos</p></button>
       <button class="cartao-trilha" onclick="jogoBlocos()">
-        <span class="emoji">🧱</span><h3>Blocos do Bicho</h3><p>Empilhe e limpe fileiras. Recorde: ${estado.recordes.blocos} pontos</p></button>
+        ${seloTrofeuJogo('blocos')}<span class="emoji">🧱</span><h3>Blocos do Bicho</h3><p>Empilhe e limpe fileiras. Recorde: ${estado.recordes.blocos} pontos</p></button>
       <button class="cartao-trilha" onclick="jogoRua()">
-        <span class="emoji">🚸</span><h3>Atravessar a Rua</h3><p>Desvie dos carros até o topo. Recorde: ${estado.recordes.rua} pontos</p></button>
+        ${seloTrofeuJogo('rua')}<span class="emoji">🚸</span><h3>Atravessar a Rua</h3><p>Desvie dos carros até o topo. Recorde: ${estado.recordes.rua} pontos</p></button>
       <button class="cartao-trilha" onclick="jogoPescaria()">
-        <span class="emoji">🎣</span><h3>Pescaria</h3><p>Fisgue na hora certa. Recorde: ${estado.recordes.pescaria} pontos</p></button>
+        ${seloTrofeuJogo('pescaria')}<span class="emoji">🎣</span><h3>Pescaria</h3><p>Fisgue na hora certa. Recorde: ${estado.recordes.pescaria} pontos</p></button>
       <button class="cartao-trilha" onclick="jogoBolha()">
-        <span class="emoji">🎈</span><h3>Bolha de Sabão</h3><p>Mire e estoure grupos de cor. Recorde: ${estado.recordes.bolha} pontos</p></button>
+        ${seloTrofeuJogo('bolha')}<span class="emoji">🎈</span><h3>Bolha de Sabão</h3><p>Mire e estoure grupos de cor. Recorde: ${estado.recordes.bolha} pontos</p></button>
     </div>
     <p class="aviso" style="margin-top:16px">Minigame gasta energia do bicho — mas ela volta sozinha com o tempo.</p>`;
 };
@@ -2836,11 +2915,11 @@ function jogoMemoria(){
       a=b=null; travado=false; pinta();
       if(cartas.every(x=>x.feita)){
         const premio = Math.max(12, 60 - jogadas*2);
-        if(estado.recordes.memoria===null || jogadas < estado.recordes.memoria) estado.recordes.memoria = jogadas;
+        const novoRecorde = bateuRecorde('memoria', jogadas, true);
         estado.energia = lim(estado.energia - 10);
         estado.felicidade = lim(estado.felicidade + 12);
         ganhar(premio, 20);
-        modal(`<h2 style="font-size:24px">Todos os pares! 🎉</h2>
+        modal(`${celebracaoRecorde(novoRecorde)}<h2 style="font-size:24px">Todos os pares! 🎉</h2>
           <p style="margin:6px 0 12px">Você fez em ${jogadas} jogadas.</p>
           <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +20</span>
           <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoMemoria()">Jogar de novo</button>
@@ -2852,7 +2931,7 @@ function jogoMemoria(){
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
     <div class="titulo-secao"><h2>🃏 Memória do Bicho</h2><small>jogadas: <b id="placar-mem">0</b></small></div>
     <div id="tabuleiro-memoria"${estiloFundoMinigame('memoria')}></div>`;
-  pinta();
+  pararLoops = contarRegressiva(pinta);
 }
 
 /* --- minigame 2: chuva de frutas --- */
@@ -2876,7 +2955,7 @@ function jogoChuva(){
   cv.width = Math.min(360, cv.parentElement.clientWidth);
   cv.height = Math.max(200, Math.min(420, alturaDisponivel));
   const L = cv.width, A = cv.height;
-  let cesta = {x:L/2, l:74}, itens=[], pontos=0, t0=Date.now(), rodando=true, spawn=0, esq=false, dir=false;
+  let cesta = {x:L/2, l:74}, itens=[], pontos=0, t0=0, rodando=true, spawn=0, esq=false, dir=false;
   const TIPOS = [{e:'🍉',v:1,chave:'chuva1'},{e:'🍎',v:1,chave:'chuva2'},{e:'🍌',v:1,chave:'chuva3'},{e:'🍓',v:2,chave:'chuva4'},{e:'🥫',v:-2,chave:'chuva5'}];
   // pré-carrega as imagens configuradas no painel (se houver) — cai pro emoji/retângulo
   // padrão se não tiver, não carregar a tempo, ou dar erro (offline, arquivo removido...)
@@ -2917,20 +2996,19 @@ function jogoChuva(){
     rodando = false;
     removeEventListener('keydown', kd); removeEventListener('keyup', ku);
     const premio = Math.max(0, pontos) * 3;
-    if(pontos > estado.recordes.chuva) estado.recordes.chuva = pontos;
+    const novoRecorde = bateuRecorde('chuva', pontos);
     estado.energia = lim(estado.energia - 14);
     estado.felicidade = lim(estado.felicidade + 10);
     estado.fome = lim(estado.fome - 5);
     ganhar(premio, 15);
-    modal(`<h2 style="font-size:24px">Acabou o tempo!</h2>
+    modal(`${celebracaoRecorde(novoRecorde)}<h2 style="font-size:24px">Acabou o tempo!</h2>
       <p style="margin:6px 0 12px">${pontos} ponto(s) — seu bicho está lambendo os beiços.</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoChuva()">Jogar de novo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
-  pararLoops = () => { rodando = false; removeEventListener('keydown',kd); removeEventListener('keyup',ku); };
 
-  (function laco(){
+  function laco(){
     if(!rodando) return;
     const restante = 30 - (Date.now()-t0)/1000;
     const crono = $('#cronometro'); if(crono) crono.textContent = Math.max(0, restante).toFixed(0)+'s';
@@ -2967,7 +3045,12 @@ function jogoChuva(){
     ctx.fillStyle = '#2C3E50'; ctx.font = '900 20px Nunito, sans-serif'; ctx.textAlign = 'left';
     ctx.fillText('Pontos: '+pontos, 14, 32);
     requestAnimationFrame(laco);
-  })();
+  }
+  pararLoops = contarRegressiva(() => {
+    t0 = Date.now();
+    pararLoops = () => { rodando = false; removeEventListener('keydown',kd); removeEventListener('keyup',ku); };
+    laco();
+  });
 }
 
 /* --- minigame 3: toca do bicho (whack-a-mole) --- */
@@ -2977,7 +3060,7 @@ function jogoToca(){
   const N = 9, DURACAO = 25;
   let buracos = Array(N).fill(null); // null | 'alvo' | 'decoy'
   let sumiTimers = Array(N).fill(null);
-  let pontos = 0, t0 = Date.now(), rodando = true, spawnTimer = null, cronoTimer = null;
+  let pontos = 0, t0 = 0, rodando = true, spawnTimer = null, cronoTimer = null;
 
   const pinta = () => {
     $('#buracos-toca').innerHTML = buracos.map((b,i) =>
@@ -3012,17 +3095,16 @@ function jogoToca(){
     clearTimeout(spawnTimer); clearInterval(cronoTimer);
     sumiTimers.forEach(t => t && clearTimeout(t));
     const premio = pontos * 4;
-    if(pontos > estado.recordes.toca) estado.recordes.toca = pontos;
+    const novoRecorde = bateuRecorde('toca', pontos);
     estado.energia = lim(estado.energia - 12);
     estado.felicidade = lim(estado.felicidade + 10);
     ganhar(premio, 15);
-    modal(`<h2 style="font-size:24px">Toca fechada! 🕳️</h2>
+    modal(`${celebracaoRecorde(novoRecorde)}<h2 style="font-size:24px">Toca fechada! 🕳️</h2>
       <p style="margin:6px 0 12px">Você fez ${pontos} ponto(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoToca()">Jogar de novo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
-  pararLoops = () => { rodando = false; clearTimeout(spawnTimer); clearInterval(cronoTimer); sumiTimers.forEach(t => t && clearTimeout(t)); };
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
@@ -3031,12 +3113,16 @@ function jogoToca(){
     <div id="buracos-toca" class="grade-toca"${estiloFundoMinigame('toca')}></div>
     <p class="aviso" style="margin-top:12px">Toque no ${emojiAlvo} rápido! Se tocar no ⚡ perde ponto.</p>`;
   pinta();
-  cronoTimer = setInterval(()=>{
-    const restante = DURACAO - (Date.now()-t0)/1000;
-    const el = $('#cronometro-toca'); if(el) el.textContent = Math.max(0, restante).toFixed(0)+'s';
-    if(restante <= 0) encerra();
-  }, 200);
-  spawnUm();
+  pararLoops = contarRegressiva(() => {
+    t0 = Date.now();
+    pararLoops = () => { rodando = false; clearTimeout(spawnTimer); clearInterval(cronoTimer); sumiTimers.forEach(t => t && clearTimeout(t)); };
+    cronoTimer = setInterval(()=>{
+      const restante = DURACAO - (Date.now()-t0)/1000;
+      const el = $('#cronometro-toca'); if(el) el.textContent = Math.max(0, restante).toFixed(0)+'s';
+      if(restante <= 0) encerra();
+    }, 200);
+    spawnUm();
+  });
 }
 
 /* --- minigame 4: sequência do bicho (Simon Says) --- */
@@ -3088,17 +3174,16 @@ function jogoSequencia(){
     const pontos = sequencia.length - 1; // rodadas completadas antes de errar
     tocarEfeito('sequencia', 'erro');
     const premio = pontos * 8;
-    if(pontos > estado.recordes.sequencia) estado.recordes.sequencia = pontos;
+    const novoRecorde = bateuRecorde('sequencia', pontos);
     estado.energia = lim(estado.energia - 10);
     estado.felicidade = lim(estado.felicidade + 10);
     ganhar(premio, 15);
-    modal(`<h2 style="font-size:24px">Ops, errou a ordem! 🎵</h2>
+    modal(`${celebracaoRecorde(novoRecorde)}<h2 style="font-size:24px">Ops, errou a ordem! 🎵</h2>
       <p style="margin:6px 0 12px">Você completou ${pontos} rodada(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoSequencia()">Jogar de novo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
-  pararLoops = () => { rodando = false; aceitaToque = false; };
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
@@ -3108,7 +3193,10 @@ function jogoSequencia(){
       ${EMOJIS.map((e,i) => `<button class="pad-simon p${i}" data-i="${i}" onclick="window._padSimon(${i})">${spriteOuEmoji('sequencia'+(i+1), e, 34)}</button>`).join('')}
     </div>
     <p class="aviso" style="margin-top:14px">Observe a ordem que acende e repita tocando nos mesmos quadrados.</p>`;
-  proximaRodada();
+  pararLoops = contarRegressiva(() => {
+    pararLoops = () => { rodando = false; aceitaToque = false; };
+    proximaRodada();
+  });
 }
 
 /* --- minigame 5: corrida do bicho (endless runner, ref: corrida de plataforma clássica de SNES) --- */
@@ -3151,21 +3239,20 @@ function jogoCorrida(){
     rodando = false;
     removeEventListener('keydown', tecla);
     const premio = Math.max(0, pontos) * 2;
-    if(pontos > estado.recordes.corrida) estado.recordes.corrida = pontos;
+    const novoRecorde = bateuRecorde('corrida', pontos);
     estado.energia = lim(estado.energia - 14);
     estado.felicidade = lim(estado.felicidade + 10);
     estado.fome = lim(estado.fome - 5);
     ganhar(premio, 15);
     tocarEfeito('corrida', 'erro');
-    modal(`<h2 style="font-size:24px">Ai! 💥</h2>
+    modal(`${celebracaoRecorde(novoRecorde)}<h2 style="font-size:24px">Ai! 💥</h2>
       <p style="margin:6px 0 12px">Você fez ${pontos} ponto(s) correndo.</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoCorrida()">Jogar de novo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
-  pararLoops = () => { rodando = false; removeEventListener('keydown', tecla); };
 
-  (function laco(){
+  function laco(){
     if(!rodando) return;
     velocidade = 4.2 + Math.min(4, distancia/900);
     distancia += velocidade;
@@ -3213,7 +3300,11 @@ function jogoCorrida(){
 
     const placar = $('#placar-corrida'); if(placar) placar.textContent = pontos;
     requestAnimationFrame(laco);
-  })();
+  }
+  pararLoops = contarRegressiva(() => {
+    pararLoops = () => { rodando = false; removeEventListener('keydown', tecla); };
+    laco();
+  });
 }
 
 /* --- minigame 6: blocos do bicho (empilhar e combinar cores, ref: quebra-cabeça de blocos coloridos de SNES) --- */
@@ -3222,7 +3313,7 @@ function jogoBlocos(){
   let grade = Array(COLS*LINHAS).fill(null); // null | índice de cor (0-5)
   let pecaAtual = Math.floor(Math.random()*6);
   let pecaProxima = Math.floor(Math.random()*6);
-  let gruposFeitos = 0, blocosRemovidos = 0, blocosColocados = 0, rodando = true;
+  let gruposFeitos = 0, blocosRemovidos = 0, blocosColocados = 0, rodando = false;
 
   function pontosAtuais(){ return blocosColocados*2 + blocosRemovidos*15; }
   // busca em largura: todas as células ligadas (cima/baixo/esquerda/direita) da mesma cor
@@ -3300,19 +3391,18 @@ function jogoBlocos(){
   function encerra(){
     rodando = false;
     const pontos = pontosAtuais();
-    if(pontos > estado.recordes.blocos) estado.recordes.blocos = pontos;
+    const novoRecorde = bateuRecorde('blocos', pontos);
     const premio = Math.round(pontos/4);
     estado.energia = lim(estado.energia - 10);
     estado.felicidade = lim(estado.felicidade + 10);
     ganhar(premio, 15);
     tocarEfeito('blocos', 'erro');
-    modal(`<h2 style="font-size:24px">Empilhou até o topo! 🧱</h2>
+    modal(`${celebracaoRecorde(novoRecorde)}<h2 style="font-size:24px">Empilhou até o topo! 🧱</h2>
       <p style="margin:6px 0 12px">${gruposFeitos} combinação(ões), ${pontos} ponto(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoBlocos()">Jogar de novo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
-  pararLoops = () => { rodando = false; };
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
@@ -3321,6 +3411,10 @@ function jogoBlocos(){
     <div id="grade-blocos" class="grade-blocos"${estiloFundoMinigame('blocos')}></div>
     <p class="aviso" style="margin-top:12px">Toque numa coluna pra soltar o bloco. 3 ou mais da mesma cor encostados somem!</p>`;
   pinta();
+  pararLoops = contarRegressiva(() => {
+    rodando = true;
+    pararLoops = () => { rodando = false; };
+  });
 }
 
 /* --- minigame 7: atravessar a rua (ref: travessia de fases clássica de SNES) --- */
@@ -3368,7 +3462,7 @@ function jogoRua(){
   }
 
   let bicho = {col: Math.floor(COLS/2), lin: LINHAS-1};
-  let vidas = 3, pontos = 0, rodando = true;
+  let vidas = 3, pontos = 0, rodando = false;
 
   function atualizarPontos(){
     const linhaAlcancada = LINHAS-1 - bicho.lin;
@@ -3406,20 +3500,19 @@ function jogoRua(){
   function encerra(){
     rodando = false;
     removeEventListener('keydown', tecla);
-    if(pontos > estado.recordes.rua) estado.recordes.rua = pontos;
+    const novoRecorde = bateuRecorde('rua', pontos);
     const premio = Math.round(pontos/2);
     estado.energia = lim(estado.energia - 12);
     estado.felicidade = lim(estado.felicidade + 10);
     ganhar(premio, 15);
-    modal(`<h2 style="font-size:24px">Atropelado! 🚗</h2>
+    modal(`${celebracaoRecorde(novoRecorde)}<h2 style="font-size:24px">Atropelado! 🚗</h2>
       <p style="margin:6px 0 12px">Você fez ${pontos} ponto(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoRua()">Jogar de novo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
-  pararLoops = () => { rodando = false; removeEventListener('keydown', tecla); };
 
-  (function laco(){
+  function laco(){
     if(!rodando) return;
     ctx.clearRect(0,0,L,A);
     for(let lin=0; lin<LINHAS; lin++){
@@ -3452,7 +3545,12 @@ function jogoRua(){
 
     if(atropelou) levarAtropelada();
     requestAnimationFrame(laco);
-  })();
+  }
+  pararLoops = contarRegressiva(() => {
+    rodando = true;
+    pararLoops = () => { rodando = false; removeEventListener('keydown', tecla); };
+    laco();
+  });
 }
 
 /* --- minigame 8: pescaria (mar animado + fisgada + puxada, ref: minigame de pesca clássico de SNES) --- */
@@ -3461,11 +3559,11 @@ function jogoPescaria(){
   const PEIXES = [
     {e:'🐟', valor:5}, {e:'🐠', valor:8}, {e:'🦐', valor:6}, {e:'🦞', valor:14}, {e:'🥾', valor:0},
   ];
-  let pontos = 0, capturas = 0, rodando = true;
+  let pontos = 0, capturas = 0, rodando = false;
   // fase: 'esperando' (nada mordeu ainda) -> 'mordeu' (janela curta pra fisgar) ->
   // 'puxando' (minigame de puxar até a barra encher, senão o peixe foge)
   let fase = 'esperando', peixeAtual = null, progresso = 0;
-  let t0 = Date.now(), timerMordida = null, timerJanela = null, timerPuxada = null, cronoTimer = null;
+  let t0 = 0, timerMordida = null, timerJanela = null, timerPuxada = null, cronoTimer = null;
   let evento = null; // {tipo:'sucesso'|'escapou', t0} — anima por cima da cena por um instante
 
   function mensagem(txt){
@@ -3561,18 +3659,17 @@ function jogoPescaria(){
   function encerra(){
     rodando = false;
     clearTimeout(timerMordida); clearTimeout(timerJanela); clearInterval(timerPuxada); clearInterval(cronoTimer);
-    if(pontos > estado.recordes.pescaria) estado.recordes.pescaria = pontos;
+    const novoRecorde = bateuRecorde('pescaria', pontos);
     const premio = pontos;
     estado.energia = lim(estado.energia - 10);
     estado.felicidade = lim(estado.felicidade + 10);
     ganhar(premio, 15);
-    modal(`<h2 style="font-size:24px">Acabou o tempo! 🎣</h2>
+    modal(`${celebracaoRecorde(novoRecorde)}<h2 style="font-size:24px">Acabou o tempo! 🎣</h2>
       <p style="margin:6px 0 12px">${capturas} peixe(s) fisgado(s), ${pontos} ponto(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoPescaria()">Jogar de novo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
-  pararLoops = () => { rodando = false; clearTimeout(timerMordida); clearTimeout(timerJanela); clearInterval(timerPuxada); clearInterval(cronoTimer); };
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
@@ -3623,7 +3720,7 @@ function jogoPescaria(){
     ctx.strokeStyle = '#2C3E50'; ctx.lineWidth = 1.5; ctx.stroke();
   }
 
-  (function laco(){
+  function laco(){
     if(!rodando) return;
     const agora = Date.now(), t = agora/1000;
     const L = cv.width, A = cv.height, nivel = A*0.42;
@@ -3685,14 +3782,20 @@ function jogoPescaria(){
     }
 
     requestAnimationFrame(laco);
-  })();
+  }
 
-  novaRodada();
-  cronoTimer = setInterval(() => {
-    const restante = DURACAO - (Date.now()-t0)/1000;
-    const el = $('#cronometro-pescaria'); if(el) el.textContent = Math.max(0,restante).toFixed(0)+'s';
-    if(restante <= 0) encerra();
-  }, 200);
+  pararLoops = contarRegressiva(() => {
+    rodando = true;
+    pararLoops = () => { rodando = false; clearTimeout(timerMordida); clearTimeout(timerJanela); clearInterval(timerPuxada); clearInterval(cronoTimer); };
+    t0 = Date.now();
+    laco();
+    novaRodada();
+    cronoTimer = setInterval(() => {
+      const restante = DURACAO - (Date.now()-t0)/1000;
+      const el = $('#cronometro-pescaria'); if(el) el.textContent = Math.max(0,restante).toFixed(0)+'s';
+      if(restante <= 0) encerra();
+    }, 200);
+  });
 }
 
 /* --- minigame 9: bolha de sabão (ref: quebra-cabeça de mira e cores clássico de SNES) --- */
@@ -3708,7 +3811,7 @@ function jogoBolha(){
   const MARGEM_MIRA = 1; // quantos "passos" ela sai pra fora da grade nas pontas antes de voltar
   let colunaAlvo = Math.floor(COLS/2); // coluna de verdade (sempre 0..COLS-1) usada pro tiro
   let posVirtual = colunaAlvo, direcaoMira = 1; // posição da seta, que pode passar da borda (saidinha)
-  let pontos = 0, bolhasEstouradas = 0, rodando = true, disparando = false;
+  let pontos = 0, bolhasEstouradas = 0, rodando = false, disparando = false;
   let miraTimer = null, timerVoo = null, timerEstouro = null;
   let posicoesColunas = []; // centro (em px, relativo ao #campo-bolhas) de cada coluna — medido de verdade no DOM
   let espacamentoColuna = 40; // distância entre colunas (medida no DOM), usada só pra extrapolar a saidinha
@@ -3852,19 +3955,18 @@ function jogoBolha(){
   function encerra(){
     rodando = false;
     clearInterval(miraTimer); clearTimeout(timerVoo); clearTimeout(timerEstouro);
-    if(pontos > estado.recordes.bolha) estado.recordes.bolha = pontos;
+    const novoRecorde = bateuRecorde('bolha', pontos);
     const premio = Math.round(pontos/3);
     estado.energia = lim(estado.energia - 10);
     estado.felicidade = lim(estado.felicidade + 10);
     ganhar(premio, 15);
     tocarEfeito('bolha', 'erro');
-    modal(`<h2 style="font-size:24px">As bolhas chegaram no canhão! 🎈</h2>
+    modal(`${celebracaoRecorde(novoRecorde)}<h2 style="font-size:24px">As bolhas chegaram no canhão! 🎈</h2>
       <p style="margin:6px 0 12px">${bolhasEstouradas} bolha(s) estourada(s), ${pontos} ponto(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoBolha()">Jogar de novo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
-  pararLoops = () => { rodando = false; clearInterval(miraTimer); clearTimeout(timerVoo); clearTimeout(timerEstouro); };
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
@@ -3885,13 +3987,17 @@ function jogoBolha(){
   // pouco pra fora da grade (posVirtual passa de COLS-1 ou de 0) antes de voltar, sem nunca
   // parar de se mexer; a coluna de verdade (colunaAlvo, sempre clampada 0..COLS-1) fica na
   // ponta por vários ticks seguidos enquanto isso — o mesmo tempo extra, só que animado.
-  miraTimer = setInterval(() => {
-    if(!rodando) return;
-    posVirtual += direcaoMira;
-    if(posVirtual >= COLS-1+MARGEM_MIRA || posVirtual <= -MARGEM_MIRA) direcaoMira *= -1;
-    colunaAlvo = Math.max(0, Math.min(COLS-1, posVirtual));
-    pintarMira();
-  }, 160);
+  pararLoops = contarRegressiva(() => {
+    rodando = true;
+    pararLoops = () => { rodando = false; clearInterval(miraTimer); clearTimeout(timerVoo); clearTimeout(timerEstouro); };
+    miraTimer = setInterval(() => {
+      if(!rodando) return;
+      posVirtual += direcaoMira;
+      if(posVirtual >= COLS-1+MARGEM_MIRA || posVirtual <= -MARGEM_MIRA) direcaoMira *= -1;
+      colunaAlvo = Math.max(0, Math.min(COLS-1, posVirtual));
+      pintarMira();
+    }, 160);
+  });
 }
 
 /* ---------- 9. TELA: LOJA DA VILA ----------
