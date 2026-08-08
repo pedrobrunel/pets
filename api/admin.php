@@ -47,10 +47,12 @@
      GET  ?acao=npcs_listar
      GET  ?acao=npc_obter             ?id=xx
      POST ?acao=npc_salvar            {id, nome, emoji, imagem, imagemTipo, tela, diasSemana, horaInicio, horaFim,
-                                        dataInicio, dataFim, publicado, ordem, dialogo:{inicial, nos:{...}}}
+                                        dataInicio, dataFim, publicado, ordem, dialogo:{inicial, nos:{..., expressao?}},
+                                        expressoes:{feliz?, triste?, surpreso?}}
      POST ?acao=npc_excluir           {id}
      POST ?acao=npc_duplicar          {id, novoId} -> clona um NPC (fica como rascunho)
-     POST ?acao=npc_imagem            (multipart: arquivo) -> sobe imagem pra assets/npcs/
+     POST ?acao=npc_imagem            (multipart: arquivo) -> sobe imagem pra assets/npcs/ (usado pra imagem
+                                        principal E pras expressões extras — mesmo upload genérico pros dois)
      GET  ?acao=missoes_listar
      GET  ?acao=missao_obter          ?id=xx
      POST ?acao=missao_salvar         {id, titulo, descricao, tipo, objetivo:{...}, premio:{moedas,xp}, publicado, ordem}
@@ -197,6 +199,9 @@ function pastaMinigames(): string { return dirname(__DIR__) . '/assets/minigames
 function pastaJornal(): string { return dirname(__DIR__) . '/assets/jornal'; }
 function caminhoPublicoMundo(string $nome): string { return $nome === '' ? '' : 'assets/mundos/' . $nome; }
 function caminhoPublicoNpc(string $nome): string { return $nome === '' ? '' : 'assets/npcs/' . $nome; }
+// expressões extras (opcionais) que um nó do diálogo pode escolher no lugar da imagem
+// principal do NPC — catálogo fechado, mesmo espírito de whitelist usado em outros lugares
+const EXPRESSOES_NPC = ['feliz', 'triste', 'surpreso'];
 function caminhoPublicoItem(string $nome): string { return $nome === '' ? '' : 'assets/itens/' . $nome; }
 function caminhoPublicoMovel(string $nome): string { return $nome === '' ? '' : 'assets/moveis/' . $nome; }
 function caminhoPublicoLoja(string $nome): string { return $nome === '' ? '' : 'assets/lojas/' . $nome; }
@@ -445,6 +450,8 @@ function validarDialogo(array $d): ?string {
     if (!is_array($no)) return "Nó \"$chave\": formato inválido.";
     $texto = trim((string)($no['texto'] ?? ''));
     if ($texto === '' || mb_strlen($texto) > 300) return "Nó \"$chave\": o texto do balão precisa ter de 1 a 300 caracteres.";
+    $expressao = (string)($no['expressao'] ?? '');
+    if ($expressao !== '' && !in_array($expressao, EXPRESSOES_NPC, true)) return "Nó \"$chave\": expressão desconhecida.";
     if (!is_array($no['opcoes'] ?? null) || !$no['opcoes']) return "Nó \"$chave\": precisa de ao menos 1 opção (botão).";
     if (count($no['opcoes']) > 4) return "Nó \"$chave\": no máximo 4 opções por nó.";
     foreach ($no['opcoes'] as $j => $op) {
@@ -1240,10 +1247,11 @@ try {
   }
 
   if ($acao === 'npc_obter') {
-    $st = bd()->prepare('SELECT id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, publicado, ordem FROM npcs WHERE id = ?');
+    $st = bd()->prepare('SELECT id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, expressoes, publicado, ordem FROM npcs WHERE id = ?');
     $st->execute([(string)($_GET['id'] ?? '')]);
     $n = $st->fetch(PDO::FETCH_ASSOC);
     if (!$n) responder(['erro' => 'NPC não encontrado.'], 404);
+    $expressoes = json_decode($n['expressoes'] ?: '{}', true) ?: [];
     responder([
       'id' => $n['id'], 'nome' => $n['nome'], 'emoji' => $n['emoji'],
       'imagem' => $n['imagem'], 'imagemUrl' => caminhoPublicoNpc($n['imagem']), 'imagemTipo' => $n['imagem_tipo'],
@@ -1251,6 +1259,8 @@ try {
       'dataInicio' => $n['data_inicio'], 'dataFim' => $n['data_fim'],
       'publicado' => (bool)$n['publicado'], 'ordem' => (int)$n['ordem'],
       'dialogo' => json_decode($n['dialogo'], true),
+      'expressoes' => $expressoes,
+      'expressoesUrl' => array_map(fn($nomeArquivo) => caminhoPublicoNpc((string)$nomeArquivo), $expressoes),
     ]);
   }
 
@@ -1280,15 +1290,29 @@ try {
     if (!is_array($dialogo)) responder(['erro' => 'Formato de diálogo inválido.'], 422);
     $erro = validarDialogo($dialogo);
     if ($erro) responder(['erro' => $erro], 422);
-    bd()->prepare('INSERT INTO npcs (id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, publicado, ordem)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
+    // expressões extras: {chave: nome-do-arquivo}, só as chaves do catálogo fechado acima —
+    // os arquivos em si já foram validados/gravados na hora do upload (mesma ação de sempre,
+    // npc_imagem), aqui só confere que não veio chave inventada
+    $expressoesEntrada = $d['expressoes'] ?? [];
+    if (!is_array($expressoesEntrada)) responder(['erro' => 'Formato de expressões inválido.'], 422);
+    $expressoes = [];
+    foreach ($expressoesEntrada as $chaveExpr => $arquivoExpr) {
+      if (!in_array($chaveExpr, EXPRESSOES_NPC, true)) responder(['erro' => "Expressão \"$chaveExpr\" desconhecida."], 422);
+      $arquivoExpr = trim((string)$arquivoExpr);
+      if ($arquivoExpr !== '') $expressoes[$chaveExpr] = $arquivoExpr;
+    }
+
+    bd()->prepare('INSERT INTO npcs (id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, expressoes, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE nome=VALUES(nome), emoji=VALUES(emoji), imagem=VALUES(imagem), imagem_tipo=VALUES(imagem_tipo),
         tela=VALUES(tela), dias_semana=VALUES(dias_semana), hora_inicio=VALUES(hora_inicio), hora_fim=VALUES(hora_fim),
         data_inicio=VALUES(data_inicio), data_fim=VALUES(data_fim),
-        dialogo=VALUES(dialogo), publicado=VALUES(publicado), ordem=VALUES(ordem)')
+        dialogo=VALUES(dialogo), expressoes=VALUES(expressoes), publicado=VALUES(publicado), ordem=VALUES(ordem)')
       ->execute([
         $id, $nome, $emoji, $imagem, $imagemTipo, $tela, $diasSemana, $horaInicio, $horaFim, $dataInicio, $dataFim,
-        json_encode($dialogo, JSON_UNESCAPED_UNICODE), !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0),
+        json_encode($dialogo, JSON_UNESCAPED_UNICODE), json_encode($expressoes, JSON_UNESCAPED_UNICODE),
+        !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0),
       ]);
     responder(['ok' => true]);
   }
@@ -1313,16 +1337,16 @@ try {
     $st = bd()->prepare('SELECT COUNT(*) FROM npcs WHERE id = ?');
     $st->execute([$novoId]);
     if ($st->fetchColumn()) responder(['erro' => "Já existe um NPC com id \"$novoId\"."], 422);
-    $st = bd()->prepare('SELECT nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, ordem FROM npcs WHERE id = ?');
+    $st = bd()->prepare('SELECT nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, expressoes, ordem FROM npcs WHERE id = ?');
     $st->execute([(string)($d['id'] ?? '')]);
     $n = $st->fetch(PDO::FETCH_ASSOC);
     if (!$n) responder(['erro' => 'NPC original não encontrado.'], 404);
-    bd()->prepare('INSERT INTO npcs (id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, publicado, ordem)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)')
+    bd()->prepare('INSERT INTO npcs (id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, expressoes, publicado, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)')
       ->execute([
         $novoId, $n['nome'] . ' (cópia)', $n['emoji'], $n['imagem'], $n['imagem_tipo'], $n['tela'],
         $n['dias_semana'], $n['hora_inicio'], $n['hora_fim'], $n['data_inicio'], $n['data_fim'],
-        $n['dialogo'], (int)$n['ordem'],
+        $n['dialogo'], $n['expressoes'], (int)$n['ordem'],
       ]);
     responder(['ok' => true, 'id' => $novoId]);
   }

@@ -55,7 +55,7 @@ try {
 
   // NPCs: cada um tem uma imagem (png por enquanto) e um diálogo em árvore, só botões —
   // nunca campo de texto livre pro aluno digitar, isso é regra do projeto (ver README).
-  $npcsLinhas = bd()->query('SELECT id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo FROM npcs WHERE publicado = 1 ORDER BY ordem, nome')
+  $npcsLinhas = bd()->query('SELECT id, nome, emoji, imagem, imagem_tipo, tela, dias_semana, hora_inicio, hora_fim, data_inicio, data_fim, dialogo, expressoes FROM npcs WHERE publicado = 1 ORDER BY ordem, nome')
     ->fetchAll(PDO::FETCH_ASSOC);
   $pastaNpcs = dirname(__DIR__) . '/assets/npcs';
   $npcsPublicados = array_column($npcsLinhas, 'id');
@@ -69,6 +69,12 @@ try {
     'horaInicio' => $n['hora_inicio'], 'horaFim' => $n['hora_fim'],
     'dataInicio' => $n['data_inicio'], 'dataFim' => $n['data_fim'],
     'dialogo' => json_decode($n['dialogo'], true),
+    // expressões extras (opcionais) que um nó do diálogo pode escolher no lugar da
+    // imagem principal — só entra no mapa se o arquivo realmente existir no servidor
+    'expressoesUrl' => array_filter(array_map(
+      fn($arquivo) => is_string($arquivo) && $arquivo !== '' && is_file($pastaNpcs . '/' . $arquivo) ? 'assets/npcs/' . $arquivo : '',
+      json_decode($n['expressoes'] ?: '{}', true) ?: []
+    )),
   ], $npcsLinhas);
 
   // Jornal (Neoiatimes): colunista (se tiver) puxa nome/emoji/imagem do NPC ligado — o

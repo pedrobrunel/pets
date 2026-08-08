@@ -408,6 +408,9 @@ try {
     'hora_fim'    => "VARCHAR(5) NOT NULL DEFAULT ''",
     'data_inicio' => "VARCHAR(10) NOT NULL DEFAULT ''",
     'data_fim'    => "VARCHAR(10) NOT NULL DEFAULT ''",
+    // imagens extras opcionais (feliz/triste/surpreso) que um nó do diálogo pode escolher
+    // no lugar da imagem principal — {chave: nome-do-arquivo}, mesma pasta assets/npcs
+    'expressoes'  => "JSON NOT NULL DEFAULT '{}'",
   ] as $coluna => $definicao) {
     if (!in_array($coluna, $colunasExistentes, true)) $pdo->exec("ALTER TABLE npcs ADD COLUMN $coluna $definicao");
   }
