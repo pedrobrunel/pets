@@ -47,7 +47,9 @@
      GET  ?acao=npcs_listar
      GET  ?acao=npc_obter             ?id=xx
      POST ?acao=npc_salvar            {id, nome, emoji, imagem, imagemTipo, tela, diasSemana, horaInicio, horaFim,
-                                        dataInicio, dataFim, publicado, ordem, dialogo:{inicial, nos:{..., expressao?}},
+                                        dataInicio, dataFim, publicado, ordem,
+                                        dialogo:{inicial, inicialRetorno?, condicoesEntrada?:[{estado,no}],
+                                          nos:{..., expressao?, variantes?:[...]}},
                                         expressoes:{feliz?, triste?, surpreso?}}
      POST ?acao=npc_excluir           {id}
      POST ?acao=npc_duplicar          {id, novoId} -> clona um NPC (fica como rascunho)
@@ -202,6 +204,10 @@ function caminhoPublicoNpc(string $nome): string { return $nome === '' ? '' : 'a
 // expressões extras (opcionais) que um nó do diálogo pode escolher no lugar da imagem
 // principal do NPC — catálogo fechado, mesmo espírito de whitelist usado em outros lugares
 const EXPRESSOES_NPC = ['feliz', 'triste', 'surpreso'];
+// estados do bicho que o diálogo pode usar pra escolher um nó de entrada diferente do
+// normal (ex.: o NPC comentar que o bicho tá com fome antes do papo de sempre) — "baixa"
+// é decidido no cliente (mesmo corte de 40 usado nos humores da Casa)
+const ESTADOS_ENTRADA_NPC = ['fome_baixa', 'felicidade_baixa', 'energia_baixa'];
 function caminhoPublicoItem(string $nome): string { return $nome === '' ? '' : 'assets/itens/' . $nome; }
 function caminhoPublicoMovel(string $nome): string { return $nome === '' ? '' : 'assets/moveis/' . $nome; }
 function caminhoPublicoLoja(string $nome): string { return $nome === '' ? '' : 'assets/lojas/' . $nome; }
@@ -452,6 +458,14 @@ function validarDialogo(array $d): ?string {
     if ($texto === '' || mb_strlen($texto) > 300) return "Nó \"$chave\": o texto do balão precisa ter de 1 a 300 caracteres.";
     $expressao = (string)($no['expressao'] ?? '');
     if ($expressao !== '' && !in_array($expressao, EXPRESSOES_NPC, true)) return "Nó \"$chave\": expressão desconhecida.";
+    // variações da mesma fala — o cliente sorteia uma toda vez que o nó aparece, pra não
+    // repetir sempre a mesma frase quando o aluno conversa de novo com o NPC
+    $variantes = $no['variantes'] ?? [];
+    if (!is_array($variantes)) return "Nó \"$chave\": formato de variações inválido.";
+    if (count($variantes) > 2) return "Nó \"$chave\": no máximo 2 variações extras de fala por nó.";
+    foreach ($variantes as $v) {
+      if (!is_string($v) || trim($v) === '' || mb_strlen($v) > 300) return "Nó \"$chave\": cada variação de fala precisa ter de 1 a 300 caracteres.";
+    }
     if (!is_array($no['opcoes'] ?? null) || !$no['opcoes']) return "Nó \"$chave\": precisa de ao menos 1 opção (botão).";
     if (count($no['opcoes']) > 4) return "Nó \"$chave\": no máximo 4 opções por nó.";
     foreach ($no['opcoes'] as $j => $op) {
@@ -489,6 +503,25 @@ function validarDialogo(array $d): ?string {
   }
   $inicial = $d['inicial'] ?? null;
   if (!is_string($inicial) || !isset($d['nos'][$inicial])) return 'Escolha um nó inicial válido pro diálogo.';
+
+  // nó alternativo pra quando o aluno já conversou com esse NPC antes (2ª visita em
+  // diante) — opcional; sem escolher, a conversa sempre recomeça pelo nó inicial de cima
+  $inicialRetorno = (string)($d['inicialRetorno'] ?? '');
+  if ($inicialRetorno !== '' && !isset($d['nos'][$inicialRetorno])) return 'O nó pra "já conversamos antes" aponta pra um nó que não existe.';
+
+  // reações ao estado do bicho: lista ordenada, a primeira que bater decide o nó de
+  // entrada (tem prioridade até sobre o "já conversamos antes") — catálogo fechado de
+  // estados, cada um no máximo 1 vez
+  $condicoesEntrada = $d['condicoesEntrada'] ?? [];
+  if (!is_array($condicoesEntrada)) return 'Formato de condições de entrada inválido.';
+  if (count($condicoesEntrada) > count(ESTADOS_ENTRADA_NPC)) return 'No máximo ' . count(ESTADOS_ENTRADA_NPC) . ' condições de entrada.';
+  $estadosUsados = [];
+  foreach ($condicoesEntrada as $c) {
+    if (!is_array($c) || !in_array($c['estado'] ?? null, ESTADOS_ENTRADA_NPC, true)) return 'Condição de entrada inválida.';
+    if (in_array($c['estado'], $estadosUsados, true)) return 'Cada estado do bicho só pode aparecer 1 vez nas condições de entrada.';
+    $estadosUsados[] = $c['estado'];
+    if (!is_string($c['no'] ?? null) || !isset($d['nos'][$c['no']])) return 'Uma condição de entrada aponta pra um nó que não existe.';
+  }
   return null;
 }
 
