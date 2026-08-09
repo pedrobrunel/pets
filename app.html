@@ -689,6 +689,8 @@ body.tela-cheia #app{padding:0;max-width:none}
 .carta:active{transform:translateY(4px);border-bottom-width:1px}
 .carta.virada{background:#fff;color:inherit;border-color:var(--contorno)}
 .carta.par{background:var(--mata);color:#fff;border-color:var(--mata-rim)}
+@keyframes tremeCarta{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+.carta.errou{animation:tremeCarta .4s ease;background:#FDEDEC;border-color:#E74C3C}
 canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border:var(--borda) solid var(--contorno);
   border-bottom-width:8px;border-radius:var(--r);background:#D6EAF8;touch-action:none}
 
@@ -1237,7 +1239,7 @@ const estado = {
   moedas:60, xp:0,
   fome:72, felicidade:80, energia:90,
   equipado:[], mochila:[], inventario:{},
-  licoesFeitas:[], recordes:{memoria:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0, rua:0, pescaria:0, bolha:0},
+  licoesFeitas:[], recordes:{memoria:null, memoriaTempo:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0, rua:0, pescaria:0, bolha:0},
   missoes:{}, cenasVisitadas:[], gatilhosAtivos:[], itensColetados:[],
   moveisComprados:[], casaMoveis:[], casaDesbloqueada:false,
   npcsVisitados:[],
@@ -2854,7 +2856,10 @@ function contarRegressiva(aoComecar){
 // só pra Memória, onde menos jogadas é melhor; todo o resto é "quanto mais pontos, melhor"
 function bateuRecorde(chave, valor, menorMelhor){
   const atual = estado.recordes[chave];
-  const bateu = menorMelhor ? (atual === null || valor < atual) : (valor > atual);
+  // "atual" pode vir undefined (não null) em conta antiga salva antes desse campo existir —
+  // trata os dois como "sem recorde ainda", senão o 1º resultado bom nunca vira recorde
+  const semRecorde = atual === null || atual === undefined;
+  const bateu = menorMelhor ? (semRecorde || valor < atual) : (semRecorde || valor > atual);
   if(bateu) estado.recordes[chave] = valor;
   return bateu;
 }
@@ -2891,7 +2896,7 @@ RENDER.arcade = () => {
     ${blocoNpcsDaTela('arcade')}
     <div class="grade">
       <button class="cartao-trilha" onclick="jogoMemoria()">
-        ${seloTrofeuJogo('memoria')}<span class="emoji">🃏</span><h3>Memória do Bicho</h3><p>Ache os pares. Recorde: ${estado.recordes.memoria ?? '—'} jogadas</p></button>
+        ${seloTrofeuJogo('memoria')}<span class="emoji">🃏</span><h3>Memória do Bicho</h3><p>Ache os pares. Recorde: ${estado.recordes.memoria ?? '—'} jogadas${estado.recordes.memoriaTempo!=null?` (${estado.recordes.memoriaTempo}s)`:''}</p></button>
       <button class="cartao-trilha" onclick="jogoChuva()">
         <span class="emoji">🍉</span><h3>Chuva de Frutas</h3><p>Recorde: ${estado.recordes.chuva} pontos</p></button>
       <button class="cartao-trilha" onclick="jogoToca()">
@@ -2916,43 +2921,81 @@ RENDER.arcade = () => {
 function jogoMemoria(){
   const naipes = ['🍉','🐟','🦴','🧀','🍎','🍪'];
   const cartas = [...naipes, ...naipes].sort(()=>Math.random()-.5)
-    .map((e,i)=>({i, e, chaveSprite:'memoria'+(naipes.indexOf(e)+1), aberta:false, feita:false}));
-  let a=null, b=null, jogadas=0, travado=false;
+    .map((e,i)=>({i, e, chaveSprite:'memoria'+(naipes.indexOf(e)+1), aberta:false, feita:false, errada:false}));
+  let a=null, b=null, jogadas=0, travado=true, emPreview=true;
+  let comboAtual=0, maiorCombo=0, inicioTempo=null, cronoTimer=null;
+  const tempoDecorrido = () => inicioTempo ? Math.floor((Date.now()-inicioTempo)/1000) : 0;
   const pinta = () => {
     $('#tabuleiro-memoria').innerHTML = cartas.map(c=>
-      `<button class="carta ${c.feita?'par':c.aberta?'virada':''}" onclick="window._vira(${c.i})">${spriteOuEmoji(c.chaveSprite, c.e)}</button>`).join('');
+      `<button class="carta ${c.feita?'par':c.aberta?'virada':''} ${c.errada?'errou':''}" onclick="window._vira(${c.i})">${spriteOuEmoji(c.chaveSprite, c.e)}</button>`).join('');
     $('#placar-mem').textContent = jogadas;
+    const cronoEl = $('#cronometro-mem');
+    if(cronoEl) cronoEl.textContent = tempoDecorrido() + 's';
   };
   window._vira = i => {
+    if(emPreview) return;
     const c = cartas[i];
     if(travado || c.aberta || c.feita) return;
     c.aberta = true;
     if(!a){ a=c; pinta(); return; }
-    b=c; jogadas++; travado=true; pinta();
+    b=c; jogadas++; travado=true;
+    const acertou = a.e===b.e;
+    if(!acertou){ a.errada=b.errada=true; } // mostra o tremor antes de virar de volta
+    pinta();
     setTimeout(()=>{
-      tocarEfeito('memoria', a.e===b.e ? 'acerto' : 'erro');
-      if(a.e===b.e){ a.feita=b.feita=true; }
-      else { a.aberta=b.aberta=false; }
+      tocarEfeito('memoria', acertou ? 'acerto' : 'erro');
+      if(acertou){
+        a.feita=b.feita=true;
+        comboAtual++; maiorCombo=Math.max(maiorCombo, comboAtual);
+      } else {
+        a.aberta=b.aberta=false; a.errada=b.errada=false;
+        comboAtual=0;
+      }
       a=b=null; travado=false; pinta();
       if(cartas.every(x=>x.feita)){
-        const premio = Math.max(12, 60 - jogadas*2);
+        clearInterval(cronoTimer);
+        const tempoSegundos = tempoDecorrido();
+        // 3 fontes de moeda: acerto (menos jogadas = melhor), rapidez e combo de acertos
+        // seguidos — recompensa tanto quem já decorou quanto quem joga rápido e sem errar
+        const premioBase = Math.max(12, 60 - jogadas*2);
+        const bonusVelocidade = Math.max(0, 30 - tempoSegundos);
+        const bonusCombo = maiorCombo >= 2 ? maiorCombo * 2 : 0;
+        const premio = premioBase + bonusVelocidade + bonusCombo;
         const novoRecorde = bateuRecorde('memoria', jogadas, true);
+        bateuRecorde('memoriaTempo', tempoSegundos, true);
         estado.energia = lim(estado.energia - 10);
         estado.felicidade = lim(estado.felicidade + 12);
         ganhar(premio, 20);
         modal(`${celebracaoRecorde(novoRecorde)}<h2 style="font-size:24px">Todos os pares! 🎉</h2>
-          <p style="margin:6px 0 12px">Você fez em ${jogadas} jogadas.</p>
+          <p style="margin:6px 0 12px">Você fez em ${jogadas} jogadas, em ${tempoSegundos}s${maiorCombo>=2?` — melhor combo: ${maiorCombo}x`:''}.</p>
           <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +20</span>
+          ${bonusVelocidade>0?`<span class="chip">⚡ +${bonusVelocidade} rapidez</span>`:''}
+          ${bonusCombo>0?`<span class="chip">🔥 +${bonusCombo} combo</span>`:''}
           <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoMemoria()">Jogar de novo</button>
           <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
       }
-    }, a.e===c.e ? 260 : 700);
+    }, acertou ? 260 : 700);
   };
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <div class="titulo-secao"><h2>🃏 Memória do Bicho</h2><small>jogadas: <b id="placar-mem">0</b></small></div>
+    <div class="titulo-secao"><h2>🃏 Memória do Bicho</h2><small>jogadas: <b id="placar-mem">0</b> · tempo: <b id="cronometro-mem">0s</b></small></div>
+    <p id="aviso-preview-mem" class="aviso" style="margin:6px 0">👀 Memorize as cartas...</p>
     <div id="tabuleiro-memoria"${estiloFundoMinigame('memoria')}></div>`;
-  pararLoops = contarRegressiva(pinta);
+  pararLoops = contarRegressiva(() => {
+    // prévia: mostra o tabuleiro todo virado por um instante antes de travar de novo —
+    // dá uma chance real de decorar antes do cronômetro (e as jogadas) começarem a valer
+    cartas.forEach(c => c.aberta = true);
+    pinta();
+    const previewTimer = setTimeout(() => {
+      cartas.forEach(c => c.aberta = false);
+      emPreview = false; travado = false;
+      inicioTempo = Date.now();
+      $('#aviso-preview-mem')?.remove();
+      cronoTimer = setInterval(pinta, 1000);
+      pinta();
+    }, 2200);
+    pararLoops = () => { clearTimeout(previewTimer); clearInterval(cronoTimer); };
+  });
 }
 
 /* --- minigame 2: chuva de frutas --- */
