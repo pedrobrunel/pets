@@ -849,9 +849,12 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .blocos-proximo{text-align:center;font-weight:900;font-size:14px;margin:2px 0 8px;display:flex;align-items:center;justify-content:center;gap:8px}
 .grade-blocos{display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(10,1fr);gap:4px;
   max-width:240px;aspect-ratio:6/10;margin:0 auto;background:#fff;border:var(--borda) solid var(--contorno);
-  border-bottom-width:6px;border-radius:var(--r);padding:6px}
+  border-bottom-width:6px;border-radius:var(--r);padding:6px;position:relative}
 .bloco-cel{border-radius:5px;background:#EDF0F1;border:2px solid #D5DBDB;padding:0;transition:transform .1s ease}
 .bloco-cel:active{transform:scale(.92)}
+/* clone que "cai" do topo da coluna até a linha onde vai pousar — o array grade[] só é
+   atualizado quando ele termina de cair, ver window._dropCol */
+.bloco-caindo{position:absolute;z-index:5;pointer-events:none;transition:top ease-in}
 .bloco-preview{display:inline-block;width:22px;height:22px;border-radius:5px;border:2px solid #D5DBDB;vertical-align:middle}
 .bloco-cel.cor0,.bloco-preview.cor0{background:var(--manga);border-color:var(--manga-rim)}
 .bloco-cel.cor1,.bloco-preview.cor1{background:var(--rosa);border-color:var(--rosa-rim)}
@@ -3432,7 +3435,7 @@ function jogoBlocos(){
   let grade = Array(COLS*LINHAS).fill(null); // null | índice de cor (0-5)
   let pecaAtual = Math.floor(Math.random()*6);
   let pecaProxima = Math.floor(Math.random()*6);
-  let gruposFeitos = 0, blocosRemovidos = 0, blocosColocados = 0, rodando = false;
+  let gruposFeitos = 0, blocosRemovidos = 0, blocosColocados = 0, rodando = false, animando = false;
 
   function pontosAtuais(){ return blocosColocados*2 + blocosRemovidos*15; }
   // busca em largura: todas as células ligadas (cima/baixo/esquerda/direita) da mesma cor
@@ -3493,19 +3496,41 @@ function jogoBlocos(){
     $('#placar-blocos').textContent = pontosAtuais();
   }
   window._dropCol = col => {
-    if(!rodando || grade[col] !== null) return; // topo dessa coluna já ocupado
+    if(!rodando || animando || grade[col] !== null) return; // topo dessa coluna já ocupado
     let linhaAlvo = -1;
     for(let l = LINHAS-1; l >= 0; l--){
       if(grade[l*COLS+col] === null){ linhaAlvo = l; break; }
     }
-    grade[linhaAlvo*COLS+col] = pecaAtual;
-    blocosColocados++;
-    tocarEfeito('blocos', resolverGrupos() ? 'acerto' : 'erro');
+    // clone visual que cai do topo da coluna até a linha onde vai pousar — a grade[] só é
+    // atualizada (e os grupos resolvidos) quando a animação termina, como se fosse mesmo
+    // o bloco sendo jogado até o lugar
+    animando = true;
+    const gradeEl = $('#grade-blocos');
+    const topoEl = gradeEl.children[col];
+    const alvoEl = gradeEl.children[linhaAlvo*COLS+col];
+    const caindo = document.createElement('div');
+    caindo.className = `bloco-cel bloco-caindo cor${pecaAtual}`;
+    caindo.style.width = topoEl.offsetWidth + 'px';
+    caindo.style.height = topoEl.offsetHeight + 'px';
+    caindo.style.left = topoEl.offsetLeft + 'px';
+    caindo.style.top = topoEl.offsetTop + 'px';
+    gradeEl.appendChild(caindo);
+    const duracao = Math.min(380, 160 + linhaAlvo*18); // linhas mais fundas caem um pouco mais devagar
+    caindo.style.transitionDuration = duracao + 'ms';
+    requestAnimationFrame(() => { caindo.style.top = alvoEl.offsetTop + 'px'; });
+    setTimeout(() => {
+      caindo.remove();
+      animando = false;
+      if(!rodando) return; // saiu da tela no meio da queda
+      grade[linhaAlvo*COLS+col] = pecaAtual;
+      blocosColocados++;
+      tocarEfeito('blocos', resolverGrupos() ? 'acerto' : 'erro');
 
-    pecaAtual = pecaProxima;
-    pecaProxima = Math.floor(Math.random()*6);
-    pinta();
-    if(grade.slice(0, COLS).some(c => c !== null)) encerra();
+      pecaAtual = pecaProxima;
+      pecaProxima = Math.floor(Math.random()*6);
+      pinta();
+      if(grade.slice(0, COLS).some(c => c !== null)) encerra();
+    }, duracao + 30);
   };
   function encerra(){
     rodando = false;
