@@ -687,6 +687,39 @@ try {
   // AUTO_INCREMENT) como chave, e valida ali mesmo que não exista outra fase com o mesmo
   // número antes de salvar (erro claro pro admin, em vez de um ON DUPLICATE KEY silencioso
   // sobrescrevendo a fase errada por coincidência de número)
+
+  // ranking do Empurra-Caixas: melhor pontuação (menos jogadas) de cada jogador em cada
+  // fase — 1 linha por (jogador, fase), atualizada só quando melhora (ver estado.php,
+  // sokoban_pontuar). "fase_numero" e não um id de sokoban_fases de propósito: se o admin
+  // excluir/recriar a fase, o ranking de quem já jogou continua valendo pro mesmo número.
+  $pdo->exec('CREATE TABLE IF NOT EXISTS sokoban_pontuacoes (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    jogador_id    INT NOT NULL,
+    fase_numero   INT NOT NULL,
+    jogadas       INT NOT NULL,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY jogador_fase (jogador_id, fase_numero),
+    INDEX (fase_numero, jogadas),
+    FOREIGN KEY (jogador_id) REFERENCES jogadores(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+  // mapas criados por jogador (aba "crie seu mapa" do Empurra-Caixas): ficam pendentes até
+  // o hostmaster aprovar (vira uma linha nova em sokoban_fases, numerada) ou rejeitar. O
+  // jogador pode jogar o próprio mapa a qualquer momento (aprovado ou não) — só quem
+  // aprova é que decide se o resto da turma também joga.
+  $pdo->exec("CREATE TABLE IF NOT EXISTS sokoban_mapas_jogadores (
+    id                    INT AUTO_INCREMENT PRIMARY KEY,
+    jogador_id            INT NOT NULL,
+    nome                  VARCHAR(60) NOT NULL DEFAULT '',
+    grade                 TEXT NOT NULL,
+    status                ENUM('pendente','aprovado','rejeitado') NOT NULL DEFAULT 'pendente',
+    fase_numero_aprovada  INT NULL,
+    criado_em             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX (status),
+    FOREIGN KEY (jogador_id) REFERENCES jogadores(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
   $sokobanExistentes = (int)$pdo->query('SELECT COUNT(*) FROM sokoban_fases')->fetchColumn();
   $sokobanSemeadas = 0;
   if ($sokobanExistentes === 0) {

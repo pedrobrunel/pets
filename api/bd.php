@@ -71,6 +71,34 @@ function textoProibido(string $texto): ?string {
   }
   return null;
 }
+/** valida a grade de uma fase do Empurra-Caixas (Sokoban) — notação: espaço chão, # parede,
+    @ jogador, $ caixa, . alvo, + jogador-no-alvo, * caixa-no-alvo, ^ espinho (bloqueia só o
+    jogador), % gatilho (destranca as portas), D porta. Compartilhada entre admin.php (fase
+    oficial, criada pelo hostmaster) e estado.php (mapa enviado por um jogador pra moderação)
+    — mesmas regras estruturais nos dois casos, só quem pode publicar direto que muda.
+    @return string|null motivo da recusa, ou null se a grade tá ok */
+function validarSokobanGrade(string $grade): ?string {
+  if (trim($grade) === '') return '"grade" não pode ficar vazia.';
+  if (mb_strlen($grade) > 3000) return 'A grade tá grande demais (máximo 3000 caracteres).';
+  $linhas = explode("\n", $grade);
+  if (count($linhas) < 3 || count($linhas) > 30) return 'A grade precisa ter de 3 a 30 linhas.';
+  foreach ($linhas as $i => $linha) {
+    if (mb_strlen($linha) > 40) return 'Linha ' . ($i + 1) . ': no máximo 40 colunas.';
+    if (preg_match('/[^ #@\$.+*^%D]/', $linha)) {
+      return 'Linha ' . ($i + 1) . ': só pode ter espaço, # @ $ . + * ^ % D.';
+    }
+  }
+  $jogadores = 0; $caixas = 0; $alvos = 0;
+  foreach ($linhas as $linha) {
+    $jogadores += substr_count($linha, '@') + substr_count($linha, '+');
+    $caixas += substr_count($linha, '$') + substr_count($linha, '*');
+    $alvos += substr_count($linha, '.') + substr_count($linha, '+') + substr_count($linha, '*');
+  }
+  if ($jogadores !== 1) return "A grade precisa ter exatamente 1 jogador (@ ou +) — tem $jogadores.";
+  if ($alvos < 1) return 'A grade precisa ter pelo menos 1 alvo (.).';
+  if ($caixas < $alvos) return "Tem menos caixas ($caixas) do que alvos ($alvos) — impossível de resolver.";
+  return null;
+}
 /** notificação push em tempo real (mensagem nova, pedido de amizade aceito etc.) pra todos
     os aparelhos inscritos desse jogador — nunca deixa a ação principal falhar por causa
     disso: qualquer erro aqui (VAPID não configurado, biblioteca, rede) é engolido, é só
