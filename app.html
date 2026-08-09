@@ -905,6 +905,18 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .bolha-preview{display:inline-block;width:26px;height:26px;border-radius:50%;vertical-align:middle}
 .bolha-preview.pequena{width:18px;height:18px}
 
+/* ---------- empurra-caixas (minigame 10, estilo Sokoban — 10 fases) ----------
+   tamanho de coluna e da célula calculados em JS (dimensionarGrade, dentro de jogoSokoban),
+   igual à Memória — os níveis variam muito de tamanho (5x4 até 14x12) pra um grid fixo
+   fazer sentido. --tam-sokoban vem de lá e escala a fonte do emoji junto com a célula. */
+#grade-sokoban{display:grid;gap:2px;justify-content:center;align-content:center;margin:8px auto 0}
+.soko-cel{aspect-ratio:1;display:grid;place-items:center;border-radius:4px;
+  font-size:calc(var(--tam-sokoban, 32px) * .55);line-height:1}
+.soko-cel.parede{background:var(--contorno)}
+.soko-cel.chao{background:#F4F1EA;border:1px solid #E2DDD0}
+.soko-cel.alvo{background:#FDF3D8;border:1px solid #E9C46A;box-shadow:inset 0 0 0 3px #F4D160}
+.soko-cel.caixa-no-alvo{background:#D9F2DD;border:1px solid #7FC98F;box-shadow:inset 0 0 0 3px #52B969}
+
 /* ---------- filtro de série nas trilhas ---------- */
 /* carrossel de séries: setas fixas nas pontas, a tira de chips rola por trás (arraste
    ou toque nas setas) — sem barra de rolagem visível poluindo o visual */
@@ -1247,8 +1259,8 @@ const estado = {
   moedas:60, xp:0,
   fome:72, felicidade:80, energia:90,
   equipado:[], mochila:[], inventario:{},
-  licoesFeitas:[], recordes:{memoria:null, memoriaTempo:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0, rua:0, pescaria:0, bolha:0},
-  paresMemoria:6,
+  licoesFeitas:[], recordes:{memoria:null, memoriaTempo:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0, rua:0, pescaria:0, bolha:0, sokoban:null},
+  paresMemoria:6, faseSokoban:1,
   missoes:{}, cenasVisitadas:[], gatilhosAtivos:[], itensColetados:[],
   moveisComprados:[], casaMoveis:[], casaDesbloqueada:false,
   npcsVisitados:[],
@@ -2895,7 +2907,7 @@ function celebracaoRecorde(bateu){
 // mapa jogo -> id da conquista relacionada em MEDALHAS (chuva não tem uma própria)
 const MEDALHA_DO_JOGO = {
   memoria:'memoria', toca:'reflexo', sequencia:'ouvido', corrida:'corredor',
-  blocos:'empilhador', rua:'atravessador', pescaria:'pescador', bolha:'estourador',
+  blocos:'empilhador', rua:'atravessador', pescaria:'pescador', bolha:'estourador', sokoban:'empurrador',
 };
 function seloTrofeuJogo(jogo){
   const id = MEDALHA_DO_JOGO[jogo];
@@ -2906,6 +2918,7 @@ function seloTrofeuJogo(jogo){
 /* ---------- 8. TELA: ARCADE ---------- */
 RENDER.arcade = () => {
   const faseMem = infoFaseMemoria();
+  const faseSoko = infoFaseSokoban();
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
     <div class="titulo-secao"><h2>Arcade</h2><small>ganhe moedas pro seu bicho</small></div>
@@ -2929,6 +2942,8 @@ RENDER.arcade = () => {
         ${seloTrofeuJogo('pescaria')}<span class="emoji">🎣</span><h3>Pescaria</h3><p>Fisgue na hora certa. Recorde: ${estado.recordes.pescaria} pontos</p></button>
       <button class="cartao-trilha" onclick="jogoBolha()">
         ${seloTrofeuJogo('bolha')}<span class="emoji">🎈</span><h3>Bolha de Sabão</h3><p>Mire e estoure grupos de cor. Recorde: ${estado.recordes.bolha} pontos</p></button>
+      <button class="cartao-trilha" onclick="jogoSokoban()">
+        ${seloTrofeuJogo('sokoban')}<span class="emoji">📦</span><h3>Empurra-Caixas do Bicho</h3><p>Empurre as caixas até os alvos (fase ${faseSoko.fase}/${faseSoko.maxFase}). Recorde: fase ${estado.recordes.sokoban ?? '—'}</p></button>
     </div>
     <p class="aviso" style="margin-top:16px">Minigame gasta energia do bicho — mas ela volta sozinha com o tempo.</p>`;
 };
@@ -4142,6 +4157,254 @@ function jogoBolha(){
   });
 }
 
+/* --- minigame 10: empurra-caixas do bicho (estilo Sokoban, 10 fases) ---
+   notação clássica: # parede, @ jogador, $ caixa, . alvo (+ jogador no alvo e * caixa no
+   alvo não são usados aqui, nenhum nível começa com uma caixa já em cima do alvo). Todas as
+   10 fases foram resolvidas por um solver (busca em largura) antes de entrar aqui — nenhuma
+   fica sem solução. */
+const NIVEIS_SOKOBAN = [
+`#####
+#@  #
+# $.#
+#####`,
+`######
+#    #
+# $  #
+#  #@#
+#  . #
+######`,
+`#######
+#  @  #
+# $ $ #
+#  #  #
+# . . #
+#     #
+#######`,
+`########
+#  @   #
+# $  $ #
+#  ##  #
+#      #
+# .  . #
+#      #
+########`,
+`#########
+#   @   #
+##$###$##
+## ### ##
+## ### ##
+##.###.##
+#########`,
+`##########
+#   @    #
+##$##$##$#
+## ## ## #
+## ## ## #
+## ## ## #
+##.##.##.#
+##########`,
+`###########
+#   @     #
+##$##$##$##
+## ## ## ##
+## ## ## ##
+## ## ## ##
+## ## ## ##
+##.##.##.##
+###########`,
+`############
+#   @      #
+##$###$###$#
+## ### ### #
+## ### ### #
+## ### ### #
+## ### ### #
+## ### ### #
+##.###.###.#
+############`,
+`#############
+#     @     #
+##$#$###$#$##
+## # ### # ##
+## # ### # ##
+## # ### # ##
+## # ### # ##
+## # ### # ##
+##.#.###.#.##
+#############`,
+`##############
+#     @      #
+##$#$####$#$##
+## # #### # ##
+## # #### # ##
+## # #### # ##
+## # #### # ##
+## # #### # ##
+##.#.####.#.##
+##############`,
+];
+function infoFaseSokoban(){
+  const fase = Math.min(NIVEIS_SOKOBAN.length, Math.max(1, estado.faseSokoban ?? 1));
+  return { fase, maxFase: NIVEIS_SOKOBAN.length };
+}
+function jogoSokoban(){
+  const { fase } = infoFaseSokoban();
+  const emojiBicho = {capivara:'🦫', salsicha:'🐶', gato:'🐱'}[estado.tipo] || '🐾';
+
+  function carregarNivel(){
+    const linhasTxt = NIVEIS_SOKOBAN[fase-1].split('\n');
+    const colsN = Math.max(...linhasTxt.map(l => l.length));
+    const paredes = new Set(), alvos = new Set(), caixas = new Set();
+    let jogador = null;
+    linhasTxt.forEach((linhaTxt, r) => {
+      for(let c = 0; c < colsN; c++){
+        const ch = linhaTxt[c] || ' ';
+        const k = r+','+c;
+        if(ch === '#') paredes.add(k);
+        if(ch === '.' || ch === '+' || ch === '*') alvos.add(k);
+        if(ch === '$' || ch === '*') caixas.add(k);
+        if(ch === '@' || ch === '+') jogador = k;
+      }
+    });
+    return { paredes, alvos, caixas, jogador, linhasN: linhasTxt.length, colsN };
+  }
+
+  const nivelInicial = carregarNivel();
+  const { paredes, alvos, linhasN, colsN } = nivelInicial;
+  let caixas = nivelInicial.caixas, jogador = nivelInicial.jogador;
+  let jogadas = 0, historico = [], travado = false;
+
+  function venceu(){
+    for(const a of alvos) if(!caixas.has(a)) return false;
+    return true;
+  }
+  // mesma ideia da Memória (dimensionarTabuleiro): calcula colunas/tamanho de célula a partir
+  // do espaço real disponível — os níveis variam MUITO de tamanho (5x4 até 14x12), um grid
+  // fixo não serviria pra nenhum dos dois extremos
+  function dimensionarGrade(){
+    const board = $('#grade-sokoban');
+    const secao = $('#tela-arcade');
+    if(!board || !secao) return;
+    const titulo = secao.querySelector('.titulo-secao');
+    const dpad = secao.querySelector('.dpad-rua');
+    const acoes = secao.querySelector('.acoes-sokoban');
+    const gap = 2;
+    const consumidoAntes = titulo.getBoundingClientRect().bottom - secao.getBoundingClientRect().top;
+    const consumidoDepois = (dpad?.getBoundingClientRect().height ?? 0) + (acoes?.getBoundingClientRect().height ?? 0) + 30;
+    const alturaDisponivel = secao.clientHeight - consumidoAntes - consumidoDepois - 20;
+    const larguraDisponivel = board.clientWidth - 4;
+    const tamPelaLargura = (larguraDisponivel - gap*(colsN-1)) / colsN;
+    const tamPelaAltura = (alturaDisponivel - gap*(linhasN-1)) / linhasN;
+    const tam = Math.max(16, Math.min(52, Math.floor(Math.min(tamPelaLargura, tamPelaAltura))));
+    board.style.gridTemplateColumns = `repeat(${colsN}, ${tam}px)`;
+    board.style.setProperty('--tam-sokoban', tam+'px');
+  }
+  function pinta(){
+    const cels = [];
+    for(let r = 0; r < linhasN; r++){
+      for(let c = 0; c < colsN; c++){
+        const k = r+','+c;
+        if(paredes.has(k)){ cels.push('<div class="soko-cel parede"></div>'); continue; }
+        const temAlvo = alvos.has(k), temCaixa = caixas.has(k), temJogador = jogador === k;
+        let classe = 'soko-cel chao';
+        if(temAlvo) classe += ' alvo';
+        if(temCaixa) classe += temAlvo ? ' caixa-no-alvo' : ' caixa';
+        const conteudo = temJogador ? spriteOuEmoji('sokobanbicho', emojiBicho, 26)
+          : temCaixa ? spriteOuEmoji('sokobancaixa', '📦', 24) : '';
+        cels.push(`<div class="${classe}">${conteudo}</div>`);
+      }
+    }
+    $('#grade-sokoban').innerHTML = cels.join('');
+    $('#placar-sokoban').textContent = jogadas;
+    const btnDesfazer = $('#btn-desfazer-sokoban');
+    if(btnDesfazer) btnDesfazer.disabled = historico.length === 0;
+  }
+  function mover(dr, dc){
+    if(travado) return;
+    const [jr, jc] = jogador.split(',').map(Number);
+    const nk = (jr+dr)+','+(jc+dc);
+    if(paredes.has(nk)) return;
+    let novasCaixas = caixas;
+    if(caixas.has(nk)){
+      const bk = (jr+dr*2)+','+(jc+dc*2);
+      if(paredes.has(bk) || caixas.has(bk)) return; // caixa travada, não dá pra empurrar
+      novasCaixas = new Set(caixas);
+      novasCaixas.delete(nk);
+      novasCaixas.add(bk);
+    }
+    historico.push({ caixas, jogador, jogadas });
+    if(historico.length > 300) historico.shift();
+    caixas = novasCaixas;
+    jogador = nk;
+    jogadas++;
+    tocarEfeito('sokoban', 'acerto');
+    pinta();
+    if(venceu()) encerra();
+  }
+  window._moverSokoban = dir => {
+    if(dir === 'cima') mover(-1,0);
+    else if(dir === 'baixo') mover(1,0);
+    else if(dir === 'esquerda') mover(0,-1);
+    else if(dir === 'direita') mover(0,1);
+  };
+  window._desfazerSokoban = () => {
+    if(travado || !historico.length) return;
+    const anterior = historico.pop();
+    caixas = anterior.caixas; jogador = anterior.jogador; jogadas = anterior.jogadas;
+    pinta();
+  };
+  window._reiniciarSokoban = () => {
+    if(travado) return;
+    const fresco = carregarNivel();
+    caixas = fresco.caixas; jogador = fresco.jogador; jogadas = 0; historico = [];
+    pinta();
+  };
+  const MAPA_TECLAS = {ArrowUp:'cima', ArrowDown:'baixo', ArrowLeft:'esquerda', ArrowRight:'direita',
+    w:'cima', s:'baixo', a:'esquerda', d:'direita'};
+  const aoTeclar = e => {
+    const dir = MAPA_TECLAS[e.key];
+    if(dir){ e.preventDefault(); window._moverSokoban(dir); }
+  };
+  addEventListener('keydown', aoTeclar);
+
+  function encerra(){
+    travado = true;
+    removeEventListener('keydown', aoTeclar);
+    const novoRecorde = bateuRecorde('sokoban', fase, false);
+    const avancouFase = fase < NIVEIS_SOKOBAN.length;
+    if(avancouFase) estado.faseSokoban = fase + 1;
+    const premio = 15 + fase*8;
+    estado.energia = lim(estado.energia - 10);
+    estado.felicidade = lim(estado.felicidade + 12);
+    ganhar(premio, 15);
+    modal(`${celebracaoRecorde(novoRecorde)}<h2 style="font-size:24px">Fase ${fase} completa! 📦</h2>
+      <p style="margin:6px 0 12px">Você resolveu em ${jogadas} jogada(s).</p>
+      <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
+      <p style="margin:12px 0 0;font-weight:800">${avancouFase ? `🆙 Próxima fase: ${estado.faseSokoban}/${NIVEIS_SOKOBAN.length}` : '🏅 Você zerou o Empurra-Caixas!'}</p>
+      <button class="btn grande" style="margin-top:10px" onclick="fecharModal(); jogoSokoban()">${avancouFase ? 'Próxima fase' : 'Jogar de novo'}</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+  }
+
+  $('#tela-arcade').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Empurre as caixas 📦 até os alvos amarelos usando as setas (ou o toquinho abaixo do tabuleiro). Só dá pra empurrar, nunca puxar — se travar, toque em Desfazer ou Reiniciar.')">?</button>
+    <div class="titulo-secao"><h2>📦 Empurra-Caixas</h2><small>Fase ${fase}/${NIVEIS_SOKOBAN.length} · jogadas: <b id="placar-sokoban">0</b></small></div>
+    <div id="grade-sokoban" class="grade-sokoban"${estiloFundoMinigame('sokoban')}></div>
+    <div class="dpad-rua">
+      <button class="btn-dpad" style="grid-area:cima" onclick="window._moverSokoban('cima')">▲</button>
+      <button class="btn-dpad" style="grid-area:esquerda" onclick="window._moverSokoban('esquerda')">◀</button>
+      <button class="btn-dpad" style="grid-area:direita" onclick="window._moverSokoban('direita')">▶</button>
+      <button class="btn-dpad" style="grid-area:baixo" onclick="window._moverSokoban('baixo')">▼</button>
+    </div>
+    <div class="acoes-sokoban" style="display:flex;gap:8px;justify-content:center;margin-top:10px">
+      <button id="btn-desfazer-sokoban" class="btn pequeno branco" onclick="window._desfazerSokoban()">↩️ Desfazer</button>
+      <button class="btn pequeno branco" onclick="window._reiniciarSokoban()">🔄 Reiniciar</button>
+    </div>`;
+  dimensionarGrade();
+  pinta();
+  pararLoops = () => { removeEventListener('keydown', aoTeclar); };
+}
+
 /* ---------- 9. TELA: LOJA DA VILA ----------
    Uma loja como qualquer outra do motor genérico (ver seção 9c) — só que com id fixo
    "lojadavila" e aba própria no rodapé, por ser a lojinha padrão do jogo desde sempre. */
@@ -5138,6 +5401,7 @@ const MEDALHAS = [
   {id:'atravessador', emoji:'🚸', nome:'80 pontos na Rua', ok:()=>estado.recordes.rua>=80},
   {id:'pescador', emoji:'🎣', nome:'40 pontos na Pescaria', ok:()=>estado.recordes.pescaria>=40},
   {id:'estourador', emoji:'🎈', nome:'100 pontos na Bolha', ok:()=>estado.recordes.bolha>=100},
+  {id:'empurrador', emoji:'📦', nome:'Zerar o Empurra-Caixas', ok:()=>estado.recordes.sokoban!==null && estado.recordes.sokoban>=10},
   {id:'chama',    emoji:'🔥', nome:'7 dias seguidos', ok:()=>estado.streak.melhor>=7},
   {id:'estiloso', emoji:'😎', nome:'Bicho estiloso', ok:()=>estado.equipado.length>=1},
   {id:'clube',    emoji:'🏅', nome:'Em um clube', ok:()=>!!clubeAtual}
