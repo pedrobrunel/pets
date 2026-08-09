@@ -335,6 +335,9 @@ body.tela-cheia #app{padding:0;max-width:none}
 }
 .btn.amarelo{--bg:var(--moeda);--edge:var(--moeda-rim);color:var(--tinta);text-shadow:none}
 .btn-voltar-cena{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:41}
+/* botão redondo de "como jogar" dos minigames — mesmo estilo do Voltar, do outro lado */
+.btn-ajuda-cena{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);right:14px;z-index:41;
+  width:40px;height:40px;padding:0;border-radius:50%;font-size:18px;font-weight:900}
 
 /* ---------- viagem entre mapas (íris animada) ----------
    Sequência: uma bolinha nasce EXATAMENTE onde o dedo tocou e cresce até tomar a tela
@@ -2866,6 +2869,12 @@ function bateuRecorde(chave, valor, menorMelhor){
   if(bateu) estado.recordes[chave] = valor;
   return bateu;
 }
+// pop-up de "como jogar" — cada minigame chama isso no botão "?" ao lado do Voltar, em vez
+// de deixar o texto de instrução fixo ocupando espaço embaixo do tabuleiro/canvas
+function ajudaJogo(texto){
+  modal(`<h2 style="font-size:22px">Como jogar</h2><p style="margin:10px 0 18px">${texto}</p>
+    <button class="btn grande" onclick="fecharModal()">Entendi!</button>`);
+}
 // confete + selo dourado pra colar no topo do modal de fim de jogo quando bateuRecorde()
 // voltou true — string vazia (não desenha nada) quando não bateu
 function celebracaoRecorde(bateu){
@@ -3021,6 +3030,7 @@ function jogoMemoria(){
   };
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Memorize as cartas na prévia. Depois toque em duas cartas por vez pra achar os pares — acerte rápido e sem errar pra ganhar bônus de moedas!')">?</button>
     <div class="titulo-secao"><h2>🃏 Memória do Bicho</h2><small>Fase ${fase} · jogadas: <b id="placar-mem">0</b> · tempo: <b id="cronometro-mem">0s</b></small></div>
     <p id="aviso-preview-mem" class="aviso" style="margin:6px 0">👀 Memorize as cartas...</p>
     <div id="tabuleiro-memoria"${estiloFundoMinigame('memoria')}></div>`;
@@ -3049,18 +3059,17 @@ function jogoMemoria(){
 function jogoChuva(){
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Arraste o dedo (ou use ← →) para mover a cesta. Fruta vale ponto, lata tira ponto.')">?</button>
     <div class="titulo-secao"><h2>🍉 Chuva de Frutas</h2><small id="cronometro">30s</small></div>
-    <canvas id="tela-jogo"${estiloFundoMinigame('chuva')}></canvas>
-    <p class="aviso" style="margin-top:12px">Arraste o dedo (ou use ← →) para mover a cesta. Fruta vale ponto, lata tira ponto.</p>`;
+    <canvas id="tela-jogo"${estiloFundoMinigame('chuva')}></canvas>`;
   const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
   // tamanho calculado pelo espaço real que sobra dentro da #tela-arcade (que ocupa a tela
   // toda) — sem isso o canvas fixo de 340x440 estourava em celulares menores. O botão
   // "Voltar" é position:fixed (flutua por cima), não entra nessa conta de espaço consumido.
   const secao = $('#tela-arcade');
   const titulo = secao.querySelector('.titulo-secao');
-  const aviso = secao.querySelector('.aviso');
   const consumidoAntes = titulo.getBoundingClientRect().bottom - secao.getBoundingClientRect().top;
-  const consumidoDepois = aviso.getBoundingClientRect().height + 12;
+  const consumidoDepois = 20; // sem o texto de instrução (agora no botão "?"), só uma folga
   const bordaCanvas = 8; // canvas tem borda de 4px solid dos dois lados
   const alturaDisponivel = secao.clientHeight - consumidoAntes - consumidoDepois - bordaCanvas - 20;
   cv.width = Math.min(360, cv.parentElement.clientWidth);
@@ -3219,10 +3228,10 @@ function jogoToca(){
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Toque no ${emojiAlvo} rápido! Se tocar no ⚡ perde ponto.')">?</button>
     <div class="titulo-secao"><h2>🕳️ Toca do Bicho</h2><small id="cronometro-toca">${DURACAO}s</small></div>
     <div class="placar-toca">Pontos: <span id="placar-toca">0</span></div>
-    <div id="buracos-toca" class="grade-toca"${estiloFundoMinigame('toca')}></div>
-    <p class="aviso" style="margin-top:12px">Toque no ${emojiAlvo} rápido! Se tocar no ⚡ perde ponto.</p>`;
+    <div id="buracos-toca" class="grade-toca"${estiloFundoMinigame('toca')}></div>`;
   pinta();
   pararLoops = contarRegressiva(() => {
     t0 = Date.now();
@@ -3298,12 +3307,12 @@ function jogoSequencia(){
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Observe a ordem que acende e repita tocando nos mesmos quadrados.')">?</button>
     <div class="titulo-secao"><h2>🎵 Sequência do Bicho</h2></div>
     <div class="placar-simon">Rodadas: <span id="placar-sequencia">0</span></div>
     <div class="grade-simon"${estiloFundoMinigame('sequencia')}>
       ${EMOJIS.map((e,i) => `<button class="pad-simon p${i}" data-i="${i}" onclick="window._padSimon(${i})">${spriteOuEmoji('sequencia'+(i+1), e, 34)}</button>`).join('')}
-    </div>
-    <p class="aviso" style="margin-top:14px">Observe a ordem que acende e repita tocando nos mesmos quadrados.</p>`;
+    </div>`;
   pararLoops = contarRegressiva(() => {
     pararLoops = () => { rodando = false; aceitaToque = false; };
     proximaRodada();
@@ -3314,16 +3323,15 @@ function jogoSequencia(){
 function jogoCorrida(){
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Toque na tela (ou aperte espaço/↑) pra pular os obstáculos!')">?</button>
     <div class="titulo-secao"><h2>🏃 Corrida do Bicho</h2><small>pontos: <b id="placar-corrida">0</b></small></div>
-    <canvas id="tela-jogo"${estiloFundoMinigame('corrida')}></canvas>
-    <p class="aviso" style="margin-top:12px">Toque na tela (ou aperte espaço/↑) pra pular os obstáculos!</p>`;
+    <canvas id="tela-jogo"${estiloFundoMinigame('corrida')}></canvas>`;
   const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
   // mesmo cálculo de altura disponível usado na Chuva de Frutas — ver comentário lá
   const secao = $('#tela-arcade');
   const titulo = secao.querySelector('.titulo-secao');
-  const aviso = secao.querySelector('.aviso');
   const consumidoAntes = titulo.getBoundingClientRect().bottom - secao.getBoundingClientRect().top;
-  const consumidoDepois = aviso.getBoundingClientRect().height + 12;
+  const consumidoDepois = 20; // sem o texto de instrução (agora no botão "?"), só uma folga
   const bordaCanvas = 8;
   const alturaDisponivel = secao.clientHeight - consumidoAntes - consumidoDepois - bordaCanvas - 20;
   cv.width = Math.min(360, cv.parentElement.clientWidth);
@@ -3517,10 +3525,10 @@ function jogoBlocos(){
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Toque numa coluna pra soltar o bloco. 3 ou mais da mesma cor encostados somem!')">?</button>
     <div class="titulo-secao"><h2>🧱 Blocos do Bicho</h2><small>combos: <b id="placar-blocos-grupos">0</b> · pontos: <b id="placar-blocos">0</b></small></div>
     <p class="blocos-proximo">Próximo bloco: <span id="peca-proxima" class="bloco-preview"></span></p>
-    <div id="grade-blocos" class="grade-blocos"${estiloFundoMinigame('blocos')}></div>
-    <p class="aviso" style="margin-top:12px">Toque numa coluna pra soltar o bloco. 3 ou mais da mesma cor encostados somem!</p>`;
+    <div id="grade-blocos" class="grade-blocos"${estiloFundoMinigame('blocos')}></div>`;
   pinta();
   pararLoops = contarRegressiva(() => {
     rodando = true;
@@ -3532,6 +3540,7 @@ function jogoBlocos(){
 function jogoRua(){
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Atravesse a rua sem ser atropelado! Use as setas (ou ←↑↓→ no teclado).')">?</button>
     <div class="titulo-secao"><h2>🚸 Atravessar a Rua</h2><small>vidas: <b id="placar-rua-vidas">3</b> · pontos: <b id="placar-rua">0</b></small></div>
     <canvas id="tela-jogo"${estiloFundoMinigame('rua')}></canvas>
     <div class="dpad-rua">
@@ -3539,16 +3548,14 @@ function jogoRua(){
       <button class="btn-dpad" style="grid-area:esquerda" onclick="window._moverRua('esquerda')">◀</button>
       <button class="btn-dpad" style="grid-area:direita" onclick="window._moverRua('direita')">▶</button>
       <button class="btn-dpad" style="grid-area:baixo" onclick="window._moverRua('baixo')">▼</button>
-    </div>
-    <p class="aviso" style="margin-top:10px">Atravesse a rua sem ser atropelado! Use as setas (ou ←↑↓→ no teclado).</p>`;
+    </div>`;
   const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
   // mesmo cálculo de altura disponível dos outros jogos de canvas — ver comentário na Chuva de Frutas
   const secao = $('#tela-arcade');
   const titulo = secao.querySelector('.titulo-secao');
   const dpad = secao.querySelector('.dpad-rua');
-  const aviso = secao.querySelector('.aviso');
   const consumidoAntes = titulo.getBoundingClientRect().bottom - secao.getBoundingClientRect().top;
-  const consumidoDepois = dpad.getBoundingClientRect().height + aviso.getBoundingClientRect().height + 24;
+  const consumidoDepois = dpad.getBoundingClientRect().height + 20; // sem o aviso (agora no botão "?")
   const bordaCanvas = 8;
   const alturaDisponivel = secao.clientHeight - consumidoAntes - consumidoDepois - bordaCanvas - 20;
   cv.width = Math.min(340, cv.parentElement.clientWidth);
@@ -3784,6 +3791,7 @@ function jogoPescaria(){
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Toque no botão Puxar! quando a boia mergulhar. Depois continue tocando rápido pra fisgar o peixe antes que a linha arrebente!')">?</button>
     <div class="titulo-secao"><h2>🎣 Pescaria</h2><small id="cronometro-pescaria">${DURACAO}s</small></div>
     <div class="placar-pescaria">Pontos: <span id="placar-pescaria">0</span></div>
     <canvas id="tela-jogo"${estiloFundoMinigame('pescaria')}></canvas>
@@ -3791,8 +3799,7 @@ function jogoPescaria(){
       <div class="barra-puxada"><div id="barra-puxada-cheio" class="barra-puxada-cheio"></div></div>
     </div>
     <p id="ultimo-peixe-pescaria" class="ultimo-peixe-pescaria">Observe a boia na água...</p>
-    <button id="btn-puxar-pescaria" class="btn grande amarelo" onclick="window._puxarPescaria()">Puxar!</button>
-    <p class="aviso" style="margin-top:10px">Toque em "Puxar!" quando a boia mergulhar. Depois continue tocando rápido pra fisgar o peixe antes que a linha arrebente!</p>`;
+    <button id="btn-puxar-pescaria" class="btn grande amarelo" onclick="window._puxarPescaria()">Puxar!</button>`;
 
   // cena do mar em canvas — mesmo cálculo de altura disponível usado nos outros minigames
   const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
@@ -3800,9 +3807,8 @@ function jogoPescaria(){
   const placarEl = secao.querySelector('.placar-pescaria');
   const mensagemEl = secao.querySelector('.ultimo-peixe-pescaria');
   const botaoEl = $('#btn-puxar-pescaria');
-  const avisoEl = secao.querySelector('.aviso');
   const consumidoAntes = placarEl.getBoundingClientRect().bottom - secao.getBoundingClientRect().top;
-  const consumidoDepois = mensagemEl.getBoundingClientRect().height + botaoEl.getBoundingClientRect().height + avisoEl.getBoundingClientRect().height + 44;
+  const consumidoDepois = mensagemEl.getBoundingClientRect().height + botaoEl.getBoundingClientRect().height + 32; // sem o aviso (agora no botão "?")
   const alturaDisponivel = secao.clientHeight - consumidoAntes - consumidoDepois - 8 - 20;
   cv.width = Math.min(360, cv.parentElement.clientWidth);
   cv.height = Math.max(190, Math.min(320, alturaDisponivel));
@@ -4081,6 +4087,7 @@ function jogoBolha(){
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Espere a mira ▼ passar pela coluna certa e toque no botão Atirar!. 3 ou mais bolhas da mesma cor encostadas estouram!')">?</button>
     <div class="titulo-secao"><h2>🎈 Bolha de Sabão</h2><small>pontos: <b id="placar-bolhas">0</b></small></div>
     <div id="campo-bolhas" class="bolha-campo">
       <div id="grade-bolhas" class="grade-bolhas"${estiloFundoMinigame('bolha')}></div>
@@ -4090,8 +4097,7 @@ function jogoBolha(){
     <div class="canhao-bolha">
       <button id="btn-atirar-bolha" class="btn grande" onclick="window._atirarBolha()">Atirar!</button>
       <span>próxima: <span class="bolha-preview pequena" id="bolha-proxima"></span></span>
-    </div>
-    <p class="aviso" style="margin-top:10px">Espere a mira ▼ passar pela coluna certa e toque em "Atirar!". 3 ou mais bolhas da mesma cor encostadas estouram!</p>`;
+    </div>`;
   pinta();
   // nas pontas (coluna 0 e última) a mira virava de volta rápido demais pro tempo de reação de
   // quem está jogando. Uma pausa parada ali ficou estranha — em vez disso, ela agora sai um
