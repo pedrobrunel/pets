@@ -940,6 +940,22 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .soko-cel-editor.gatilho{background:#E3DBF7}
 .soko-cel-editor.porta{background:#8B5A2B}
 
+/* ---------- damas (minigame 11, jogador x PC) ---------- */
+.tabuleiro-damas{display:grid;grid-template-columns:repeat(8,1fr);width:100%;max-width:400px;
+  margin:10px auto 0;border:3px solid var(--contorno);border-radius:10px;overflow:hidden;aspect-ratio:1}
+.dama-cel{aspect-ratio:1;display:grid;place-items:center;padding:0;border:none;position:relative}
+.dama-cel.clara{background:#F4F1EA}
+.dama-cel.escura{background:#8B5A2B}
+.dama-cel.selecionavel{cursor:pointer}
+.dama-cel.selecionada{box-shadow:inset 0 0 0 3px var(--moeda)}
+.dama-cel.destino{cursor:pointer}
+.dama-cel.destino::after{content:'';width:26%;height:26%;border-radius:50%;background:rgba(241,196,15,.65)}
+.dama-peca{width:80%;height:80%;border-radius:50%;display:grid;place-items:center;position:relative;
+  font-size:calc(min(9vw,40px)*.5);box-shadow:0 2px 0 rgba(0,0,0,.3)}
+.dama-peca.jogador{background:#fff;border:2px solid #E0DED8}
+.dama-peca.pc{background:#2C3E50;border:2px solid #17202A}
+.dama-coroa{position:absolute;top:-38%;font-size:.9em}
+
 /* tela de seleção de fase do Empurra-Caixas — grade de botões numerados, cadeado nas
    ainda não desbloqueadas, estrela nas já resolvidas (pode jogar de novo à vontade) */
 .grade-fases-sokoban{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:10px;margin-top:14px}
@@ -1294,7 +1310,7 @@ const estado = {
   moedas:60, xp:0,
   fome:72, felicidade:80, energia:90,
   equipado:[], mochila:[], inventario:{},
-  licoesFeitas:[], recordes:{memoria:null, memoriaTempo:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0, rua:0, pescaria:0, bolha:0, sokoban:null},
+  licoesFeitas:[], recordes:{memoria:null, memoriaTempo:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0, rua:0, pescaria:0, bolha:0, sokoban:null, damas:0},
   paresMemoria:6, faseSokobanDesbloqueada:1, sokobanCompletadas:[],
   missoes:{}, cenasVisitadas:[], gatilhosAtivos:[], itensColetados:[],
   moveisComprados:[], casaMoveis:[], casaDesbloqueada:false,
@@ -3045,6 +3061,7 @@ function celebracaoRecorde(bateu){
 const MEDALHA_DO_JOGO = {
   memoria:'memoria', toca:'reflexo', sequencia:'ouvido', corrida:'corredor',
   blocos:'empilhador', rua:'atravessador', pescaria:'pescador', bolha:'estourador', sokoban:'empurrador',
+  damas:'estrategista',
 };
 function seloTrofeuJogo(jogo){
   const id = MEDALHA_DO_JOGO[jogo];
@@ -3081,6 +3098,8 @@ RENDER.arcade = () => {
         ${seloTrofeuJogo('bolha')}<span class="emoji">🎈</span><h3>Bolha de Sabão</h3><p>Mire e estoure grupos de cor. Recorde: ${estado.recordes.bolha} pontos</p></button>
       <button class="cartao-trilha" onclick="jogoSokobanSelecionarFase()">
         ${seloTrofeuJogo('sokoban')}<span class="emoji">📦</span><h3>Empurra-Caixas do Bicho</h3><p>Empurre as caixas até os alvos. ${faseSoko.completas}/${faseSoko.total} fases completas. Recorde: fase ${estado.recordes.sokoban ?? '—'}</p></button>
+      <button class="cartao-trilha" onclick="jogoDamas()">
+        ${seloTrofeuJogo('damas')}<span class="emoji">♟️</span><h3>Damas</h3><p>Você contra o PC — captura obrigatória vale. Vitórias: ${estado.recordes.damas ?? 0}</p></button>
     </div>
     <p class="aviso" style="margin-top:16px">Minigame gasta energia do bicho — mas ela volta sozinha com o tempo.</p>`;
 };
@@ -4779,6 +4798,244 @@ window._excluirMeuMapaSokoban = async (id) => {
   jogoSokobanMeusMapas();
 };
 
+/* --- minigame 11: damas do bicho (jogador x PC) ---
+   tabuleiro 8x8, casas escuras jogáveis onde (linha+coluna) é ímpar. Peão só anda pra frente
+   (jogador sobe, PC desce); vira dama ao chegar na última fileira. SEM dama voadora (rainha
+   move só 1 casa, em qualquer direção diagonal) — mantém as regras simples pro público do
+   jogo. Captura é OBRIGATÓRIA sempre que disponível (pra qualquer peça, inclusive peão, em
+   qualquer direção) e EM CADEIA: uma sequência de capturas da mesma peça é gerada por inteiro
+   e aplicada de uma vez só no clique (não pede "continuar capturando" depois). Não tem regra
+   de "captura máxima" — havendo mais de uma sequência possível, o jogador escolhe qualquer
+   uma. O PC joga com minimax (poda alfa-beta, profundidade 4) sobre essa mesma geração de
+   jogadas, então nunca faz nada ilegal nem ignora uma captura obrigatória. */
+const DAMAS_DIRECOES = [[-1,-1],[-1,1],[1,-1],[1,1]];
+function damasNaTabuleiro(r,c){ return r>=0 && r<8 && c>=0 && c<8; }
+function damasCriarTabuleiroInicial(){
+  const t = Array.from({length:8}, () => Array(8).fill(null));
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    if((r+c)%2 !== 1) continue;
+    if(r < 3) t[r][c] = {cor:'pc', dama:false};
+    else if(r > 4) t[r][c] = {cor:'jogador', dama:false};
+  }
+  return t;
+}
+function damasVirouDama(cor, linhaDestino){
+  return cor === 'jogador' ? linhaDestino === 0 : linhaDestino === 7;
+}
+function damasMovimentosNormaisDePeca(tab, r, c){
+  const peca = tab[r][c];
+  const direcoes = peca.dama ? DAMAS_DIRECOES : DAMAS_DIRECOES.filter(([dr]) => dr === (peca.cor === 'jogador' ? -1 : 1));
+  const movs = [];
+  for(const [dr,dc] of direcoes){
+    const nr = r+dr, nc = c+dc;
+    if(damasNaTabuleiro(nr,nc) && !tab[nr][nc]) movs.push({de:[r,c], para:[nr,nc], capturas:[]});
+  }
+  return movs;
+}
+// gera toda sequência COMPLETA de captura a partir de uma peça (recursivo — encadeia
+// enquanto houver próxima captura disponível). "capturadas" e "origem" são internos da
+// recursão; a chamada externa nunca passa esses dois parâmetros.
+function damasCapturasDePeca(tab, r, c, cor, dama, capturadas, origem){
+  capturadas = capturadas || [];
+  origem = origem || [r,c];
+  const resultados = [];
+  for(const [dr,dc] of DAMAS_DIRECOES){
+    const mr = r+dr, mc = c+dc, ar = r+dr*2, ac = c+dc*2;
+    if(!damasNaTabuleiro(ar,ac)) continue;
+    const alvo = tab[mr][mc];
+    if(!alvo || alvo.cor === cor) continue;
+    if(tab[ar][ac]) continue;
+    const tabTemp = tab.map(l => l.slice());
+    tabTemp[r][c] = null;
+    tabTemp[mr][mc] = null;
+    const novaDama = dama || damasVirouDama(cor, ar);
+    tabTemp[ar][ac] = {cor, dama: novaDama};
+    const novasCapturadas = [...capturadas, [mr,mc]];
+    const continuacao = damasCapturasDePeca(tabTemp, ar, ac, cor, novaDama, novasCapturadas, origem);
+    if(continuacao.length) resultados.push(...continuacao);
+    else resultados.push({de:origem, para:[ar,ac], capturas:novasCapturadas, dama:novaDama});
+  }
+  return resultados;
+}
+function damasGerarMovimentos(tab, cor){
+  const capturas = [];
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p = tab[r][c];
+    if(p && p.cor === cor) capturas.push(...damasCapturasDePeca(tab, r, c, p.cor, p.dama));
+  }
+  if(capturas.length) return capturas; // captura obrigatória — se existe, é a única opção válida
+  const normais = [];
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p = tab[r][c];
+    if(p && p.cor === cor) normais.push(...damasMovimentosNormaisDePeca(tab, r, c));
+  }
+  return normais;
+}
+function damasAplicarMovimento(tab, mov){
+  const novo = tab.map(l => l.slice());
+  const peca = novo[mov.de[0]][mov.de[1]];
+  novo[mov.de[0]][mov.de[1]] = null;
+  for(const [mr,mc] of mov.capturas) novo[mr][mc] = null;
+  const dama = mov.dama !== undefined ? mov.dama : (peca.dama || damasVirouDama(peca.cor, mov.para[0]));
+  novo[mov.para[0]][mov.para[1]] = {cor:peca.cor, dama};
+  return novo;
+}
+function damasFimDeJogo(tab, corDaVez){
+  if(!tab.some(l => l.some(p => p && p.cor === corDaVez))) return true; // sem peça = perdeu
+  return damasGerarMovimentos(tab, corDaVez).length === 0; // sem jogada legal = perdeu
+}
+// avaliação simples: material (dama vale mais que peão) + um empurrãozinho pro peão avançar
+// rumo a virar dama — suficiente pra um oponente competente sem precisar de tabela de abertura
+function damasAvaliar(tab){
+  let pontos = 0;
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p = tab[r][c];
+    if(!p) continue;
+    let v = p.dama ? 3 : 1 + (p.cor === 'pc' ? r : 7-r) * 0.05;
+    pontos += p.cor === 'pc' ? v : -v;
+  }
+  return pontos + (Math.random() - 0.5) * 0.02; // ruído mínimo, só pra não jogar sempre idêntico
+}
+function damasMinimax(tab, profundidade, maximizando, alfa, beta){
+  const cor = maximizando ? 'pc' : 'jogador';
+  const movimentos = damasGerarMovimentos(tab, cor);
+  if(movimentos.length === 0) return maximizando ? -1000 : 1000;
+  if(profundidade === 0) return damasAvaliar(tab);
+  if(maximizando){
+    let melhor = -Infinity;
+    for(const mov of movimentos){
+      melhor = Math.max(melhor, damasMinimax(damasAplicarMovimento(tab, mov), profundidade-1, false, alfa, beta));
+      alfa = Math.max(alfa, melhor);
+      if(beta <= alfa) break;
+    }
+    return melhor;
+  }
+  let melhor = Infinity;
+  for(const mov of movimentos){
+    melhor = Math.min(melhor, damasMinimax(damasAplicarMovimento(tab, mov), profundidade-1, true, alfa, beta));
+    beta = Math.min(beta, melhor);
+    if(beta <= alfa) break;
+  }
+  return melhor;
+}
+function damasMelhorMovimentoPC(tab, profundidade){
+  const movimentos = damasGerarMovimentos(tab, 'pc');
+  if(!movimentos.length) return null;
+  let melhor = null, melhorValor = -Infinity;
+  for(const mov of movimentos){
+    const valor = damasMinimax(damasAplicarMovimento(tab, mov), profundidade-1, false, -Infinity, Infinity);
+    if(valor > melhorValor){ melhorValor = valor; melhor = mov; }
+  }
+  return melhor;
+}
+function jogoDamas(){
+  let tabuleiro = damasCriarTabuleiroInicial();
+  let turno = 'jogador';
+  let selecionada = null;
+  let travado = false;
+
+  function pinta(){
+    const legaisJogador = (!travado && turno === 'jogador') ? damasGerarMovimentos(tabuleiro, 'jogador') : [];
+    const destinos = selecionada ? legaisJogador.filter(m => m.de[0]===selecionada[0] && m.de[1]===selecionada[1]) : [];
+    const cels = [];
+    for(let r=0;r<8;r++){
+      for(let c=0;c<8;c++){
+        const jogavel = (r+c)%2 === 1;
+        const peca = tabuleiro[r][c];
+        const ehSelecionada = !!selecionada && selecionada[0]===r && selecionada[1]===c;
+        const ehDestino = destinos.some(m => m.para[0]===r && m.para[1]===c);
+        const podeSelecionar = jogavel && peca && peca.cor === 'jogador' && legaisJogador.some(m => m.de[0]===r && m.de[1]===c);
+        let classe = 'dama-cel ' + (jogavel ? 'escura' : 'clara');
+        if(ehSelecionada) classe += ' selecionada';
+        if(ehDestino) classe += ' destino';
+        if(podeSelecionar) classe += ' selecionavel';
+        const conteudo = peca
+          ? `<div class="dama-peca ${peca.cor}">${spriteOuEmoji(peca.cor==='jogador' ? 'damasjogador' : 'damaspc', peca.cor==='jogador' ? '🔴' : '⚫', 30)}${peca.dama ? '<span class="dama-coroa">👑</span>' : ''}</div>`
+          : '';
+        cels.push(`<button type="button" class="${classe}"${jogavel ? ` onclick="window._clicarDamas(${r},${c})"` : ' disabled'}>${conteudo}</button>`);
+      }
+    }
+    $('#tabuleiro-damas').innerHTML = cels.join('');
+    const status = $('#status-damas');
+    if(status) status.textContent = travado ? '' : (turno === 'jogador' ? 'Sua vez' : 'PC pensando...');
+  }
+  function aoClicarCasa(r, c){
+    if(travado || turno !== 'jogador') return;
+    const legais = damasGerarMovimentos(tabuleiro, 'jogador');
+    const peca = tabuleiro[r][c];
+    if(peca && peca.cor === 'jogador'){
+      if(!legais.some(m => m.de[0]===r && m.de[1]===c)){ tocarEfeito('damas', 'erro'); return; }
+      selecionada = [r,c];
+      pinta();
+      return;
+    }
+    if(!selecionada){ tocarEfeito('damas', 'erro'); return; }
+    const mov = legais.find(m => m.de[0]===selecionada[0] && m.de[1]===selecionada[1] && m.para[0]===r && m.para[1]===c);
+    if(!mov){ tocarEfeito('damas', 'erro'); return; }
+    tabuleiro = damasAplicarMovimento(tabuleiro, mov);
+    selecionada = null;
+    tocarEfeito('damas', 'acerto');
+    if(damasFimDeJogo(tabuleiro, 'pc')){ pinta(); encerra(true); return; }
+    turno = 'pc';
+    pinta();
+    setTimeout(jogadaDoPC, 550);
+  }
+  function jogadaDoPC(){
+    if(travado) return;
+    const mov = damasMelhorMovimentoPC(tabuleiro, 4);
+    if(!mov){ encerra(true); return; } // segurança: damasFimDeJogo já devia ter pego isso antes
+    tabuleiro = damasAplicarMovimento(tabuleiro, mov);
+    tocarEfeito('damas', 'acerto');
+    if(damasFimDeJogo(tabuleiro, 'jogador')){ pinta(); encerra(false); return; }
+    turno = 'jogador';
+    pinta();
+  }
+  function encerra(vitoriaJogador){
+    travado = true;
+    estado.energia = lim(estado.energia - 10);
+    estado.felicidade = lim(estado.felicidade + (vitoriaJogador ? 12 : 6));
+    if(vitoriaJogador){
+      estado.recordes.damas = (estado.recordes.damas ?? 0) + 1;
+      const premio = 25;
+      ganhar(premio, 20);
+      modal(`<h2 style="font-size:24px">Você venceu! ♟️</h2>
+        <p style="margin:6px 0 12px">Já são ${estado.recordes.damas} vitória(s) contra o PC.</p>
+        <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +20</span>
+        <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoDamas()">Jogar de novo</button>
+        <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+    } else {
+      ganhar(0, 5);
+      modal(`<h2 style="font-size:24px">O PC venceu dessa vez 🤖</h2>
+        <p style="margin:6px 0 12px">Bora tentar de novo?</p>
+        <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoDamas()">Jogar de novo</button>
+        <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+    }
+  }
+  window._clicarDamas = aoClicarCasa;
+  window._reiniciarDamas = () => {
+    if(travado) return;
+    tabuleiro = damasCriarTabuleiroInicial();
+    turno = 'jogador';
+    selecionada = null;
+    pinta();
+  };
+  window._desistirDamas = () => {
+    if(travado || !confirm('Desistir dessa partida?')) return;
+    encerra(false);
+  };
+  $('#tela-arcade').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Toque numa peça vermelha (sua) e depois na casa marcada pra mover. Peão só anda pra frente, mas captura em qualquer direção — e captura é obrigatória: se você puder comer uma peça do PC, precisa jogar essa jogada. Chegou na última fileira? Virou dama 👑, que agora anda e captura pra qualquer lado. Quem ficar sem peça (ou sem jogada) perde.')">?</button>
+    <div class="titulo-secao"><h2>♟️ Damas</h2><small id="status-damas">Sua vez</small></div>
+    <div id="tabuleiro-damas" class="tabuleiro-damas"${estiloFundoMinigame('damas')}></div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:10px">
+      <button class="btn pequeno branco" onclick="window._reiniciarDamas()">🔄 Reiniciar</button>
+      <button class="btn pequeno branco" onclick="window._desistirDamas()">🏳️ Desistir</button>
+    </div>`;
+  pinta();
+  pararLoops = null;
+}
+
 /* ---------- 9. TELA: LOJA DA VILA ----------
    Uma loja como qualquer outra do motor genérico (ver seção 9c) — só que com id fixo
    "lojadavila" e aba própria no rodapé, por ser a lojinha padrão do jogo desde sempre. */
@@ -5776,6 +6033,7 @@ const MEDALHAS = [
   {id:'pescador', emoji:'🎣', nome:'40 pontos na Pescaria', ok:()=>estado.recordes.pescaria>=40},
   {id:'estourador', emoji:'🎈', nome:'100 pontos na Bolha', ok:()=>estado.recordes.bolha>=100},
   {id:'empurrador', emoji:'📦', nome:'Zerar o Empurra-Caixas', ok:()=>estado.recordes.sokoban!==null && estado.recordes.sokoban>=10},
+  {id:'estrategista', emoji:'♟️', nome:'3 vitórias nas Damas', ok:()=>(estado.recordes.damas ?? 0)>=3},
   {id:'chama',    emoji:'🔥', nome:'7 dias seguidos', ok:()=>estado.streak.melhor>=7},
   {id:'estiloso', emoji:'😎', nome:'Bicho estiloso', ok:()=>estado.equipado.length>=1},
   {id:'clube',    emoji:'🏅', nome:'Em um clube', ok:()=>!!clubeAtual}
