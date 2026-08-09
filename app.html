@@ -910,6 +910,10 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
    igual à Memória — os níveis variam muito de tamanho (5x4 até 14x12) pra um grid fixo
    fazer sentido. --tam-sokoban vem de lá e escala a fonte do emoji junto com a célula. */
 #grade-sokoban{display:grid;gap:2px;justify-content:center;align-content:center;margin:8px auto 0}
+@keyframes tremeSokoban{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+#grade-sokoban.treme-sokoban{animation:tremeSokoban .3s ease}
+.barra-auto-sokoban-wrap{height:6px;border-radius:3px;background:#0002;overflow:hidden;margin-top:8px}
+.barra-auto-sokoban-cheio{height:100%;width:100%;background:var(--mata);transition:width 2.5s linear}
 .soko-cel{aspect-ratio:1;display:grid;place-items:center;border-radius:4px;
   font-size:calc(var(--tam-sokoban, 32px) * .55);line-height:1}
 .soko-cel.parede{background:var(--contorno)}
@@ -920,6 +924,21 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .soko-cel.gatilho{background:#E3DBF7;border:1px solid #A98FE0;box-shadow:inset 0 0 0 3px #B79EEA}
 .soko-cel.porta-fechada{background:#8B5A2B;border:1px solid #6B4319}
 .soko-cel.porta-aberta{background:#F4F1EA;border:1px dashed #C9A876}
+
+/* editor de mapa próprio (jogoSokobanCriarMapa) — mesma notação/paleta do editor do
+   painel, só que pro jogador desenhar o mapa dele direto no jogo */
+.paleta-sokoban{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px;justify-content:center}
+.ferramenta-sokoban{background:#fff;border:1px solid var(--contorno);border-radius:8px;padding:6px 10px;
+  font-weight:800;font-size:12px;cursor:pointer}
+.ferramenta-sokoban.ativa{background:var(--tinta);color:#fff;border-color:var(--tinta)}
+.editor-grade-sokoban{display:inline-grid;gap:1px;background:#ccc;border:2px solid #999;width:max-content;margin:0 auto}
+.soko-cel-editor{width:26px;height:26px;border:none;padding:0;font-size:14px;display:grid;place-items:center;cursor:pointer;line-height:1}
+.soko-cel-editor.parede{background:#5D6D7E}
+.soko-cel-editor.chao{background:#F4F1EA}
+.soko-cel-editor.alvo{background:#FDF3D8;box-shadow:inset 0 0 0 2px #F4D160}
+.soko-cel-editor.espinho{background:#FBDCE0}
+.soko-cel-editor.gatilho{background:#E3DBF7}
+.soko-cel-editor.porta{background:#8B5A2B}
 
 /* tela de seleção de fase do Empurra-Caixas — grade de botões numerados, cadeado nas
    ainda não desbloqueadas, estrela nas já resolvidas (pode jogar de novo à vontade) */
@@ -4287,6 +4306,35 @@ function infoSokoban(){
   const completas = (estado.sokobanCompletadas ?? []).length;
   return { total, desbloqueada, completas };
 }
+// top 10 de uma fase — só quem tem conta salva aparece (o placar é gravado em
+// sokoban_pontuar, mesmo espírito de privacidade do ranking geral: sem conta não tem como)
+async function jogoSokobanRanking(numero){
+  if(!logado){
+    modal(`<h2 style="font-size:22px">🏆 Ranking — Fase ${numero}</h2><p style="margin:10px 0">Só dá pra ver o ranking com conta salva (usuário e senha) — jogando sem conta não tem como.</p>
+      <button class="btn grande branco" style="margin-top:6px" onclick="fecharModal()">Fechar</button>`);
+    return;
+  }
+  modal(`<h2 style="font-size:22px">🏆 Ranking — Fase ${numero}</h2><p style="margin:10px 0">Carregando…</p>`);
+  try{
+    const r = await fetch('api/estado.php?acao=sokoban_ranking&fase=' + numero, {cache:'no-store'});
+    const d = await r.json().catch(() => ({ranking:[]}));
+    if(!r.ok) throw new Error(d.erro || 'Não deu pra carregar o ranking.');
+    const linhas = d.ranking || [];
+    modal(`
+      <h2 style="font-size:22px">🏆 Ranking — Fase ${numero}</h2>
+      <p style="margin:4px 0 10px;font-size:12px;font-weight:700;opacity:.7">Top 10 · menos jogadas é melhor</p>
+      ${linhas.length ? linhas.map((l,i) => `<div class="ranking-linha${l.apelido===estado.apelido?' eu':''}">
+        <b style="width:22px;opacity:.6">${i+1}º</b>
+        ${svgBicho(l.tipo, {estilo:'width:28px;height:28px'})}
+        <b style="flex:1">${esc(l.apelido)}</b>
+        <span class="chip">${l.jogadas} jogada${l.jogadas===1?'':'s'}</span>
+      </div>`).join('') : '<p class="vazio" style="margin:0">Ninguém pontuou nessa fase ainda. Seja o primeiro!</p>'}
+      <button class="btn grande branco" style="margin-top:14px" onclick="fecharModal()">Fechar</button>`);
+  }catch(e){
+    modal(`<h2 style="font-size:22px">🏆 Ranking — Fase ${numero}</h2><p style="margin:10px 0">${esc(e.message)}</p>
+      <button class="btn grande branco" style="margin-top:6px" onclick="fecharModal()">Fechar</button>`);
+  }
+}
 // tela de seleção de fase — "salva" o jogo de verdade: cadeado nas fases além da
 // desbloqueada, estrela nas já resolvidas (dá pra jogar de novo à vontade, sem perder nada)
 function jogoSokobanSelecionarFase(){
@@ -4304,11 +4352,16 @@ function jogoSokobanSelecionarFase(){
           ${bloqueada?'disabled':''} onclick="jogoSokoban(${f.numero})">
           ${bloqueada ? '🔒' : completa ? '⭐' : '📦'}<span>${f.numero}</span></button>`;
       }).join('')}
-    </div>`;
+    </div>
+    <button class="btn grande branco" style="margin-top:16px" onclick="jogoSokobanCriarMapa()">🎨 Criar meu mapa</button>`;
   pararLoops = null;
 }
-function jogoSokoban(numero){
-  const fase = SOKOBAN_FASES.find(f => f.numero === numero) || SOKOBAN_FASES[0];
+let SOKOBAN_MAPA_TESTE_ATUAL = null; // último {nome, grade} testado — só pro botão "jogar de novo" no fim
+function jogoSokoban(numero, opcoes){
+  const ehCustom = !!opcoes?.faseCustom;
+  const fase = ehCustom ? opcoes.faseCustom : (SOKOBAN_FASES.find(f => f.numero === numero) || SOKOBAN_FASES[0]);
+  if(ehCustom) SOKOBAN_MAPA_TESTE_ATUAL = fase;
+  const aoVoltar = opcoes?.aoVoltar || (() => jogoSokobanSelecionarFase());
   const emojiBicho = {capivara:'🦫', salsicha:'🐶', gato:'🐱'}[estado.tipo] || '🐾';
 
   function carregarNivel(){
@@ -4391,15 +4444,26 @@ function jogoSokoban(numero){
     const btnDesfazer = $('#btn-desfazer-sokoban');
     if(btnDesfazer) btnDesfazer.disabled = historico.length === 0;
   }
+  // movimento barrado (parede, espinho, porta fechada, caixa travada): sem isso o jogo
+  // ficava mudo quando esbarrava num espinho — parecia "não fazer nada" mesmo bloqueando
+  // certinho por baixo dos panos, porque só o acerto tinha som/animação
+  function bloqueado(){
+    tocarEfeito('sokoban', 'erro');
+    const board = $('#grade-sokoban');
+    if(!board) return;
+    board.classList.remove('treme-sokoban');
+    void board.offsetWidth; // reinicia a animação se já tava tremendo
+    board.classList.add('treme-sokoban');
+  }
   function mover(dr, dc){
     if(travado) return;
     const [jr, jc] = jogador.split(',').map(Number);
     const nk = (jr+dr)+','+(jc+dc);
-    if(bloqueiaJogador(nk)) return;
+    if(bloqueiaJogador(nk)){ bloqueado(); return; }
     let novasCaixas = caixas, novasPortasAbertas = portasAbertas;
     if(caixas.has(nk)){
       const bk = (jr+dr*2)+','+(jc+dc*2);
-      if(bloqueiaCaixa(bk, caixas)) return; // caixa travada, não dá pra empurrar
+      if(bloqueiaCaixa(bk, caixas)){ bloqueado(); return; } // caixa travada, não dá pra empurrar
       novasCaixas = new Set(caixas);
       novasCaixas.delete(nk);
       novasCaixas.add(bk);
@@ -4444,6 +4508,17 @@ function jogoSokoban(numero){
   function encerra(){
     travado = true;
     removeEventListener('keydown', aoTeclar);
+    // mapa próprio (testado no editor ou na lista "meus mapas" do Perfil): não é uma fase
+    // oficial numerada, então não mexe em recorde/progresso/moedas nem manda pro ranking —
+    // é só um "resolveu, parabéns", com a volta indo pra quem chamou (editor ou Perfil)
+    if(ehCustom){
+      window._voltarSokobanCustom = aoVoltar;
+      modal(`<h2 style="font-size:24px">Mapa resolvido! 🎉</h2>
+        <p style="margin:6px 0 12px">Você resolveu "${esc(fase.nome)}" em ${jogadas} jogada(s).</p>
+        <button class="btn grande" style="margin-top:10px" onclick="fecharModal(); jogoSokoban(null, {faseCustom: SOKOBAN_MAPA_TESTE_ATUAL, aoVoltar: window._voltarSokobanCustom})">🔄 Jogar de novo</button>
+        <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); window._voltarSokobanCustom()">Voltar</button>`);
+      return;
+    }
     const novoRecorde = bateuRecorde('sokoban', fase.numero, false);
     if(!(estado.sokobanCompletadas ?? []).includes(fase.numero)){
       estado.sokobanCompletadas = [...(estado.sokobanCompletadas ?? []), fase.numero];
@@ -4455,21 +4530,46 @@ function jogoSokoban(numero){
     estado.energia = lim(estado.energia - 10);
     estado.felicidade = lim(estado.felicidade + 12);
     ganhar(premio, 15);
+    // ranking por fase: só quem tem conta salva entra (mesmo espírito do ranking geral) —
+    // fire-and-forget, o backend só grava se bater a melhor marca do próprio jogador
+    if(logado){
+      fetch('api/estado.php?acao=sokoban_pontuar', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({faseNumero: fase.numero, jogadas}),
+      }).catch(()=>{});
+    }
     const proximaFase = SOKOBAN_FASES.find(f => f.numero === fase.numero + 1);
     const proximaDesbloqueada = proximaFase && proximaFase.numero <= (estado.faseSokobanDesbloqueada ?? 1);
     modal(`${celebracaoRecorde(novoRecorde)}<h2 style="font-size:24px">Fase ${fase.numero} completa! 📦</h2>
       <p style="margin:6px 0 12px">Você resolveu em ${jogadas} jogada(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       ${!proximaFase ? '<p style="margin:12px 0 0;font-weight:800">🏅 Você zerou o Empurra-Caixas!</p>' : ''}
-      ${proximaDesbloqueada ? `<button class="btn grande" style="margin-top:10px" onclick="fecharModal(); jogoSokoban(${proximaFase.numero})">Próxima fase</button>` : ''}
+      <button class="btn grande branco" style="margin-top:10px" onclick="jogoSokobanRanking(${fase.numero})">🏆 Ver ranking da fase</button>
+      ${proximaDesbloqueada ? `<button class="btn grande" style="margin-top:10px" onclick="fecharModal(); jogoSokoban(${proximaFase.numero})">Próxima fase</button>
+      <div class="barra-auto-sokoban-wrap"><div id="barra-auto-sokoban" class="barra-auto-sokoban-cheio"></div></div>
+      <small style="opacity:.65;display:block;margin-top:3px">Passando pra próxima sozinho...</small>` : ''}
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); jogoSokobanSelecionarFase()">Escolher fase</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+    // barrinha de avanço automático: encolhe sozinha e troca de fase ao zerar — sem tirar
+    // os botões de baixo (clicar em QUALQUER um deles fecha o modal, que já é o sinal usado
+    // aqui pra saber que deu tempo de cancelar: some o #barra-auto-sokoban do DOM)
+    if(proximaDesbloqueada){
+      const DURACAO_MS = 2500;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const barra = $('#barra-auto-sokoban');
+        if(barra) barra.style.width = '0%';
+      }));
+      setTimeout(() => {
+        if($('#barra-auto-sokoban')){ fecharModal(); jogoSokoban(proximaFase.numero); }
+      }, DURACAO_MS);
+    }
   }
 
+  window._voltarSokobanCustom = aoVoltar;
   $('#tela-arcade').innerHTML = `
-    <button class="btn amarelo pequeno btn-voltar-cena" onclick="jogoSokobanSelecionarFase()">Voltar</button>
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="${ehCustom ? 'window._voltarSokobanCustom()' : 'jogoSokobanSelecionarFase()'}">Voltar</button>
     <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Empurre as caixas 📦 até os alvos usando as setas (ou o toquinho abaixo do tabuleiro). Só dá pra empurrar, nunca puxar — se travar, toque em Desfazer ou Reiniciar. Espinhos 🔺 travam só você, a caixa passa por cima numa boa. Uma caixa em cima do gatilho 🟣 destranca as portas 🚪 do resto da fase.')">?</button>
-    <div class="titulo-secao"><h2>📦 Fase ${fase.numero}</h2><small>jogadas: <b id="placar-sokoban">0</b></small></div>
+    <div class="titulo-secao"><h2>📦 ${ehCustom ? esc(fase.nome) : 'Fase ' + fase.numero}</h2><small>jogadas: <b id="placar-sokoban">0</b></small></div>
     <div id="grade-sokoban" class="grade-sokoban"${estiloFundoMinigame('sokoban')}></div>
     <div class="dpad-rua">
       <button class="btn-dpad" style="grid-area:cima" onclick="window._moverSokoban('cima')">▲</button>
@@ -4477,14 +4577,202 @@ function jogoSokoban(numero){
       <button class="btn-dpad" style="grid-area:direita" onclick="window._moverSokoban('direita')">▶</button>
       <button class="btn-dpad" style="grid-area:baixo" onclick="window._moverSokoban('baixo')">▼</button>
     </div>
-    <div class="acoes-sokoban" style="display:flex;gap:8px;justify-content:center;margin-top:10px">
+    <div class="acoes-sokoban" style="display:flex;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap">
       <button id="btn-desfazer-sokoban" class="btn pequeno branco" onclick="window._desfazerSokoban()">↩️ Desfazer</button>
       <button class="btn pequeno branco" onclick="window._reiniciarSokoban()">🔄 Reiniciar</button>
+      ${!ehCustom ? `<button class="btn pequeno branco" onclick="jogoSokobanRanking(${fase.numero})">🏆 Ranking</button>` : ''}
     </div>`;
   dimensionarGrade();
   pinta();
   pararLoops = () => { removeEventListener('keydown', aoTeclar); };
 }
+
+/* ---------- Empurra-Caixas: editor de mapa próprio (jogador cria e joga) ----------
+   mesma paleta/notação do editor do painel (admin.html), adaptada pro jogo — o jogador
+   desenha, testa na hora sem precisar salvar nada e, se quiser, manda pro hostmaster
+   decidir se vira uma fase oficial (status fica visível no Perfil: pendente/aprovado/
+   rejeitado — ver blocoMeusMapasSokoban). */
+const FERRAMENTAS_SOKOBAN_APP = [
+  {ch:'#', rotulo:'Parede', emoji:'⬛'},
+  {ch:' ', rotulo:'Chão', emoji:'⬜'},
+  {ch:'@', rotulo:'Você', emoji:'🦫'},
+  {ch:'$', rotulo:'Caixa', emoji:'📦'},
+  {ch:'.', rotulo:'Alvo', emoji:'🟨'},
+  {ch:'^', rotulo:'Espinho', emoji:'🔺'},
+  {ch:'%', rotulo:'Gatilho', emoji:'🟣'},
+  {ch:'D', rotulo:'Porta', emoji:'🚪'},
+];
+let gradeEditorSokobanApp = [];
+let ferramentaAtualSokobanApp = '#';
+function gradeVaziaSokobanApp(largura, altura){
+  const grade = [];
+  for(let r=0; r<altura; r++){
+    const linha = [];
+    for(let c=0; c<largura; c++) linha.push((r===0 || r===altura-1 || c===0 || c===largura-1) ? '#' : ' ');
+    grade.push(linha);
+  }
+  return grade;
+}
+function classeCelulaSokobanApp(ch){
+  if(ch === '#') return 'parede';
+  if(ch === '.' || ch === '+' || ch === '*') return 'alvo';
+  if(ch === '^') return 'espinho';
+  if(ch === '%') return 'gatilho';
+  if(ch === 'D') return 'porta';
+  return 'chao';
+}
+function conteudoCelulaSokobanApp(ch){
+  if(ch === '@' || ch === '+') return '🦫';
+  if(ch === '$' || ch === '*') return '📦';
+  if(ch === '^') return '🔺';
+  if(ch === '%') return '🟣';
+  return '';
+}
+function gradeSokobanAppParaTexto(){
+  return gradeEditorSokobanApp.map(linha => linha.join('').replace(/ +$/, '')).join('\n');
+}
+function validarGradeSokobanApp(){
+  let jogadores=0, caixas=0, alvos=0;
+  for(const linha of gradeEditorSokobanApp){
+    for(const ch of linha){
+      if(ch==='@'||ch==='+') jogadores++;
+      if(ch==='$'||ch==='*') caixas++;
+      if(ch==='.'||ch==='+'||ch==='*') alvos++;
+    }
+  }
+  const problemas = [];
+  if(jogadores !== 1) problemas.push(`precisa de exatamente 1 você no mapa (tem ${jogadores})`);
+  if(alvos < 1) problemas.push('precisa de pelo menos 1 alvo');
+  if(caixas < alvos) problemas.push(`tem menos caixas (${caixas}) do que alvos (${alvos})`);
+  return problemas;
+}
+function renderizarGradeEditorSokobanApp(){
+  const largura = gradeEditorSokobanApp[0]?.length || 0;
+  const wrap = $('#editor-grade-sokoban-app');
+  if(!wrap) return;
+  wrap.style.gridTemplateColumns = `repeat(${largura}, 26px)`;
+  wrap.innerHTML = gradeEditorSokobanApp.map((linha, r) =>
+    linha.map((ch, c) => `<button type="button" class="soko-cel-editor ${classeCelulaSokobanApp(ch)}" onclick="window._pintarSokobanApp(${r},${c})">${conteudoCelulaSokobanApp(ch)}</button>`).join('')
+  ).join('');
+  const problemas = validarGradeSokobanApp();
+  const aviso = $('#aviso-sokoban-app');
+  if(aviso){
+    if(problemas.length){ aviso.className = 'aviso-form erro'; aviso.textContent = 'Antes de testar: ' + problemas.join('; ') + '.'; }
+    else { aviso.className = 'aviso-form ok'; aviso.textContent = 'Mapa pronto pra testar!'; }
+  }
+}
+window._pintarSokobanApp = (r, c) => {
+  if(ferramentaAtualSokobanApp === '@'){
+    gradeEditorSokobanApp.forEach(linha => linha.forEach((ch, i) => { if(ch === '@' || ch === '+') linha[i] = ' '; }));
+  }
+  gradeEditorSokobanApp[r][c] = ferramentaAtualSokobanApp;
+  renderizarGradeEditorSokobanApp();
+};
+window._selecionarFerramentaSokobanApp = ch => {
+  ferramentaAtualSokobanApp = ch;
+  document.querySelectorAll('#paleta-sokoban .ferramenta-sokoban').forEach(b => b.classList.toggle('ativa', b.dataset.ch === ch));
+};
+function jogoSokobanCriarMapa(nomeExistente, gradeExistente){
+  gradeEditorSokobanApp = gradeExistente ? textoParaGradeSokobanApp(gradeExistente) : (gradeEditorSokobanApp.length ? gradeEditorSokobanApp : gradeVaziaSokobanApp(9, 8));
+  $('#tela-arcade').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="jogoSokobanSelecionarFase()">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Desenhe seu próprio mapa! Escolha uma ferramenta e toque numa célula da grade pra pintar. Precisa de exatamente 1 você (🦫), pelo menos 1 alvo (🟨) e caixas (📦) suficientes pra cobrir os alvos. Depois é só testar — e, se curtir, mandar pro professor decidir se vira uma fase de verdade do jogo.')">?</button>
+    <div class="titulo-secao"><h2>🎨 Criar meu mapa</h2><small>desenhe, teste e, se quiser, envie pro jogo</small></div>
+    <label style="font-weight:800;font-size:13px;display:block;margin:8px 0 4px">Nome do mapa</label>
+    <input id="sokoban-app-nome" type="text" maxlength="60" value="${esc(nomeExistente || '')}" placeholder="ex.: Labirinto do Bicho" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--contorno)">
+    <div style="display:flex;gap:8px;margin:10px 0;align-items:flex-end">
+      <div><label style="font-size:12px;font-weight:800;display:block">colunas</label><input id="sokoban-app-largura" type="number" value="${gradeEditorSokobanApp[0]?.length||9}" min="3" max="20" style="width:60px;padding:6px"></div>
+      <div><label style="font-size:12px;font-weight:800;display:block">linhas</label><input id="sokoban-app-altura" type="number" value="${gradeEditorSokobanApp.length||8}" min="3" max="18" style="width:60px;padding:6px"></div>
+      <button type="button" class="btn pequeno branco" onclick="window._redimensionarSokobanApp()">Redimensionar</button>
+    </div>
+    <div id="paleta-sokoban" class="paleta-sokoban">
+      ${FERRAMENTAS_SOKOBAN_APP.map(f => `<button type="button" class="ferramenta-sokoban ${f.ch===ferramentaAtualSokobanApp?'ativa':''}" data-ch="${f.ch}" onclick="window._selecionarFerramentaSokobanApp('${f.ch}')">${f.emoji} ${esc(f.rotulo)}</button>`).join('')}
+    </div>
+    <div style="overflow-x:auto;padding:8px 0"><div id="editor-grade-sokoban-app" class="editor-grade-sokoban"></div></div>
+    <div id="aviso-sokoban-app" class="aviso-form"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn grande" onclick="window._testarSokobanApp()">▶️ Testar</button>
+      <button class="btn grande branco" onclick="window._enviarSokobanApp()">📤 Enviar pro jogo</button>
+    </div>`;
+  renderizarGradeEditorSokobanApp();
+  pararLoops = null;
+}
+function textoParaGradeSokobanApp(texto){
+  const linhas = texto.split('\n');
+  const largura = Math.max(1, ...linhas.map(l => l.length));
+  return linhas.map(l => { const linha = []; for(let c=0; c<largura; c++) linha.push(l[c] || ' '); return linha; });
+}
+window._redimensionarSokobanApp = () => {
+  const largura = Math.max(3, Math.min(20, Number($('#sokoban-app-largura').value) || 9));
+  const altura = Math.max(3, Math.min(18, Number($('#sokoban-app-altura').value) || 8));
+  const nova = gradeVaziaSokobanApp(largura, altura);
+  // só copia o MIOLO da grade antiga (nunca a borda dela) pro miolo da nova — copiar a
+  // borda também podia pintar parede por cima de chão (ou vice-versa) quando a borda antiga
+  // caía numa linha/coluna que virou meio de grade na nova, deixando a grade sem parede
+  // fechando os lados depois de redimensionar
+  for(let r=1; r<altura-1 && r<gradeEditorSokobanApp.length-1; r++){
+    for(let c=1; c<largura-1 && c<(gradeEditorSokobanApp[r]?.length||0)-1; c++){
+      nova[r][c] = gradeEditorSokobanApp[r][c];
+    }
+  }
+  gradeEditorSokobanApp = nova;
+  renderizarGradeEditorSokobanApp();
+};
+window._testarSokobanApp = () => {
+  const problemas = validarGradeSokobanApp();
+  if(problemas.length){ brinde('Corrija antes de testar: ' + problemas[0]); return; }
+  const nome = $('#sokoban-app-nome').value.trim() || 'Meu mapa';
+  jogoSokoban(null, {faseCustom: {nome, grade: gradeSokobanAppParaTexto()}, aoVoltar: () => jogoSokobanCriarMapa(nome)});
+};
+window._enviarSokobanApp = async () => {
+  if(!logado){ brinde('Crie uma conta (usuário e senha) pra poder enviar seu mapa pro jogo.'); return; }
+  const problemas = validarGradeSokobanApp();
+  if(problemas.length){ brinde('Corrija antes de enviar: ' + problemas[0]); return; }
+  const nome = $('#sokoban-app-nome').value.trim() || 'Meu mapa';
+  try{
+    const r = await fetch('api/estado.php?acao=sokoban_mapa_enviar', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({nome, grade: gradeSokobanAppParaTexto()}),
+    });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.erro || 'Não deu pra enviar.');
+    brinde('📤 Mapa enviado! O professor vai decidir se ele vira uma fase de verdade.');
+  }catch(e){ brinde(e.message || 'Não deu pra enviar agora. Tenta de novo?'); }
+};
+// "meus mapas" no Perfil — lista o que o jogador já enviou, com status de moderação;
+// dá pra jogar de novo (aprovado ou não) e apagar enquanto não foi decidido
+async function jogoSokobanMeusMapas(){
+  modal(`<h2 style="font-size:22px">🎨 Meus mapas</h2><p style="margin:10px 0">Carregando…</p>`);
+  try{
+    const r = await fetch('api/estado.php?acao=sokoban_meus_mapas', {cache:'no-store'});
+    const d = await r.json().catch(() => ({mapas:[]}));
+    if(!r.ok) throw new Error(d.erro || 'Não deu pra carregar seus mapas.');
+    const SELO = {pendente: '🕓 em análise', aprovado: '✅ virou fase oficial', rejeitado: '✖️ não aprovado'};
+    modal(`
+      <h2 style="font-size:22px">🎨 Meus mapas</h2>
+      ${d.mapas.length ? d.mapas.map(m => `
+        <div style="border:1px solid var(--contorno);border-radius:12px;padding:10px 12px;margin-bottom:8px;text-align:left">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <b>${esc(m.nome)}</b><span class="chip">${SELO[m.status]}</span>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <button class="btn pequeno" onclick="fecharModal(); jogoSokoban(null, {faseCustom:{nome:m.nome, grade:m.grade}, aoVoltar: jogoSokobanMeusMapas})">▶️ Jogar</button>
+            ${m.status === 'pendente' ? `<button class="btn pequeno branco" onclick="window._excluirMeuMapaSokoban(${m.id})">🗑️ Apagar</button>` : ''}
+          </div>
+        </div>`).join('') : '<p class="vazio" style="margin:10px 0">Você ainda não criou nenhum mapa. Vá no Arcade > Empurra-Caixas > 🎨 Criar meu mapa!</p>'}
+      <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal()">Fechar</button>`);
+  }catch(e){
+    modal(`<h2 style="font-size:22px">🎨 Meus mapas</h2><p style="margin:10px 0">${esc(e.message)}</p>
+      <button class="btn grande branco" style="margin-top:6px" onclick="fecharModal()">Fechar</button>`);
+  }
+}
+window._excluirMeuMapaSokoban = async (id) => {
+  if(!confirm('Apagar esse mapa?')) return;
+  await fetch('api/estado.php?acao=sokoban_mapa_excluir', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id}),
+  }).catch(()=>{});
+  jogoSokobanMeusMapas();
+};
 
 /* ---------- 9. TELA: LOJA DA VILA ----------
    Uma loja como qualquer outra do motor genérico (ver seção 9c) — só que com id fixo
@@ -5515,6 +5803,9 @@ RENDER.perfil = () => {
         </button>
         <button class="carrossel-item" style="--cor:var(--jabuti);--cor-borda:var(--jabuti-rim)" onclick="ir('clube')">
           <span class="carrossel-emoji">${clubeAtual ? esc(clubeAtual.emoji) : '🏅'}</span><span>Clube</span>
+        </button>
+        <button class="carrossel-item" style="--cor:var(--rosa);--cor-borda:var(--rosa-rim)" onclick="jogoSokobanMeusMapas()">
+          <span class="carrossel-emoji">🎨</span><span>Meus mapas</span>
         </button>
         <button class="carrossel-item" style="--cor:var(--mata);--cor-borda:var(--mata-rim)" onclick="compartilhar()">
           <span class="carrossel-emoji">🔗</span><span>Compartilhar</span>

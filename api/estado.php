@@ -41,6 +41,11 @@
      GET  ?acao=clube_membros_listar                    -> só o líder: cada membro com nível/streak/lições (tipo "resumo do professor")
      POST ?acao=clube_membro_remover {apelido}          -> só o líder, tira alguém do clube
      GET  ?acao=ranking                                -> top 10 por nível e por sequência (só apelido/bicho/número)
+     POST ?acao=sokoban_pontuar {faseNumero, jogadas}  -> grava se bater a melhor marca (menos jogadas) do jogador nessa fase
+     GET  ?acao=sokoban_ranking ?fase=xx                -> top 10 dessa fase do Empurra-Caixas (apelido/bicho/jogadas)
+     POST ?acao=sokoban_mapa_enviar {nome, grade}       -> manda mapa próprio pra moderação (fica "pendente")
+     GET  ?acao=sokoban_meus_mapas                      -> mapas que você enviou, com status
+     POST ?acao=sokoban_mapa_excluir {id}               -> apaga um mapa seu (só se ainda não foi aprovado)
      POST ?acao=push_inscrever  {endpoint, p256dh, auth} -> ativa lembrete de sequência nesse aparelho
      POST ?acao=push_desinscrever {endpoint}            -> desativa nesse aparelho
      GET  ?acao=resumo_responsavel                     -> painel de acompanhamento (mesmo login do jogador)
@@ -204,6 +209,80 @@ try {
         'apelido' => $l['apelido'], 'tipo' => $l['tipo'], 'streakAtual' => (int)$l['streak_atual'], 'streakMelhor' => (int)$l['streak_melhor'],
       ], $porStreak),
     ]);
+  }
+
+  /* ranking do Empurra-Caixas: 1 linha por (jogador, fase) — grava só quando o resultado
+     bate a melhor marca anterior do próprio jogador (menos jogadas é melhor). O UNIQUE KEY
+     em sokoban_pontuacoes garante que nunca duplica linha pra reaproveitar aqui. */
+  if ($acao === 'sokoban_pontuar') {
+    $d = corpo();
+    $faseNumero = (int)($d['faseNumero'] ?? 0);
+    $jogadas = (int)($d['jogadas'] ?? 0);
+    if ($faseNumero < 1 || $jogadas < 1 || $jogadas > 100000) responder(['erro' => 'Pontuação inválida.'], 422);
+    $st = bd()->prepare('SELECT jogadas FROM sokoban_pontuacoes WHERE jogador_id = ? AND fase_numero = ?');
+    $st->execute([$id, $faseNumero]);
+    $atual = $st->fetchColumn();
+    if ($atual === false) {
+      bd()->prepare('INSERT INTO sokoban_pontuacoes (jogador_id, fase_numero, jogadas) VALUES (?, ?, ?)')
+        ->execute([$id, $faseNumero, $jogadas]);
+    } elseif ($jogadas < (int)$atual) {
+      bd()->prepare('UPDATE sokoban_pontuacoes SET jogadas = ? WHERE jogador_id = ? AND fase_numero = ?')
+        ->execute([$jogadas, $id, $faseNumero]);
+    }
+    responder(['ok' => true]);
+  }
+
+  /* top 10 de uma fase do Empurra-Caixas — só apelido, bicho (pro emoji) e jogadas, mesmo
+     espírito de privacidade do ?acao=ranking (nunca moedas ou qualquer outra coisa). */
+  if ($acao === 'sokoban_ranking') {
+    $faseNumero = (int)($_GET['fase'] ?? 0);
+    if ($faseNumero < 1) responder(['erro' => 'Fase inválida.'], 422);
+    $st = bd()->prepare("SELECT j.apelido AS apelido,
+        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(j.estado, '$.tipo')), 'capivara') AS tipo,
+        p.jogadas AS jogadas
+      FROM sokoban_pontuacoes p JOIN jogadores j ON j.id = p.jogador_id
+      WHERE p.fase_numero = ? ORDER BY p.jogadas ASC, p.atualizado_em ASC LIMIT 10");
+    $st->execute([$faseNumero]);
+    responder(['ranking' => array_map(fn($l) => [
+      'apelido' => $l['apelido'], 'tipo' => $l['tipo'], 'jogadas' => (int)$l['jogadas'],
+    ], $st->fetchAll(PDO::FETCH_ASSOC))]);
+  }
+
+  /* jogador envia um mapa próprio do Empurra-Caixas — fica "pendente" até o hostmaster
+     aprovar (aba Sokoban > Mapas enviados) ou rejeitar. Mesma validação estrutural das
+     fases oficiais (validarSokobanGrade, em bd.php). */
+  if ($acao === 'sokoban_mapa_enviar') {
+    $d = corpo();
+    $nome = trim((string)($d['nome'] ?? ''));
+    $grade = (string)($d['grade'] ?? '');
+    if ($nome === '') $nome = 'Mapa sem nome';
+    if (mb_strlen($nome) > 60) responder(['erro' => 'O nome do mapa pode ter no máximo 60 letras.'], 422);
+    $erro = validarSokobanGrade($grade);
+    if ($erro) responder(['erro' => $erro], 422);
+    bd()->prepare('INSERT INTO sokoban_mapas_jogadores (jogador_id, nome, grade) VALUES (?, ?, ?)')
+      ->execute([$id, $nome, $grade]);
+    responder(['ok' => true, 'id' => (int)bd()->lastInsertId()]);
+  }
+
+  /* mapas que ESSE jogador já enviou — pra listar no Perfil, com status de moderação e
+     poder jogar o próprio mapa de novo a qualquer momento (aprovado ou não). */
+  if ($acao === 'sokoban_meus_mapas') {
+    $st = bd()->prepare('SELECT id, nome, grade, status, fase_numero_aprovada, criado_em
+      FROM sokoban_mapas_jogadores WHERE jogador_id = ? ORDER BY criado_em DESC');
+    $st->execute([$id]);
+    responder(['mapas' => array_map(fn($m) => [
+      'id' => (int)$m['id'], 'nome' => $m['nome'], 'grade' => $m['grade'], 'status' => $m['status'],
+      'faseNumeroAprovada' => $m['fase_numero_aprovada'] !== null ? (int)$m['fase_numero_aprovada'] : null,
+    ], $st->fetchAll(PDO::FETCH_ASSOC))]);
+  }
+
+  /* apaga um mapa próprio — só se ainda não foi aprovado (virar fase oficial é definitivo;
+     tirar essa fase do jogo é lá na aba Sokoban do painel, não aqui). */
+  if ($acao === 'sokoban_mapa_excluir') {
+    $mapaId = (int)(corpo()['id'] ?? 0);
+    $st = bd()->prepare("DELETE FROM sokoban_mapas_jogadores WHERE id = ? AND jogador_id = ? AND status != 'aprovado'");
+    $st->execute([$mapaId, $id]);
+    responder(['ok' => true]);
   }
 
   /* inscrição de notificação push (lembrete de sequência, opcional — ativado no Perfil).

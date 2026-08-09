@@ -131,6 +131,9 @@
      GET  ?acao=sokoban_fase_obter     ?id=xx
      POST ?acao=sokoban_fase_salvar    {id?, numero, nome, grade, publicada} -> sem id cria uma fase nova
      POST ?acao=sokoban_fase_excluir   {id}
+     GET  ?acao=sokoban_mapas_listar   ?status=pendente|aprovado|rejeitado (padrão pendente)
+     POST ?acao=sokoban_mapa_aprovar   {id} -> vira fase oficial nova, publicada
+     POST ?acao=sokoban_mapa_rejeitar  {id}
    ========================================================= */
 
 declare(strict_types=1);
@@ -605,34 +608,8 @@ function validarMissao(array $m): ?string {
   return null;
 }
 
-/* Grade de uma fase do Empurra-Caixas (minigame estilo Sokoban) — mesma notação que o
-   parser de app.html usa: # parede, @ jogador, $ caixa, . alvo, + jogador-no-alvo,
-   * caixa-no-alvo, ^ espinho, % gatilho, D porta, espaço = chão. Só confere estrutura
-   (exatamente 1 jogador, caixas >= alvos, caracteres válidos, tamanho razoável) — não roda
-   um solver aqui pra confirmar que dá pra resolver (isso o admin confere jogando a fase
-   depois de publicar). */
-function validarSokobanGrade(string $grade): ?string {
-  if (trim($grade) === '') return '"grade" não pode ficar vazia.';
-  if (mb_strlen($grade) > 3000) return 'A grade tá grande demais (máximo 3000 caracteres).';
-  $linhas = explode("\n", $grade);
-  if (count($linhas) < 3 || count($linhas) > 30) return 'A grade precisa ter de 3 a 30 linhas.';
-  foreach ($linhas as $i => $linha) {
-    if (mb_strlen($linha) > 40) return 'Linha ' . ($i + 1) . ': no máximo 40 colunas.';
-    if (preg_match('/[^ #@\$.+*^%D]/', $linha)) {
-      return 'Linha ' . ($i + 1) . ': só pode ter espaço, # @ $ . + * ^ % D.';
-    }
-  }
-  $jogadores = 0; $caixas = 0; $alvos = 0;
-  foreach ($linhas as $linha) {
-    $jogadores += substr_count($linha, '@') + substr_count($linha, '+');
-    $caixas += substr_count($linha, '$') + substr_count($linha, '*');
-    $alvos += substr_count($linha, '.') + substr_count($linha, '+') + substr_count($linha, '*');
-  }
-  if ($jogadores !== 1) return "A grade precisa ter exatamente 1 jogador (@ ou +) — tem $jogadores.";
-  if ($alvos < 1) return 'A grade precisa ter pelo menos 1 alvo (.).';
-  if ($caixas < $alvos) return "Tem menos caixas ($caixas) do que alvos ($alvos) — impossível de resolver.";
-  return null;
-}
+/* validarSokobanGrade() mudou pra bd.php (compartilhada com estado.php, que valida o mesmo
+   jeito o mapa que um jogador envia pra moderação — ver ?acao=sokoban_mapa_enviar). */
 
 /* Espelha exatamente o que cada INICIAR_BLOCO de app.html espera — um bloco
    com formato errado não trava o admin aqui, trava o aluno lá na hora de
@@ -1065,6 +1042,7 @@ try {
       'denunciasPendentes' => (int)$bdc->query("SELECT
           (SELECT COUNT(*) FROM mensagens WHERE denunciada = 1 AND removida = 0)
           + (SELECT COUNT(*) FROM forum_posts WHERE denunciado = 1 AND removido = 0)")->fetchColumn(),
+      'sokobanMapasPendentes' => (int)$bdc->query("SELECT COUNT(*) FROM sokoban_mapas_jogadores WHERE status = 'pendente'")->fetchColumn(),
       'mensagensRemovidas' => (int)$bdc->query('SELECT COUNT(*) FROM mensagens WHERE removida = 1')->fetchColumn(),
       'postsRemovidos' => (int)$bdc->query('SELECT COUNT(*) FROM forum_posts WHERE removido = 1')->fetchColumn(),
       'totalAmizades' => (int)$bdc->query("SELECT COUNT(*) FROM amizades WHERE status = 'aceita'")->fetchColumn(),
@@ -2661,6 +2639,49 @@ try {
     $d = corpo();
     $id = (int)($d['id'] ?? 0);
     bd()->prepare('DELETE FROM sokoban_fases WHERE id = ?')->execute([$id]);
+    responder(['ok' => true]);
+  }
+
+  /* ---------- Empurra-Caixas: mapas enviados por jogador (moderação) ----------
+     Um jogador manda o mapa dele (ver estado.php, sokoban_mapa_enviar) e fica "pendente"
+     até o hostmaster aprovar (vira uma fase oficial nova, numerada) ou rejeitar. */
+  if ($acao === 'sokoban_mapas_listar') {
+    $status = (string)($_GET['status'] ?? 'pendente');
+    if (!in_array($status, ['pendente', 'aprovado', 'rejeitado'], true)) $status = 'pendente';
+    $st = bd()->prepare('SELECT m.id, m.nome, m.grade, m.status, m.fase_numero_aprovada, m.criado_em, j.apelido
+      FROM sokoban_mapas_jogadores m JOIN jogadores j ON j.id = m.jogador_id
+      WHERE m.status = ? ORDER BY m.criado_em ASC');
+    $st->execute([$status]);
+    responder(['mapas' => array_map(fn($m) => [
+      'id' => (int)$m['id'], 'nome' => $m['nome'], 'grade' => $m['grade'], 'status' => $m['status'],
+      'faseNumeroAprovada' => $m['fase_numero_aprovada'] !== null ? (int)$m['fase_numero_aprovada'] : null,
+      'apelido' => $m['apelido'], 'criadoEm' => $m['criado_em'],
+    ], $st->fetchAll(PDO::FETCH_ASSOC))]);
+  }
+
+  /* aprova: vira fase oficial nova (número = maior atual + 1), publicada de cara. A grade
+     já foi validada no envio (estado.php), mas confere de novo aqui — nunca custa nada e
+     protege contra o formato mudar entre o envio e a aprovação. */
+  if ($acao === 'sokoban_mapa_aprovar') {
+    $mapaId = (int)(corpo()['id'] ?? 0);
+    $st = bd()->prepare("SELECT id, nome, grade FROM sokoban_mapas_jogadores WHERE id = ? AND status = 'pendente'");
+    $st->execute([$mapaId]);
+    $mapa = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$mapa) responder(['erro' => 'Mapa não encontrado (ou já foi decidido).'], 404);
+    $erro = validarSokobanGrade($mapa['grade']);
+    if ($erro) responder(['erro' => 'Esse mapa não passa mais na validação: ' . $erro], 422);
+    $proximoNumero = (int)bd()->query('SELECT COALESCE(MAX(numero), 0) + 1 FROM sokoban_fases')->fetchColumn();
+    bd()->prepare('INSERT INTO sokoban_fases (numero, nome, grade, publicada) VALUES (?, ?, ?, 1)')
+      ->execute([$proximoNumero, $mapa['nome'] ?: ('Fase ' . $proximoNumero), $mapa['grade']]);
+    bd()->prepare("UPDATE sokoban_mapas_jogadores SET status = 'aprovado', fase_numero_aprovada = ? WHERE id = ?")
+      ->execute([$proximoNumero, $mapaId]);
+    responder(['ok' => true, 'faseNumero' => $proximoNumero]);
+  }
+
+  if ($acao === 'sokoban_mapa_rejeitar') {
+    $mapaId = (int)(corpo()['id'] ?? 0);
+    bd()->prepare("UPDATE sokoban_mapas_jogadores SET status = 'rejeitado' WHERE id = ? AND status = 'pendente'")
+      ->execute([$mapaId]);
     responder(['ok' => true]);
   }
 

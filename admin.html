@@ -40,6 +40,7 @@ aside nav button{
 }
 aside nav button:hover{opacity:1;background:rgba(255,255,255,.08)}
 aside nav button.ativo{opacity:1;background:rgba(255,255,255,.16)}
+.badge-nav{display:inline-block;background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;vertical-align:middle}
 aside .rodape-lateral{margin-top:auto;font-size:12px;opacity:.7}
 aside .rodape-lateral button{width:100%;margin-top:10px;background:rgba(255,255,255,.1);border:none;color:#fff;padding:9px;border-radius:8px;font-weight:800;cursor:pointer}
 main{flex:1;padding:26px 32px;max-width:980px}
@@ -318,7 +319,7 @@ body.conectando-fluxo{cursor:crosshair}
       <button data-aba="itens">🔭 Itens</button>
       <button data-aba="moveis">🛋️ Móveis</button>
       <button data-aba="arcade">🕹️ Arcade</button>
-      <button data-aba="sokoban">📦 Sokoban</button>
+      <button data-aba="sokoban">📦 Sokoban <span id="badge-sokoban-pendentes" class="badge-nav" hidden></span></button>
       <button data-aba="temporadas">🎉 Temporadas</button>
       <button data-aba="lojas">🏪 Lojas</button>
       <button data-aba="mundos">🎒 Mundos</button>
@@ -1037,6 +1038,19 @@ body.conectando-fluxo{cursor:crosshair}
       </form>
 
       <div class="painel"><table id="tabela-sokoban"></table></div>
+
+      <h3 style="margin-top:26px">Mapas enviados por jogadores</h3>
+      <p class="sub">quem cria um mapa no jogo pode mandar pra moderação — aprovar vira uma fase oficial nova (numerada, publicada de cara); rejeitar só descarta, sem apagar o mapa de quem criou (ele continua jogando o próprio mapa numa boa).</p>
+      <div class="linha3" style="max-width:420px">
+        <div><label>ver</label>
+          <select id="sokoban-mapas-filtro">
+            <option value="pendente">pendentes</option>
+            <option value="aprovado">aprovados</option>
+            <option value="rejeitado">rejeitados</option>
+          </select>
+        </div>
+      </div>
+      <div id="lista-sokoban-mapas" style="display:flex;flex-direction:column;gap:12px;margin-top:12px"></div>
     </section>
 
     <section id="aba-temporadas" class="oculto">
@@ -1441,7 +1455,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   if(b.dataset.aba === 'arcade') carregarArcade();
   if(b.dataset.aba === 'temporadas') carregarTemporadas();
   if(b.dataset.aba === 'lojas') carregarLojas();
-  if(b.dataset.aba === 'sokoban') carregarFasesSokoban();
+  if(b.dataset.aba === 'sokoban') { carregarFasesSokoban(); carregarSokobanMapas(); }
 });
 
 /* ---------- painel (métricas) ---------- */
@@ -1464,6 +1478,11 @@ async function carregarPainel(){
   $('#lista-duvidas-painel').innerHTML = m.licoesComMaisDuvidas.length
     ? m.licoesComMaisDuvidas.map(l => `<p style="margin:4px 0"><b>${l.perguntas}</b> pergunta${l.perguntas===1?'':'s'} — ${esc(l.titulo)}</p>`).join('')
     : '<p class="sub" style="margin:0">Nenhuma dúvida postada ainda.</p>';
+  // "pinga" no painel: badge vermelho na aba Sokoban quando tem mapa de jogador esperando
+  // aprovação — atualiza sempre que o Painel carrega (é a aba padrão ao abrir o admin)
+  const badgeSokoban = $('#badge-sokoban-pendentes');
+  badgeSokoban.textContent = m.sokobanMapasPendentes;
+  badgeSokoban.hidden = m.sokobanMapasPendentes === 0;
 }
 
 /* ---------- mapas (cenas + pontos clicáveis) ----------
@@ -3654,10 +3673,11 @@ $('#btn-redimensionar-sokoban').onclick = () => {
   const largura = Math.max(3, Math.min(24, Number($('#sokoban-largura').value) || 9));
   const altura = Math.max(3, Math.min(24, Number($('#sokoban-altura').value) || 8));
   const nova = gradeVaziaSokoban(largura, altura);
-  // preserva o que já tinha desenhado, dentro dos limites novos (encolher corta, crescer
-  // preenche com parede na borda nova)
-  for(let r=0; r<Math.min(altura, gradeEditorSokoban.length); r++){
-    for(let c=0; c<Math.min(largura, gradeEditorSokoban[r]?.length||0); c++){
+  // preserva o MIOLO do que já tinha desenhado (nunca a borda antiga) — copiar a borda
+  // também podia pintar parede/chão por cima da linha/coluna errada quando ela caía num
+  // lugar que virou meio de grade na nova, deixando a grade sem parede fechando os lados
+  for(let r=1; r<altura-1 && r<gradeEditorSokoban.length-1; r++){
+    for(let c=1; c<largura-1 && c<(gradeEditorSokoban[r]?.length||0)-1; c++){
       nova[r][c] = gradeEditorSokoban[r][c];
     }
   }
@@ -3742,6 +3762,53 @@ $('#form-fase-sokoban').addEventListener('submit', async e => {
     carregarFasesSokoban();
   }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
 });
+
+/* ---------- mapas do Empurra-Caixas enviados por jogador (moderação) ----------
+   pré-visualização somada do mesmo jeito da grade do editor (classeCelulaSokoban /
+   conteudoCelulaSokoban), só que sem clique — é read-only aqui, decidir é aprovar/rejeitar. */
+function gradeSokobanPreviaHTML(grade){
+  const linhas = textoParaGradeSokoban(grade);
+  const largura = linhas[0]?.length || 0;
+  return `<div class="editor-grade-sokoban" style="grid-template-columns:repeat(${largura}, 20px);pointer-events:none">
+    ${linhas.map(linha => linha.map(ch => `<div class="soko-cel-editor ${classeCelulaSokoban(ch)}">${conteudoCelulaSokoban(ch)}</div>`).join('')).join('')}
+  </div>`;
+}
+async function carregarSokobanMapas(){
+  const status = $('#sokoban-mapas-filtro').value;
+  const d = await api('sokoban_mapas_listar', {query:`&status=${status}`}).catch(() => ({mapas: []}));
+  const lista = $('#lista-sokoban-mapas');
+  if(!d.mapas.length){
+    lista.innerHTML = `<p class="sub">Nenhum mapa ${status === 'pendente' ? 'pendente' : status} no momento.</p>`;
+    return;
+  }
+  lista.innerHTML = d.mapas.map(m => `
+    <div class="painel" style="padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div>
+          <b>${esc(m.nome)}</b> <span class="sub">de ${esc(m.apelido)}</span><br>
+          <span class="sub">${new Date(m.criadoEm).toLocaleString('pt-BR')}${m.faseNumeroAprovada ? ` · virou a Fase ${m.faseNumeroAprovada}` : ''}</span>
+        </div>
+        ${m.status === 'pendente' ? `<div style="display:flex;gap:8px">
+          <button class="btn mata" onclick="aprovarSokobanMapa(${m.id})">✅ Aprovar</button>
+          <button class="btn erro" onclick="rejeitarSokobanMapa(${m.id})">✖️ Rejeitar</button>
+        </div>` : ''}
+      </div>
+      <div style="overflow-x:auto;margin-top:10px">${gradeSokobanPreviaHTML(m.grade)}</div>
+    </div>`).join('');
+}
+window.aprovarSokobanMapa = async (id) => {
+  if(!confirm('Aprovar esse mapa? Ele vira uma fase oficial nova (publicada) na hora.')) return;
+  try{
+    await api('sokoban_mapa_aprovar', {method:'POST', corpo:{id}});
+    carregarSokobanMapas(); carregarFasesSokoban(); carregarPainel();
+  }catch(e){ alert(e.message); }
+};
+window.rejeitarSokobanMapa = async (id) => {
+  if(!confirm('Rejeitar esse mapa? Quem criou continua podendo jogar ele, só não vira fase oficial.')) return;
+  await api('sokoban_mapa_rejeitar', {method:'POST', corpo:{id}});
+  carregarSokobanMapas(); carregarPainel();
+};
+$('#sokoban-mapas-filtro').addEventListener('change', carregarSokobanMapas);
 
 async function carregarTemporadas(){
   const d = await api('temporadas_listar').catch(() => ({temporadas: []}));
