@@ -4604,6 +4604,15 @@ const FERRAMENTAS_SOKOBAN_APP = [
 ];
 let gradeEditorSokobanApp = [];
 let ferramentaAtualSokobanApp = '#';
+// tamanhos fixos (não dá pra digitar um número qualquer) — todos dentro da faixa das fases
+// oficiais (até 17×12), que já são as testadas contra o redimensionamento responsivo da
+// tela de jogo (dimensionarGrade calcula o tamanho da célula a partir do espaço real
+// disponível); um mapa maior que isso podia ficar minúsculo ou cortado em tela pequena
+const TAMANHOS_SOKOBAN_APP = [
+  {valor:'7x6', rotulo:'Pequeno (7×6)'},
+  {valor:'11x9', rotulo:'Médio (11×9)'},
+  {valor:'15x12', rotulo:'Grande (15×12)'},
+];
 function gradeVaziaSokobanApp(largura, altura){
   const grade = [];
   for(let r=0; r<altura; r++){
@@ -4673,27 +4682,24 @@ window._selecionarFerramentaSokobanApp = ch => {
   document.querySelectorAll('#paleta-sokoban .ferramenta-sokoban').forEach(b => b.classList.toggle('ativa', b.dataset.ch === ch));
 };
 function jogoSokobanCriarMapa(nomeExistente, gradeExistente){
-  gradeEditorSokobanApp = gradeExistente ? textoParaGradeSokobanApp(gradeExistente) : (gradeEditorSokobanApp.length ? gradeEditorSokobanApp : gradeVaziaSokobanApp(9, 8));
+  gradeEditorSokobanApp = gradeExistente ? textoParaGradeSokobanApp(gradeExistente) : (gradeEditorSokobanApp.length ? gradeEditorSokobanApp : gradeVaziaSokobanApp(11, 9));
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="jogoSokobanSelecionarFase()">Voltar</button>
     <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Desenhe seu próprio mapa! Escolha uma ferramenta e toque numa célula da grade pra pintar. Precisa de exatamente 1 você (🦫), pelo menos 1 alvo (🟨) e caixas (📦) suficientes pra cobrir os alvos. Depois é só testar — e, se curtir, mandar pro professor decidir se vira uma fase de verdade do jogo.')">?</button>
     <div class="titulo-secao"><h2>🎨 Criar meu mapa</h2><small>desenhe, teste e, se quiser, envie pro jogo</small></div>
     <label style="font-weight:800;font-size:13px;display:block;margin:8px 0 4px">Nome do mapa</label>
     <input id="sokoban-app-nome" type="text" maxlength="60" value="${esc(nomeExistente || '')}" placeholder="ex.: Labirinto do Bicho" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--contorno)">
-    <div style="display:flex;gap:8px;margin:10px 0;align-items:flex-end">
-      <div><label style="font-size:12px;font-weight:800;display:block">colunas</label><input id="sokoban-app-largura" type="number" value="${gradeEditorSokobanApp[0]?.length||9}" min="3" max="20" style="width:60px;padding:6px"></div>
-      <div><label style="font-size:12px;font-weight:800;display:block">linhas</label><input id="sokoban-app-altura" type="number" value="${gradeEditorSokobanApp.length||8}" min="3" max="18" style="width:60px;padding:6px"></div>
-      <button type="button" class="btn pequeno branco" onclick="window._redimensionarSokobanApp()">Redimensionar</button>
-    </div>
-    <div id="paleta-sokoban" class="paleta-sokoban">
+    <label style="font-weight:800;font-size:13px;display:block;margin:10px 0 4px">Tamanho do mapa</label>
+    <select id="sokoban-app-tamanho" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--contorno)" onchange="window._redimensionarSokobanApp()">
+      ${TAMANHOS_SOKOBAN_APP.map(t => `<option value="${t.valor}" ${t.valor === `${gradeEditorSokobanApp[0]?.length||0}x${gradeEditorSokobanApp.length||0}` ? 'selected' : ''}>${t.rotulo}</option>`).join('')}
+    </select>
+    <div id="paleta-sokoban" class="paleta-sokoban" style="margin-top:10px">
       ${FERRAMENTAS_SOKOBAN_APP.map(f => `<button type="button" class="ferramenta-sokoban ${f.ch===ferramentaAtualSokobanApp?'ativa':''}" data-ch="${f.ch}" onclick="window._selecionarFerramentaSokobanApp('${f.ch}')">${f.emoji} ${esc(f.rotulo)}</button>`).join('')}
     </div>
     <div style="overflow-x:auto;padding:8px 0"><div id="editor-grade-sokoban-app" class="editor-grade-sokoban"></div></div>
     <div id="aviso-sokoban-app" class="aviso-form"></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-      <button class="btn grande" onclick="window._testarSokobanApp()">▶️ Testar</button>
-      <button class="btn grande branco" onclick="window._enviarSokobanApp()">📤 Enviar pro jogo</button>
-    </div>`;
+    <button class="btn grande" style="margin-top:10px" onclick="window._testarSokobanApp()">▶️ Testar</button>
+    <button class="btn grande branco" style="margin-top:10px" onclick="window._enviarSokobanApp()">📤 Enviar pro jogo</button>`;
   renderizarGradeEditorSokobanApp();
   pararLoops = null;
 }
@@ -4703,8 +4709,7 @@ function textoParaGradeSokobanApp(texto){
   return linhas.map(l => { const linha = []; for(let c=0; c<largura; c++) linha.push(l[c] || ' '); return linha; });
 }
 window._redimensionarSokobanApp = () => {
-  const largura = Math.max(3, Math.min(20, Number($('#sokoban-app-largura').value) || 9));
-  const altura = Math.max(3, Math.min(18, Number($('#sokoban-app-altura').value) || 8));
+  const [largura, altura] = $('#sokoban-app-tamanho').value.split('x').map(Number);
   const nova = gradeVaziaSokobanApp(largura, altura);
   // só copia o MIOLO da grade antiga (nunca a borda dela) pro miolo da nova — copiar a
   // borda também podia pintar parede por cima de chão (ou vice-versa) quando a borda antiga
