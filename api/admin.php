@@ -127,6 +127,10 @@
      POST ?acao=item_loja_duplicar    {id, novoId} -> clona um item (fica como rascunho, estoque_vendido zera)
      POST ?acao=item_loja_estoque_resetar {id} -> zera estoque_vendido (repõe o estoque)
      POST ?acao=item_loja_imagem      (multipart: arquivo, slot=id da variante ou vazio p/ imagem base) -> sobe pra assets/lojas/
+     GET  ?acao=sokoban_fases_listar
+     GET  ?acao=sokoban_fase_obter     ?id=xx
+     POST ?acao=sokoban_fase_salvar    {id?, numero, nome, grade, publicada} -> sem id cria uma fase nova
+     POST ?acao=sokoban_fase_excluir   {id}
    ========================================================= */
 
 declare(strict_types=1);
@@ -598,6 +602,35 @@ function validarMissao(array $m): ?string {
   $xp = $premio['xp'] ?? 0;
   if (!is_int($moedas) || $moedas < 0 || $moedas > 500) return '"premio.moedas" precisa ser um número inteiro de 0 a 500.';
   if (!is_int($xp) || $xp < 0 || $xp > 500) return '"premio.xp" precisa ser um número inteiro de 0 a 500.';
+  return null;
+}
+
+/* Grade de uma fase do Empurra-Caixas (minigame estilo Sokoban) — mesma notação que o
+   parser de app.html usa: # parede, @ jogador, $ caixa, . alvo, + jogador-no-alvo,
+   * caixa-no-alvo, ^ espinho, % gatilho, D porta, espaço = chão. Só confere estrutura
+   (exatamente 1 jogador, caixas >= alvos, caracteres válidos, tamanho razoável) — não roda
+   um solver aqui pra confirmar que dá pra resolver (isso o admin confere jogando a fase
+   depois de publicar). */
+function validarSokobanGrade(string $grade): ?string {
+  if (trim($grade) === '') return '"grade" não pode ficar vazia.';
+  if (mb_strlen($grade) > 3000) return 'A grade tá grande demais (máximo 3000 caracteres).';
+  $linhas = explode("\n", $grade);
+  if (count($linhas) < 3 || count($linhas) > 30) return 'A grade precisa ter de 3 a 30 linhas.';
+  foreach ($linhas as $i => $linha) {
+    if (mb_strlen($linha) > 40) return 'Linha ' . ($i + 1) . ': no máximo 40 colunas.';
+    if (preg_match('/[^ #@\$.+*^%D]/', $linha)) {
+      return 'Linha ' . ($i + 1) . ': só pode ter espaço, # @ $ . + * ^ % D.';
+    }
+  }
+  $jogadores = 0; $caixas = 0; $alvos = 0;
+  foreach ($linhas as $linha) {
+    $jogadores += substr_count($linha, '@') + substr_count($linha, '+');
+    $caixas += substr_count($linha, '$') + substr_count($linha, '*');
+    $alvos += substr_count($linha, '.') + substr_count($linha, '+') + substr_count($linha, '*');
+  }
+  if ($jogadores !== 1) return "A grade precisa ter exatamente 1 jogador (@ ou +) — tem $jogadores.";
+  if ($alvos < 1) return 'A grade precisa ter pelo menos 1 alvo (.).';
+  if ($caixas < $alvos) return "Tem menos caixas ($caixas) do que alvos ($alvos) — impossível de resolver.";
   return null;
 }
 
@@ -2576,6 +2609,59 @@ try {
       'item' => array_map(fn($it) => ['id' => $it['id'], 'rotulo' => $marca($it['emoji'] . ' ' . $it['nome'], $it['publicado']), 'publicado' => (bool)$it['publicado']], $itens),
       'loja' => array_map(fn($l) => ['id' => $l['id'], 'rotulo' => $marca($l['emoji'] . ' ' . $l['nome'], $l['publicado']), 'publicado' => (bool)$l['publicado']], $lojas),
     ]);
+  }
+
+  /* ---------- Empurra-Caixas (minigame estilo Sokoban): fases ----------
+     "numero" decide a ordem/identidade da fase pro cliente (não é PRIMARY KEY — "id",
+     o AUTO_INCREMENT, é quem identifica a fase de verdade nesse CRUD). Trocar o texto da
+     grade de uma fase já publicada não afeta quem já jogou; só reaproveita o slot. */
+  if ($acao === 'sokoban_fases_listar') {
+    $linhas = bd()->query('SELECT id, numero, nome, publicada, LENGTH(grade) AS tamanho FROM sokoban_fases ORDER BY numero, id')->fetchAll(PDO::FETCH_ASSOC);
+    responder(['fases' => array_map(fn($f) => [
+      'id' => (int)$f['id'], 'numero' => (int)$f['numero'], 'nome' => $f['nome'],
+      'publicada' => (bool)$f['publicada'], 'tamanho' => (int)$f['tamanho'],
+    ], $linhas)]);
+  }
+
+  if ($acao === 'sokoban_fase_obter') {
+    $id = (int)($_GET['id'] ?? 0);
+    $st = bd()->prepare('SELECT id, numero, nome, grade, publicada FROM sokoban_fases WHERE id = ?');
+    $st->execute([$id]);
+    $f = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$f) responder(['erro' => 'Fase não encontrada.'], 404);
+    responder(['fase' => [
+      'id' => (int)$f['id'], 'numero' => (int)$f['numero'], 'nome' => $f['nome'],
+      'grade' => $f['grade'], 'publicada' => (bool)$f['publicada'],
+    ]]);
+  }
+
+  if ($acao === 'sokoban_fase_salvar') {
+    $d = corpo();
+    $numero = $d['numero'] ?? null;
+    if (!is_int($numero) || $numero < 1 || $numero > 999) responder(['erro' => '"numero" precisa ser um número inteiro de 1 a 999.'], 422);
+    $nome = trim((string)($d['nome'] ?? ''));
+    if (mb_strlen($nome) > 60) responder(['erro' => '"nome" pode ter no máximo 60 caracteres.'], 422);
+    $grade = (string)($d['grade'] ?? '');
+    $erro = validarSokobanGrade($grade);
+    if ($erro) responder(['erro' => $erro], 422);
+    $id = (int)($d['id'] ?? 0);
+    $publicada = !empty($d['publicada']) ? 1 : 0;
+    if ($id > 0) {
+      bd()->prepare('UPDATE sokoban_fases SET numero = ?, nome = ?, grade = ?, publicada = ? WHERE id = ?')
+        ->execute([$numero, $nome, $grade, $publicada, $id]);
+    } else {
+      bd()->prepare('INSERT INTO sokoban_fases (numero, nome, grade, publicada) VALUES (?, ?, ?, ?)')
+        ->execute([$numero, $nome, $grade, $publicada]);
+      $id = (int)bd()->lastInsertId();
+    }
+    responder(['ok' => true, 'id' => $id]);
+  }
+
+  if ($acao === 'sokoban_fase_excluir') {
+    $d = corpo();
+    $id = (int)($d['id'] ?? 0);
+    bd()->prepare('DELETE FROM sokoban_fases WHERE id = ?')->execute([$id]);
+    responder(['ok' => true]);
   }
 
   responder(['erro' => 'Ação desconhecida.'], 404);
