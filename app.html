@@ -678,10 +678,12 @@ body.tela-cheia #app{padding:0;max-width:none}
 .campo-resposta-forum input{flex:1;padding:8px 10px;border:2px solid var(--contorno);border-radius:10px;font-weight:700;font-size:13px}
 
 /* ---------- minigames ----------
-   os 4 tabuleiros têm max-width fixo — sem isso, no PC (onde a tela de Arcade fica em
-   modo "tela-cheia" e o #app perde o limite de 520px), os quadrados esticam até ocupar
-   a largura toda da janela, gigantes e desproporcionais */
-#tabuleiro-memoria{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:360px;margin:0 auto}
+   os outros 3 tabuleiros têm max-width fixo — sem isso, no PC (onde a tela de Arcade
+   fica em modo "tela-cheia" e o #app perde o limite de 520px), os quadrados esticam até
+   ocupar a largura toda da janela, gigantes e desproporcionais. A Memória é diferente:
+   o número de colunas e o tamanho da carta são calculados em JS (dimensionarTabuleiro, dentro
+   de jogoMemoria) pra ocupar o espaço vertical disponível de verdade, em vez de deixar sobra */
+#tabuleiro-memoria{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;justify-content:center;align-content:center;margin:0 auto}
 .carta{aspect-ratio:1;border:var(--borda) solid var(--jabuti-rim);border-bottom-width:6px;border-radius:14px;
   background:var(--jabuti);
   font-size:28px;display:grid;place-items:center;color:transparent;
@@ -1240,6 +1242,7 @@ const estado = {
   fome:72, felicidade:80, energia:90,
   equipado:[], mochila:[], inventario:{},
   licoesFeitas:[], recordes:{memoria:null, memoriaTempo:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0, rua:0, pescaria:0, bolha:0},
+  paresMemoria:6,
   missoes:{}, cenasVisitadas:[], gatilhosAtivos:[], itensColetados:[],
   moveisComprados:[], casaMoveis:[], casaDesbloqueada:false,
   npcsVisitados:[],
@@ -2890,13 +2893,14 @@ function seloTrofeuJogo(jogo){
 
 /* ---------- 8. TELA: ARCADE ---------- */
 RENDER.arcade = () => {
+  const faseMem = infoFaseMemoria();
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
     <div class="titulo-secao"><h2>Arcade</h2><small>ganhe moedas pro seu bicho</small></div>
     ${blocoNpcsDaTela('arcade')}
     <div class="grade">
       <button class="cartao-trilha" onclick="jogoMemoria()">
-        ${seloTrofeuJogo('memoria')}<span class="emoji">🃏</span><h3>Memória do Bicho</h3><p>Ache os pares. Recorde: ${estado.recordes.memoria ?? '—'} jogadas${estado.recordes.memoriaTempo!=null?` (${estado.recordes.memoriaTempo}s)`:''}</p></button>
+        ${seloTrofeuJogo('memoria')}<span class="emoji">🃏</span><h3>Memória do Bicho</h3><p>Ache os pares (fase ${faseMem.fase}/${faseMem.maxFase}). Recorde: ${estado.recordes.memoria ?? '—'} jogadas${estado.recordes.memoriaTempo!=null?` (${estado.recordes.memoriaTempo}s)`:''}</p></button>
       <button class="cartao-trilha" onclick="jogoChuva()">
         <span class="emoji">🍉</span><h3>Chuva de Frutas</h3><p>Recorde: ${estado.recordes.chuva} pontos</p></button>
       <button class="cartao-trilha" onclick="jogoToca()">
@@ -2918,13 +2922,49 @@ RENDER.arcade = () => {
 };
 
 /* --- minigame 1: memória --- */
+// vai de 6 até NAIPES_MEMORIA.length pares, +2 a cada fase concluída — precisa de um par de
+// emoji/chaveSprite por par possível (memoria7+ cai no emoji padrão se não tiver sprite custom)
+const NAIPES_MEMORIA = ['🍉','🐟','🦴','🧀','🍎','🍪','🍌','🍇','🥕','🧁','🍒','🥨'];
+function infoFaseMemoria(){
+  const pares = Math.min(NAIPES_MEMORIA.length, Math.max(6, estado.paresMemoria ?? 6));
+  return { pares, fase: Math.round((pares-6)/2)+1, maxFase: Math.round((NAIPES_MEMORIA.length-6)/2)+1 };
+}
 function jogoMemoria(){
-  const naipes = ['🍉','🐟','🦴','🧀','🍎','🍪'];
+  const { pares, fase } = infoFaseMemoria();
+  const naipes = NAIPES_MEMORIA.slice(0, pares);
   const cartas = [...naipes, ...naipes].sort(()=>Math.random()-.5)
     .map((e,i)=>({i, e, chaveSprite:'memoria'+(naipes.indexOf(e)+1), aberta:false, feita:false, errada:false}));
   let a=null, b=null, jogadas=0, travado=true, emPreview=true;
   let comboAtual=0, maiorCombo=0, inicioTempo=null, cronoTimer=null;
   const tempoDecorrido = () => inicioTempo ? Math.floor((Date.now()-inicioTempo)/1000) : 0;
+  // calcula colunas + tamanho da carta que melhor aproveitam o espaço real que sobra dentro
+  // da #tela-arcade (mesma ideia dos canvas dos outros minigames, só que aqui varrendo
+  // possíveis números de colunas pra maximizar a carta sem estourar largura NEM altura —
+  // sem isso, um grid fixo de 4 colunas fica pequeno e sobra tela vazia embaixo
+  const dimensionarTabuleiro = () => {
+    const board = $('#tabuleiro-memoria');
+    const secao = $('#tela-arcade');
+    if(!board || !secao) return;
+    const refAntes = $('#aviso-preview-mem') || secao.querySelector('.titulo-secao');
+    const gap = 8;
+    const consumidoAntes = refAntes.getBoundingClientRect().bottom - secao.getBoundingClientRect().top;
+    const alturaDisponivel = secao.clientHeight - consumidoAntes - 36;
+    const larguraDisponivel = board.clientWidth - 4;
+    let melhorTam = 0, melhorCols = 4;
+    for(let cols = 2; cols <= cartas.length; cols++){
+      const linhas = Math.ceil(cartas.length / cols);
+      const tam = Math.min(
+        (larguraDisponivel - gap*(cols-1)) / cols,
+        (alturaDisponivel - gap*(linhas-1)) / linhas
+      );
+      if(tam > melhorTam){ melhorTam = tam; melhorCols = cols; }
+    }
+    melhorTam = Math.max(48, Math.min(120, Math.floor(melhorTam)));
+    board.style.gridTemplateColumns = `repeat(${melhorCols}, ${melhorTam}px)`;
+    // o container ocupa a altura toda calculada (não só a das cartas) e o align-content:center
+    // do CSS reparte a sobra igual em cima/embaixo — em vez de uma faixa vazia só embaixo
+    board.style.height = Math.max(0, alturaDisponivel) + 'px';
+  };
   const pinta = () => {
     $('#tabuleiro-memoria').innerHTML = cartas.map(c=>
       `<button class="carta ${c.feita?'par':c.aberta?'virada':''} ${c.errada?'errou':''}" onclick="window._vira(${c.i})">${spriteOuEmoji(c.chaveSprite, c.e)}</button>`).join('');
@@ -2963,6 +3003,8 @@ function jogoMemoria(){
         const premio = premioBase + bonusVelocidade + bonusCombo;
         const novoRecorde = bateuRecorde('memoria', jogadas, true);
         bateuRecorde('memoriaTempo', tempoSegundos, true);
+        const avancouFase = pares < NAIPES_MEMORIA.length;
+        if(avancouFase) estado.paresMemoria = pares + 2;
         estado.energia = lim(estado.energia - 10);
         estado.felicidade = lim(estado.felicidade + 12);
         ganhar(premio, 20);
@@ -2971,29 +3013,34 @@ function jogoMemoria(){
           <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +20</span>
           ${bonusVelocidade>0?`<span class="chip">⚡ +${bonusVelocidade} rapidez</span>`:''}
           ${bonusCombo>0?`<span class="chip">🔥 +${bonusCombo} combo</span>`:''}
-          <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoMemoria()">Jogar de novo</button>
+          <p style="margin:12px 0 0;font-weight:800">${avancouFase ? `🆙 Próxima fase: ${estado.paresMemoria} pares!` : '🏅 Você chegou na fase máxima!'}</p>
+          <button class="btn grande" style="margin-top:10px" onclick="fecharModal(); jogoMemoria()">${avancouFase ? 'Próxima fase' : 'Jogar de novo'}</button>
           <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
       }
     }, acertou ? 260 : 700);
   };
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <div class="titulo-secao"><h2>🃏 Memória do Bicho</h2><small>jogadas: <b id="placar-mem">0</b> · tempo: <b id="cronometro-mem">0s</b></small></div>
+    <div class="titulo-secao"><h2>🃏 Memória do Bicho</h2><small>Fase ${fase} · jogadas: <b id="placar-mem">0</b> · tempo: <b id="cronometro-mem">0s</b></small></div>
     <p id="aviso-preview-mem" class="aviso" style="margin:6px 0">👀 Memorize as cartas...</p>
     <div id="tabuleiro-memoria"${estiloFundoMinigame('memoria')}></div>`;
+  dimensionarTabuleiro();
   pararLoops = contarRegressiva(() => {
     // prévia: mostra o tabuleiro todo virado por um instante antes de travar de novo —
-    // dá uma chance real de decorar antes do cronômetro (e as jogadas) começarem a valer
+    // dá uma chance real de decorar antes do cronômetro (e as jogadas) começarem a valer.
+    // fases maiores (mais cartas) ganham um pouco mais de tempo de prévia
     cartas.forEach(c => c.aberta = true);
     pinta();
+    const duracaoPreview = 2200 + Math.max(0, pares-6)*150;
     const previewTimer = setTimeout(() => {
       cartas.forEach(c => c.aberta = false);
       emPreview = false; travado = false;
       inicioTempo = Date.now();
       $('#aviso-preview-mem')?.remove();
+      dimensionarTabuleiro(); // sem a prévia, sobrou espaço — recalcula pra ocupar tudo
       cronoTimer = setInterval(pinta, 1000);
       pinta();
-    }, 2200);
+    }, duracaoPreview);
     pararLoops = () => { clearTimeout(previewTimer); clearInterval(cronoTimer); };
   });
 }
