@@ -931,7 +931,7 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .ferramenta-sokoban{background:#fff;border:1px solid var(--contorno);border-radius:8px;padding:6px 10px;
   font-weight:800;font-size:12px;cursor:pointer}
 .ferramenta-sokoban.ativa{background:var(--tinta);color:#fff;border-color:var(--tinta)}
-.editor-grade-sokoban{display:inline-grid;gap:1px;background:#ccc;border:2px solid #999;width:max-content;margin:0 auto}
+.editor-grade-sokoban{display:inline-grid;gap:1px;background:#ccc;border:2px solid #999;width:max-content;flex-shrink:0}
 .soko-cel-editor{width:26px;height:26px;border:none;padding:0;font-size:14px;display:grid;place-items:center;cursor:pointer;line-height:1}
 .soko-cel-editor.parede{background:#5D6D7E}
 .soko-cel-editor.chao{background:#F4F1EA}
@@ -4696,7 +4696,7 @@ function jogoSokobanCriarMapa(nomeExistente, gradeExistente){
     <div id="paleta-sokoban" class="paleta-sokoban" style="margin-top:10px">
       ${FERRAMENTAS_SOKOBAN_APP.map(f => `<button type="button" class="ferramenta-sokoban ${f.ch===ferramentaAtualSokobanApp?'ativa':''}" data-ch="${f.ch}" onclick="window._selecionarFerramentaSokobanApp('${f.ch}')">${f.emoji} ${esc(f.rotulo)}</button>`).join('')}
     </div>
-    <div style="overflow-x:auto;padding:8px 0"><div id="editor-grade-sokoban-app" class="editor-grade-sokoban"></div></div>
+    <div style="overflow-x:auto;padding:8px 0;display:flex;justify-content:center"><div id="editor-grade-sokoban-app" class="editor-grade-sokoban"></div></div>
     <div id="aviso-sokoban-app" class="aviso-form"></div>
     <button class="btn grande" style="margin-top:10px" onclick="window._testarSokobanApp()">▶️ Testar</button>
     <button class="btn grande branco" style="margin-top:10px" onclick="window._enviarSokobanApp()">📤 Enviar pro jogo</button>`;
