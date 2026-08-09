@@ -665,6 +665,50 @@ try {
   }
   $pdo->exec('INSERT IGNORE INTO configuracoes (id, casa_fundo, preco_casa) VALUES (1, \'\', 5000)');
 
+  /* Fases do Empurra-Caixas (minigame estilo Sokoban): cada fase é um texto multi-linha na
+     notação clássica — # parede, @ jogador, $ caixa, . alvo, ' ' chão — mais 3 extras deste
+     jogo: ^ espinho (bloqueia só o jogador, caixa passa por cima normal), % gatilho (quando
+     alguma caixa fica em cima, TODAS as portas D destrancam de vez, mesmo que a caixa saia
+     de cima depois) e D porta (parede até destrancar). "numero" é a ordem/identidade da fase
+     pro cliente (estado.faseSokobanDesbloqueada, sokobanCompletadas) — trocar o texto da
+     grade de uma fase existente não quebra o progresso salvo de ninguém, só apagar/renumerar
+     fases quebraria. */
+  $pdo->exec('CREATE TABLE IF NOT EXISTS sokoban_fases (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    numero        INT NOT NULL,
+    nome          VARCHAR(60) NOT NULL DEFAULT \'\',
+    grade         TEXT NOT NULL,
+    publicada     TINYINT(1) NOT NULL DEFAULT 1,
+    criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX (numero)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  // numero não tem UNIQUE no banco de propósito — o upsert do admin.php usa "id" (o
+  // AUTO_INCREMENT) como chave, e valida ali mesmo que não exista outra fase com o mesmo
+  // número antes de salvar (erro claro pro admin, em vez de um ON DUPLICATE KEY silencioso
+  // sobrescrevendo a fase errada por coincidência de número)
+  $sokobanExistentes = (int)$pdo->query('SELECT COUNT(*) FROM sokoban_fases')->fetchColumn();
+  $sokobanSemeadas = 0;
+  if ($sokobanExistentes === 0) {
+    $niveisSokoban = [
+      "#####\n#@  #\n# \$.#\n#####",
+      "######\n#    #\n# \$  #\n#  #@#\n#  . #\n######",
+      "###########\n#@ ########\n#^ ########\n#         #\n###\$###\$###\n### ### ###\n### ### ###\n### ### ###\n###.###.###\n###########",
+      "#############\n#@    #######\n#^ #^ #######\n#           #\n###\$##\$###\$##\n### ## ### ##\n### ## ### ##\n### ## ### ##\n###.##.###.##\n#############",
+      "#########\n#@    ###\n####^ ###\n#       #\n####  ###\n####^ ###\n#       #\n##\$###\$##\n## ### ##\n## ### ##\n##.###.##\n#########",
+      "############\n#@     D   #\n###\$#\$##\$###\n### #%## ###\n### #### ###\n### #### ###\n### #### ###\n###.####.###\n############",
+      "##############\n#@ ###########\n#^ ###########\n#        D   #\n###\$##\$##\$##\$#\n### ##%## ## #\n### ##### ## #\n###.#####.##.#\n##############",
+      "##############\n#@    ########\n#^ #^ ########\n#            #\n###\$###\$###\$##\n### ### ### ##\n### ### ### ##\n### ### ### ##\n### ### ### ##\n### ### ### ##\n###.###.###.##\n##############",
+      "################\n#@ #############\n#^ #############\n#            D #\n###\$###\$\$##\$##\$#\n### ### %## ## #\n### ### ### ## #\n### ### ### ## #\n###.###.###.##.#\n################",
+      "#################\n#@    ###########\n#^ #^ ###########\n#             D #\n###\$###\$#\$##\$##\$#\n### ### #%## ## #\n### ### #### ## #\n### ### #### ## #\n### ### #### ## #\n### ### #### ## #\n###.###.####.##.#\n#################",
+    ];
+    $insSokoban = $pdo->prepare('INSERT INTO sokoban_fases (numero, nome, grade, publicada) VALUES (?, ?, ?, 1)');
+    foreach ($niveisSokoban as $i => $g) {
+      $insSokoban->execute([$i + 1, 'Fase ' . ($i + 1), $g]);
+      $sokobanSemeadas++;
+    }
+  }
+
   // pasta das imagens enviadas pelo painel (as do repositório continuam em assets/)
   $pastaCenas = dirname(__DIR__) . '/assets/cenas';
   if (!is_dir($pastaCenas)) @mkdir($pastaCenas, 0755, true);
@@ -890,6 +934,9 @@ try {
      . ($palavrasSemeadas
         ? '<p>🛡️ ' . $palavrasSemeadas . ' palavras proibidas de partida cadastradas (Moderação > Palavras proibidas) — é só uma base mínima, complete com o que fizer sentido pra sua turma.</p>'
         : '<p>🛡️ A lista de palavras proibidas já existia — nada foi trocado.</p>')
+     . ($sokobanSemeadas
+        ? '<p>📦 ' . $sokobanSemeadas . ' fases do Empurra-Caixas semeadas — edite, reordene ou crie mais em <code>/admin.html</code>, aba Sokoban.</p>'
+        : '<p>📦 Já havia fase do Empurra-Caixas cadastrada — nada foi semeado.</p>')
      . '<p>Acesse <code>/admin.html</code> para entrar no painel. Depois é só apagar este arquivo (api/install.php) do servidor, ou deixá-lo — ele nunca sobrescreve conteúdo já existente.</p>';
 } catch (Throwable $e) {
   http_response_code(500);

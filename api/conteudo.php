@@ -323,6 +323,12 @@ try {
     if ($entrada) $minigameConfig[$c['jogo']] = $entrada;
   }
 
+  // fases do Empurra-Caixas (minigame estilo Sokoban) — só publicadas, ordenadas por
+  // "numero" (a identidade que o cliente usa em estado.faseSokobanDesbloqueada/sokobanCompletadas)
+  $saidaSokoban = array_map(fn($f) => [
+    'numero' => (int)$f['numero'], 'nome' => $f['nome'], 'grade' => $f['grade'],
+  ], bd()->query('SELECT numero, nome, grade FROM sokoban_fases WHERE publicada = 1 ORDER BY numero, id')->fetchAll(PDO::FETCH_ASSOC));
+
   echo json_encode([
     'mundos' => $saidaMundos, 'cenas' => $saidaCenas, 'npcs' => $saidaNpcs, 'missoes' => $saidaMissoes,
     'itens' => $saidaItens, 'moveis' => $saidaMoveis, 'casaConfig' => $casaConfig, 'capas' => $capas, 'musica' => $musica,
@@ -330,10 +336,10 @@ try {
     // o par VAPID no api/config.php; sem isso, o botão de lembrete some sozinho no cliente
     'vapidPublicKey' => defined('VAPID_PUBLIC_KEY') ? VAPID_PUBLIC_KEY : '',
     'spritesMinigame' => $spritesMinigame, 'temporadas' => $saidaTemporadas, 'minigameConfig' => $minigameConfig,
-    'lojas' => $saidaLojas, 'itensLoja' => $saidaItensLoja, 'jornal' => $saidaJornal,
+    'lojas' => $saidaLojas, 'itensLoja' => $saidaItensLoja, 'jornal' => $saidaJornal, 'sokobanFases' => $saidaSokoban,
   ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
   error_log('[bichoteca-conteudo] ' . $e->getMessage());
   http_response_code(500);
-  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => [], 'moveis' => [], 'casaConfig' => ['fundoUrl' => ''], 'capas' => ['lojamoveisImagemUrl' => '', 'lojamoveisAtiva' => false, 'muralImagemUrl' => '', 'muralAtiva' => false], 'musica' => ['url' => '', 'ativa' => false], 'spritesMinigame' => [], 'temporadas' => [], 'minigameConfig' => [], 'lojas' => [], 'itensLoja' => [], 'jornal' => []]);
+  echo json_encode(['mundos' => [], 'cenas' => [], 'npcs' => [], 'missoes' => [], 'itens' => [], 'moveis' => [], 'casaConfig' => ['fundoUrl' => ''], 'capas' => ['lojamoveisImagemUrl' => '', 'lojamoveisAtiva' => false, 'muralImagemUrl' => '', 'muralAtiva' => false], 'musica' => ['url' => '', 'ativa' => false], 'spritesMinigame' => [], 'temporadas' => [], 'minigameConfig' => [], 'lojas' => [], 'itensLoja' => [], 'jornal' => [], 'sokobanFases' => []]);
 }

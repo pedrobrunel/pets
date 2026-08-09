@@ -274,6 +274,20 @@ body.conectando-fluxo{cursor:crosshair}
 .busca{margin-bottom:12px}
 .busca input{max-width:280px}
 .rodape-form{display:flex;gap:8px;margin-top:16px}
+
+/* ---------- editor visual de fases do Sokoban ---------- */
+.paleta-sokoban{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
+.ferramenta-sokoban{background:#fff;border:1px solid var(--contorno);border-radius:8px;padding:6px 10px;
+  font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:5px}
+.ferramenta-sokoban.ativa{background:var(--tinta);color:#fff;border-color:var(--tinta)}
+.editor-grade-sokoban{display:inline-grid;gap:1px;background:#ccc;border:2px solid #999;width:max-content}
+.soko-cel-editor{width:26px;height:26px;border:none;padding:0;font-size:14px;display:grid;place-items:center;cursor:pointer;line-height:1}
+.soko-cel-editor.parede{background:#5D6D7E}
+.soko-cel-editor.chao{background:#F4F1EA}
+.soko-cel-editor.alvo{background:#FDF3D8;box-shadow:inset 0 0 0 2px #F4D160}
+.soko-cel-editor.espinho{background:#FBDCE0}
+.soko-cel-editor.gatilho{background:#E3DBF7}
+.soko-cel-editor.porta{background:#8B5A2B}
 </style>
 </head>
 <body>
@@ -304,6 +318,7 @@ body.conectando-fluxo{cursor:crosshair}
       <button data-aba="itens">🔭 Itens</button>
       <button data-aba="moveis">🛋️ Móveis</button>
       <button data-aba="arcade">🕹️ Arcade</button>
+      <button data-aba="sokoban">📦 Sokoban</button>
       <button data-aba="temporadas">🎉 Temporadas</button>
       <button data-aba="lojas">🏪 Lojas</button>
       <button data-aba="mundos">🎒 Mundos</button>
@@ -984,6 +999,46 @@ body.conectando-fluxo{cursor:crosshair}
       <div id="pagina-arcade-jogo"></div>
     </section>
 
+    <section id="aba-sokoban" class="oculto">
+      <h2>Sokoban — Empurra-Caixas</h2>
+      <p class="sub">fases do minigame "Empurra-Caixas" do Arcade. "Número" decide a ordem/identidade da fase pro jogador — o progresso salvo dele aponta pro número, então trocar o desenho de uma fase já publicada não atrapalha quem já jogou, só reaproveita o número.</p>
+      <button class="btn" id="btn-nova-fase-sokoban" style="margin-bottom:14px">+ Nova fase</button>
+
+      <form id="form-fase-sokoban" class="oculto">
+        <h3 id="titulo-form-fase-sokoban" style="font-size:16px">Nova fase</h3>
+        <input type="hidden" id="sokoban-id" value="0">
+        <div class="linha3">
+          <div><label>número</label><input type="number" id="sokoban-numero" value="1" min="1" max="999"></div>
+          <div><label>nome (opcional)</label><input type="text" id="sokoban-nome" placeholder="ex.: Fase 1"></div>
+          <div style="display:flex;flex-direction:column;justify-content:flex-end"><label class="check" style="margin:0"><input type="checkbox" id="sokoban-publicada" checked style="width:auto"> publicada</label></div>
+        </div>
+
+        <label>tamanho da grade</label>
+        <div class="linha3">
+          <div><input type="number" id="sokoban-largura" value="9" min="3" max="24" placeholder="colunas"></div>
+          <div><input type="number" id="sokoban-altura" value="8" min="3" max="24" placeholder="linhas"></div>
+          <div><button type="button" class="btn branco" id="btn-redimensionar-sokoban" style="width:100%">Redimensionar</button></div>
+        </div>
+
+        <label>ferramenta (clique numa célula da grade abaixo pra pintar)</label>
+        <div id="paleta-sokoban" class="paleta-sokoban"></div>
+
+        <div id="editor-grade-sokoban-wrap" style="overflow-x:auto;padding:8px 0">
+          <div id="editor-grade-sokoban" class="editor-grade-sokoban"></div>
+        </div>
+        <div id="sokoban-validacao" class="aviso-form"></div>
+
+        <div id="sokoban-aviso" class="aviso-form"></div>
+        <div class="rodape-form">
+          <button type="submit" class="btn mata">Salvar fase</button>
+          <button type="button" class="btn branco" id="btn-cancelar-fase-sokoban">Cancelar</button>
+          <button type="button" class="btn erro" id="btn-excluir-fase-sokoban" style="margin-left:auto">Excluir fase</button>
+        </div>
+      </form>
+
+      <div class="painel"><table id="tabela-sokoban"></table></div>
+    </section>
+
     <section id="aba-temporadas" class="oculto">
       <h2>Temporadas — sprites do Arcade por período</h2>
       <p class="sub">crie pacotes de sprite pra datas comemorativas (ex.: "Festa Junina"): defina o período e suba só as imagens que quiser trocar — o resto continua puxando o sprite (ou emoji) padrão da aba Arcade. Quando o período passar, o jogo volta sozinho pro normal.</p>
@@ -1386,6 +1441,7 @@ $$('aside nav button').forEach(b => b.onclick = () => {
   if(b.dataset.aba === 'arcade') carregarArcade();
   if(b.dataset.aba === 'temporadas') carregarTemporadas();
   if(b.dataset.aba === 'lojas') carregarLojas();
+  if(b.dataset.aba === 'sokoban') carregarFasesSokoban();
 });
 
 /* ---------- painel (métricas) ---------- */
@@ -3488,6 +3544,205 @@ function statusTemporada(t){
   if(!t.ativa) return {texto: 'desativada', cls: 'off'};
   return dentroDaAgendaAdmin(t) ? {texto: 'vigente agora', cls: 'on'} : {texto: 'fora do período', cls: 'off'};
 }
+/* ---------- Sokoban (Empurra-Caixas): fases ----------
+   grade guardada como texto multi-linha (mesma notação do parser em app.html): # parede,
+   @ jogador, $ caixa, . alvo, ' ' chão, ^ espinho, % gatilho, D porta. O editor trabalha em
+   cima de uma matriz 2D (gradeEditorSokoban) e só serializa pra texto na hora de salvar. */
+const FERRAMENTAS_SOKOBAN = [
+  {ch:'#', rotulo:'Parede', emoji:'⬛'},
+  {ch:' ', rotulo:'Chão', emoji:'⬜'},
+  {ch:'@', rotulo:'Jogador', emoji:'🦫'},
+  {ch:'$', rotulo:'Caixa', emoji:'📦'},
+  {ch:'.', rotulo:'Alvo', emoji:'🟨'},
+  {ch:'^', rotulo:'Espinho', emoji:'🔺'},
+  {ch:'%', rotulo:'Gatilho', emoji:'🟣'},
+  {ch:'D', rotulo:'Porta', emoji:'🚪'},
+];
+let fasesSokobanCache = [];
+let gradeEditorSokoban = [];
+let ferramentaAtualSokoban = '#';
+
+// canvas em branco: sala com parede só na borda — ponto de partida bem mais prático pro
+// admin clicar (chão livre por dentro) do que um bloco sólido pra ir "escavando"
+function gradeVaziaSokoban(largura, altura){
+  const grade = [];
+  for(let r=0; r<altura; r++){
+    const linha = [];
+    for(let c=0; c<largura; c++) linha.push((r===0 || r===altura-1 || c===0 || c===largura-1) ? '#' : ' ');
+    grade.push(linha);
+  }
+  return grade;
+}
+function textoParaGradeSokoban(texto){
+  const linhas = texto.split('\n');
+  const largura = Math.max(1, ...linhas.map(l => l.length));
+  return linhas.map(l => {
+    const linha = [];
+    for(let c=0; c<largura; c++) linha.push(l[c] || ' ');
+    return linha;
+  });
+}
+function gradeSokobanParaTexto(){
+  return gradeEditorSokoban.map(linha => linha.join('').replace(/ +$/, '')).join('\n');
+}
+function classeCelulaSokoban(ch){
+  if(ch === '#') return 'parede';
+  if(ch === '.' || ch === '+' || ch === '*') return 'alvo';
+  if(ch === '^') return 'espinho';
+  if(ch === '%') return 'gatilho';
+  if(ch === 'D') return 'porta';
+  return 'chao';
+}
+function conteudoCelulaSokoban(ch){
+  if(ch === '@' || ch === '+') return '🦫';
+  if(ch === '$' || ch === '*') return '📦';
+  if(ch === '^') return '🔺';
+  if(ch === '%') return '🟣';
+  return '';
+}
+function renderizarPaletaSokoban(){
+  $('#paleta-sokoban').innerHTML = FERRAMENTAS_SOKOBAN.map(f =>
+    `<button type="button" class="ferramenta-sokoban ${f.ch===ferramentaAtualSokoban?'ativa':''}" onclick="selecionarFerramentaSokoban('${f.ch}')">${f.emoji} ${esc(f.rotulo)}</button>`
+  ).join('');
+}
+window.selecionarFerramentaSokoban = ch => { ferramentaAtualSokoban = ch; renderizarPaletaSokoban(); };
+window.pintarCelulaSokoban = (r, c) => {
+  if(ferramentaAtualSokoban === '@'){
+    // só pode ter 1 jogador — tira de qualquer outra célula antes de pôr aqui
+    gradeEditorSokoban.forEach(linha => linha.forEach((ch, i) => { if(ch === '@' || ch === '+') linha[i] = ' '; }));
+  }
+  gradeEditorSokoban[r][c] = ferramentaAtualSokoban;
+  renderizarGradeEditorSokoban();
+};
+function renderizarGradeEditorSokoban(){
+  const largura = gradeEditorSokoban[0]?.length || 0;
+  const wrap = $('#editor-grade-sokoban');
+  wrap.style.gridTemplateColumns = `repeat(${largura}, 26px)`;
+  wrap.innerHTML = gradeEditorSokoban.map((linha, r) =>
+    linha.map((ch, c) => `<button type="button" class="soko-cel-editor ${classeCelulaSokoban(ch)}" onclick="pintarCelulaSokoban(${r},${c})">${conteudoCelulaSokoban(ch)}</button>`).join('')
+  ).join('');
+  validarGradeSokobanUI();
+}
+// só confere estrutura (1 jogador, caixas >= alvos) — é a mesma checagem do admin.php,
+// espelhada aqui pra avisar ANTES de tentar salvar. Não confirma que dá pra resolver:
+// isso só jogando mesmo (ver README/instruções da aba).
+function validarGradeSokobanUI(){
+  let jogadores=0, caixas=0, alvos=0;
+  for(const linha of gradeEditorSokoban){
+    for(const ch of linha){
+      if(ch==='@'||ch==='+') jogadores++;
+      if(ch==='$'||ch==='*') caixas++;
+      if(ch==='.'||ch==='+'||ch==='*') alvos++;
+    }
+  }
+  const el = $('#sokoban-validacao');
+  const problemas = [];
+  if(jogadores !== 1) problemas.push(`precisa de exatamente 1 jogador (tem ${jogadores})`);
+  if(alvos < 1) problemas.push('precisa de pelo menos 1 alvo');
+  if(caixas < alvos) problemas.push(`tem menos caixas (${caixas}) do que alvos (${alvos})`);
+  el.style.display = 'block';
+  if(problemas.length){
+    el.className = 'aviso-form erro';
+    el.textContent = 'Antes de salvar: ' + problemas.join('; ') + '.';
+  } else {
+    el.className = 'aviso-form ok';
+    el.textContent = `Estrutura ok: 1 jogador, ${caixas} caixa(s), ${alvos} alvo(s). Teste jogando pra confirmar que dá pra resolver.`;
+  }
+  return problemas.length === 0;
+}
+$('#btn-redimensionar-sokoban').onclick = () => {
+  const largura = Math.max(3, Math.min(24, Number($('#sokoban-largura').value) || 9));
+  const altura = Math.max(3, Math.min(24, Number($('#sokoban-altura').value) || 8));
+  const nova = gradeVaziaSokoban(largura, altura);
+  // preserva o que já tinha desenhado, dentro dos limites novos (encolher corta, crescer
+  // preenche com parede na borda nova)
+  for(let r=0; r<Math.min(altura, gradeEditorSokoban.length); r++){
+    for(let c=0; c<Math.min(largura, gradeEditorSokoban[r]?.length||0); c++){
+      nova[r][c] = gradeEditorSokoban[r][c];
+    }
+  }
+  gradeEditorSokoban = nova;
+  renderizarGradeEditorSokoban();
+};
+
+async function carregarFasesSokoban(){
+  const d = await api('sokoban_fases_listar').catch(() => ({fases: []}));
+  fasesSokobanCache = d.fases;
+  $('#tabela-sokoban').innerHTML = `
+    <tr><th>Número</th><th>Nome</th><th>Status</th><th></th></tr>
+    ${fasesSokobanCache.map(f => `<tr>
+      <td>${f.numero}</td>
+      <td>${esc(f.nome)}</td>
+      <td><span class="selo ${f.publicada?'on':'off'}">${f.publicada?'publicada':'rascunho'}</span></td>
+      <td class="acoes">
+        <button class="btn linha branco" onclick="editarFaseSokoban(${f.id})">Editar</button>
+        <button class="btn linha erro" onclick="excluirFaseSokoban(${f.id},'${esc(f.nome)}')">Excluir</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="4">Nenhuma fase ainda.</td></tr>'}`;
+}
+function limparFormFaseSokoban(){
+  $('#form-fase-sokoban').reset();
+  $('#sokoban-id').value = '0';
+  $('#sokoban-aviso').style.display = 'none';
+  $('#btn-excluir-fase-sokoban').classList.add('oculto');
+  ferramentaAtualSokoban = '#';
+  gradeEditorSokoban = gradeVaziaSokoban(9, 8);
+  renderizarPaletaSokoban();
+  renderizarGradeEditorSokoban();
+}
+$('#btn-nova-fase-sokoban').onclick = () => {
+  limparFormFaseSokoban();
+  const proximoNumero = fasesSokobanCache.length ? Math.max(...fasesSokobanCache.map(f=>f.numero)) + 1 : 1;
+  $('#sokoban-numero').value = proximoNumero;
+  $('#sokoban-nome').value = 'Fase ' + proximoNumero;
+  $('#titulo-form-fase-sokoban').textContent = 'Nova fase';
+  $('#form-fase-sokoban').classList.remove('oculto');
+  $('#form-fase-sokoban').scrollIntoView({behavior:'smooth'});
+};
+$('#btn-cancelar-fase-sokoban').onclick = () => $('#form-fase-sokoban').classList.add('oculto');
+window.editarFaseSokoban = async (id) => {
+  const r = await api('sokoban_fase_obter', {query:`&id=${id}`}).catch(e => { alert(e.message); return null; });
+  if(!r) return;
+  const f = r.fase;
+  limparFormFaseSokoban();
+  $('#sokoban-id').value = f.id;
+  $('#sokoban-numero').value = f.numero;
+  $('#sokoban-nome').value = f.nome;
+  $('#sokoban-publicada').checked = f.publicada;
+  gradeEditorSokoban = textoParaGradeSokoban(f.grade);
+  $('#sokoban-largura').value = gradeEditorSokoban[0]?.length || 0;
+  $('#sokoban-altura').value = gradeEditorSokoban.length;
+  renderizarGradeEditorSokoban();
+  $('#btn-excluir-fase-sokoban').classList.remove('oculto');
+  $('#titulo-form-fase-sokoban').textContent = 'Editar fase ' + f.numero;
+  $('#form-fase-sokoban').classList.remove('oculto');
+  $('#form-fase-sokoban').scrollIntoView({behavior:'smooth'});
+};
+window.excluirFaseSokoban = async (id, nome) => {
+  if(!confirm(`Excluir a fase "${nome}"? Quem já tinha essa fase desbloqueada não perde o progresso — ela só some da lista de fases jogáveis.`)) return;
+  await api('sokoban_fase_excluir', {method:'POST', corpo:{id}});
+  $('#form-fase-sokoban').classList.add('oculto');
+  carregarFasesSokoban();
+};
+$('#form-fase-sokoban').addEventListener('submit', async e => {
+  e.preventDefault();
+  const aviso = $('#sokoban-aviso');
+  aviso.style.display = 'none';
+  if(!validarGradeSokobanUI()){
+    aviso.className = 'aviso-form erro'; aviso.textContent = 'Corrija os problemas da grade (veja o aviso acima do botão Salvar) antes de continuar.'; aviso.style.display = 'block';
+    return;
+  }
+  try{
+    const id = Number($('#sokoban-id').value) || 0;
+    await api('sokoban_fase_salvar', {method:'POST', corpo:{
+      id, numero: Number($('#sokoban-numero').value) || 1, nome: $('#sokoban-nome').value.trim(),
+      grade: gradeSokobanParaTexto(), publicada: $('#sokoban-publicada').checked,
+    }});
+    $('#form-fase-sokoban').classList.add('oculto');
+    carregarFasesSokoban();
+  }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
+});
+
 async function carregarTemporadas(){
   const d = await api('temporadas_listar').catch(() => ({temporadas: []}));
   temporadasCache = d.temporadas;
