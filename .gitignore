@@ -23,3 +23,8 @@ Thumbs.db
 assets/cenas/*
 !assets/cenas/.gitkeep
 !assets/cenas/.htaccess
+
+# fundo, som e miniatura de cada minigame do Arcade, enviados pelo painel — mesmo esquema
+# de assets/cenas/ acima: vivem no servidor, não no repositório.
+assets/minigames/*
+!assets/minigames/.gitkeep
