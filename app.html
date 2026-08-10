@@ -298,11 +298,18 @@ body.tela-cheia #app{padding:0;max-width:none}
    o cartão inteiro, com o nome por cima. O fundo em si (gradiente OU imagem+véu escuro) vem
    inline por cartão (cartaoDestaqueArcade), não daqui — aqui só o que não muda por jogo. */
 .carrossel-item.destaque-jogo{
-  position:relative;width:172px;height:140px;border-radius:22px;padding:14px;
-  align-items:flex-start;justify-content:flex-end;text-align:left;gap:3px;
+  position:relative;width:196px;height:156px;border-radius:24px;padding:16px;
+  align-items:flex-start;justify-content:flex-end;text-align:left;gap:4px;
+  border-bottom:8px solid var(--cor-borda);box-shadow:0 8px 16px -8px rgba(0,0,0,.4);
 }
-.destaque-emoji{position:absolute;top:12px;left:14px;font-size:34px;line-height:1;filter:drop-shadow(0 2px 2px rgba(0,0,0,.2))}
-.destaque-nome{font-family:'Baloo 2';font-size:16px;line-height:1.15;text-shadow:0 2px 3px rgba(0,0,0,.5)}
+.carrossel-item.destaque-jogo:active{border-bottom-width:3px}
+.destaque-emoji{position:absolute;top:16px;left:16px;font-size:44px;line-height:1;filter:drop-shadow(0 3px 3px rgba(0,0,0,.25))}
+.destaque-nome{font-family:'Baloo 2';font-size:18px;line-height:1.2;text-shadow:0 2px 4px rgba(0,0,0,.55);width:calc(100% - 40px)}
+.destaque-jogar{
+  position:absolute;bottom:14px;right:14px;width:34px;height:34px;border-radius:50%;
+  background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;
+  font-size:14px;box-shadow:0 2px 5px rgba(0,0,0,.3);color:var(--tinta);
+}
 .cena-quadro{position:relative;height:100%;display:inline-block;vertical-align:top;line-height:0}
 .cena-img{display:block;height:100%;width:auto;max-width:none;-webkit-user-drag:none;user-select:none;pointer-events:none}
 .predio{
@@ -518,19 +525,31 @@ body.tela-cheia #app{padding:0;max-width:none}
   position:absolute;top:10px;right:-30px;transform:rotate(38deg);
   background:var(--tinta);color:#ECF0F1;font-size:10px;padding:3px 32px;font-weight:900;
 }
-/* variação usada só pelos cards do Arcade (.arcade) — cor por jogo (--cor/--cor-borda,
-   vem inline de cada cartaoJogoArcade) num degradê sutil + ícone num badge redondo, em vez
-   do card genérico branco-liso usado pelas Trilhas/lições */
-.cartao-trilha.arcade{background:linear-gradient(165deg, color-mix(in srgb, var(--cor,#fff) 16%, #fff), #fff 60%)}
+/* lista "Todos os jogos" do Arcade — uma linha por jogo (ícone + nome/recorde + seta), no
+   lugar de uma grade de cartões quadrados repetidos: cabe muito mais jogo por tela e escaneia
+   mais rápido (o cartão quadrado grande só compensa quando tem poucos itens; com 11 jogos
+   virava parede de cards genéricos, quase todos "Recorde: 0 pontos" pra quem tá começando). */
+.lista-jogos-arcade{display:flex;flex-direction:column;gap:8px}
+.linha-jogo-arcade{
+  display:flex;align-items:center;gap:12px;text-align:left;padding:9px 12px;
+  border:var(--borda) solid var(--contorno);border-bottom-width:5px;border-radius:16px;
+  background:linear-gradient(100deg, color-mix(in srgb, var(--cor,#fff) 14%, #fff), #fff 55%);
+  transition:transform .1s ease, border-bottom-width .1s ease;
+}
+.linha-jogo-arcade:active{transform:translateY(3px);border-bottom-width:1px}
 .icone-jogo-arcade{
-  width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  flex:none;width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;
   background:var(--cor,var(--ceu));font-size:24px;box-shadow:0 3px 0 var(--cor-borda,var(--ceu-rim));
-  margin-bottom:4px;
 }
 /* com miniatura enviada no painel, o badge vira uma fotinho de verdade em vez do emoji —
    mesmo tamanho/cantos, só troca o conteúdo */
 .icone-jogo-arcade.tem-imagem{padding:0;overflow:hidden}
 .icone-jogo-arcade.tem-imagem img{width:100%;height:100%;object-fit:cover;display:block}
+.info-linha-jogo{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.info-linha-jogo b{font-family:'Baloo 2';font-size:15px;line-height:1.2}
+.info-linha-jogo b .selo-trofeu-card{position:static;font-size:13px}
+.info-linha-jogo small{font-size:11.5px;font-weight:700;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seta-linha-jogo{flex:none;font-size:22px;font-weight:900;opacity:.25}
 .escolha-bicho{
   background:#fff;border:var(--borda) solid var(--contorno);border-bottom-width:9px;border-radius:var(--r);
   padding:10px 8px 14px;text-align:center;transition:transform .1s ease, border-bottom-width .1s ease;
@@ -3099,28 +3118,28 @@ function seloTrofeuJogo(jogo){
 const JOGOS_ARCADE = [
   {id:'memoria', emoji:'🃏', nome:'Memória do Bicho', cor:'ceu', onclick:'jogoMemoria()',
     descricao:() => { const f = infoFaseMemoria(); return `Ache os pares (fase ${f.fase}/${f.maxFase})`; },
-    recorde:() => estado.recordes.memoria!=null ? `${estado.recordes.memoria} jogadas${estado.recordes.memoriaTempo!=null?` (${estado.recordes.memoriaTempo}s)`:''}` : '—'},
+    recorde:() => estado.recordes.memoria!=null ? `${estado.recordes.memoria} jogadas${estado.recordes.memoriaTempo!=null?` (${estado.recordes.memoriaTempo}s)`:''}` : null},
   {id:'chuva', emoji:'🍉', nome:'Chuva de Frutas', cor:'manga', onclick:'jogoChuva()',
-    descricao:() => 'Pegue as frutas que caem', recorde:() => `${estado.recordes.chuva} pontos`},
+    descricao:() => 'Pegue as frutas que caem', recorde:() => estado.recordes.chuva>0 ? `${estado.recordes.chuva} pontos` : null},
   {id:'toca', emoji:'🕳️', nome:'Toca do Bicho', cor:'jabuti', onclick:'jogoToca()',
-    descricao:() => 'Toque rápido, evite o raio', recorde:() => `${estado.recordes.toca} pontos`},
+    descricao:() => 'Toque rápido, evite o raio', recorde:() => estado.recordes.toca>0 ? `${estado.recordes.toca} pontos` : null},
   {id:'sequencia', emoji:'🎵', nome:'Sequência do Bicho', cor:'rosa', onclick:'jogoSequencia()',
-    descricao:() => 'Repita a ordem certinha', recorde:() => `${estado.recordes.sequencia} rodada(s)`},
+    descricao:() => 'Repita a ordem certinha', recorde:() => estado.recordes.sequencia>0 ? `${estado.recordes.sequencia} rodada(s)` : null},
   {id:'corrida', emoji:'🏃', nome:'Corrida do Bicho', cor:'mata', onclick:'jogoCorrida()',
-    descricao:() => 'Pule os obstáculos correndo', recorde:() => `${estado.recordes.corrida} pontos`},
+    descricao:() => 'Pule os obstáculos correndo', recorde:() => estado.recordes.corrida>0 ? `${estado.recordes.corrida} pontos` : null},
   {id:'blocos', emoji:'🧱', nome:'Blocos do Bicho', cor:'moeda', onclick:'jogoBlocos()',
-    descricao:() => 'Empilhe e limpe fileiras', recorde:() => `${estado.recordes.blocos} pontos`},
+    descricao:() => 'Empilhe e limpe fileiras', recorde:() => estado.recordes.blocos>0 ? `${estado.recordes.blocos} pontos` : null},
   {id:'rua', emoji:'🚸', nome:'Atravessar a Rua', cor:'ceu', onclick:'jogoRua()',
-    descricao:() => 'Desvie dos carros até o topo', recorde:() => `${estado.recordes.rua} pontos`},
+    descricao:() => 'Desvie dos carros até o topo', recorde:() => estado.recordes.rua>0 ? `${estado.recordes.rua} pontos` : null},
   {id:'pescaria', emoji:'🎣', nome:'Pescaria', cor:'manga', onclick:'jogoPescaria()',
-    descricao:() => 'Fisgue na hora certa', recorde:() => `${estado.recordes.pescaria} pontos`},
+    descricao:() => 'Fisgue na hora certa', recorde:() => estado.recordes.pescaria>0 ? `${estado.recordes.pescaria} pontos` : null},
   {id:'bolha', emoji:'🎈', nome:'Bolha de Sabão', cor:'jabuti', onclick:'jogoBolha()',
-    descricao:() => 'Mire e estoure grupos de cor', recorde:() => `${estado.recordes.bolha} pontos`},
+    descricao:() => 'Mire e estoure grupos de cor', recorde:() => estado.recordes.bolha>0 ? `${estado.recordes.bolha} pontos` : null},
   {id:'sokoban', emoji:'📦', nome:'Empurra-Caixas do Bicho', cor:'rosa', onclick:'jogoSokobanSelecionarFase()',
     descricao:() => { const f = infoSokoban(); return `${f.completas}/${f.total} fases completas`; },
-    recorde:() => estado.recordes.sokoban!=null ? `fase ${estado.recordes.sokoban}` : '—'},
+    recorde:() => estado.recordes.sokoban!=null ? `fase ${estado.recordes.sokoban}` : null},
   {id:'damas', emoji:'♟️', nome:'Damas', cor:'mata', onclick:'jogoDamas()',
-    descricao:() => 'Você contra o PC — captura vale', recorde:() => `${estado.recordes.damas ?? 0} vitória(s)`},
+    descricao:() => 'Você contra o PC — captura vale', recorde:() => (estado.recordes.damas ?? 0)>0 ? `${estado.recordes.damas} vitória(s)` : null},
 ];
 // "top 3" do carrossel de destaques: prioriza jogo(s) onde o jogador já tem troféu — é
 // literalmente o que ele mais manda bem — e completa com um punhado de jogos-bandeira fixos
@@ -3148,18 +3167,25 @@ function cartaoDestaqueArcade(jogo){
     ${seloTrofeuJogo(jogo.id)}
     ${!thumbUrl ? `<span class="destaque-emoji">${jogo.emoji}</span>` : ''}
     <b class="destaque-nome">${esc(jogo.nome)}</b>
+    <span class="destaque-jogar">▶</span>
   </button>`;
 }
+// linha compacta (imagem/ícone à esquerda, texto no meio, seta à direita) — troca a grade
+// 2 colunas de cartões quadrados de antes, que ficava repetitiva e obrigava rolar demais
+// pros 11 jogos. Numa lista, cada jogo cabe numa linha só e escaneia muito mais rápido.
 function cartaoJogoArcade(jogo){
   const thumbUrl = MINIGAME_CONFIG[jogo.id]?.thumbUrl;
   const icone = thumbUrl
     ? `<span class="icone-jogo-arcade tem-imagem"><img src="${esc(thumbUrl)}" alt=""></span>`
     : `<span class="icone-jogo-arcade">${jogo.emoji}</span>`;
-  return `<button class="cartao-trilha arcade" style="--cor:var(--${jogo.cor});--cor-borda:var(--${jogo.cor}-rim)" onclick="${jogo.onclick}">
-    ${seloTrofeuJogo(jogo.id)}
+  const recorde = jogo.recorde();
+  return `<button class="linha-jogo-arcade" style="--cor:var(--${jogo.cor});--cor-borda:var(--${jogo.cor}-rim)" onclick="${jogo.onclick}">
     ${icone}
-    <h3>${esc(jogo.nome)}</h3>
-    <p>${esc(jogo.descricao())} · Recorde: ${jogo.recorde()}</p>
+    <span class="info-linha-jogo">
+      <b>${esc(jogo.nome)} ${seloTrofeuJogo(jogo.id)}</b>
+      <small>${esc(jogo.descricao())}${recorde ? ` · 🏆 ${esc(recorde)}` : ''}</small>
+    </span>
+    <span class="seta-linha-jogo">›</span>
   </button>`;
 }
 RENDER.arcade = () => {
@@ -3178,7 +3204,7 @@ RENDER.arcade = () => {
     </div>
     <div class="carrossel-pontos" id="carrossel-arcade-pontos"></div>
     <div class="titulo-secao" style="margin:10px 4px 4px"><h2 style="font-size:16px">🕹️ Todos os jogos</h2></div>
-    <div class="grade">${JOGOS_ARCADE.map(cartaoJogoArcade).join('')}</div>
+    <div class="lista-jogos-arcade">${JOGOS_ARCADE.map(cartaoJogoArcade).join('')}</div>
     <p class="aviso" style="margin-top:16px">Minigame gasta energia do bicho — mas ela volta sozinha com o tempo.</p>`;
   iniciarCarrossel('carrossel-arcade', 'carrossel-arcade-pontos', 0);
 };
