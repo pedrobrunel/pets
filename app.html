@@ -293,6 +293,16 @@ body.tela-cheia #app{padding:0;max-width:none}
 .carrossel-pontos{display:flex;justify-content:center;gap:6px;margin:0 0 8px}
 .carrossel-ponto{width:6px;height:6px;border-radius:50%;background:var(--contorno);opacity:.3;padding:0;border:none;transition:opacity .2s ease,transform .2s ease}
 .carrossel-ponto.ativo{opacity:1;transform:scale(1.5)}
+/* cartão de destaque do Arcade — maior que o item padrão do carrossel (92x92) porque aqui
+   cabe nome + descrição do jogo, não só um ícone com legenda curta */
+.carrossel-item.destaque-jogo{
+  position:relative;width:172px;height:140px;border-radius:22px;padding:14px;
+  align-items:flex-start;justify-content:flex-end;text-align:left;gap:3px;
+  background:linear-gradient(155deg, var(--cor), color-mix(in srgb, var(--cor) 60%, #000));
+}
+.destaque-emoji{position:absolute;top:12px;left:14px;font-size:34px;line-height:1;filter:drop-shadow(0 2px 2px rgba(0,0,0,.2))}
+.destaque-nome{font-family:'Baloo 2';font-size:16px;line-height:1.15;text-shadow:0 2px 2px rgba(0,0,0,.3)}
+.destaque-desc{font-size:11px;font-weight:700;opacity:.92;text-shadow:none;line-height:1.3}
 .cena-quadro{position:relative;height:100%;display:inline-block;vertical-align:top;line-height:0}
 .cena-img{display:block;height:100%;width:auto;max-width:none;-webkit-user-drag:none;user-select:none;pointer-events:none}
 .predio{
@@ -507,6 +517,15 @@ body.tela-cheia #app{padding:0;max-width:none}
 .cartao-trilha .fita{
   position:absolute;top:10px;right:-30px;transform:rotate(38deg);
   background:var(--tinta);color:#ECF0F1;font-size:10px;padding:3px 32px;font-weight:900;
+}
+/* variação usada só pelos cards do Arcade (.arcade) — cor por jogo (--cor/--cor-borda,
+   vem inline de cada cartaoJogoArcade) num degradê sutil + ícone num badge redondo, em vez
+   do card genérico branco-liso usado pelas Trilhas/lições */
+.cartao-trilha.arcade{background:linear-gradient(165deg, color-mix(in srgb, var(--cor,#fff) 16%, #fff), #fff 60%)}
+.icone-jogo-arcade{
+  width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  background:var(--cor,var(--ceu));font-size:24px;box-shadow:0 3px 0 var(--cor-borda,var(--ceu-rim));
+  margin-bottom:4px;
 }
 .escolha-bicho{
   background:#fff;border:var(--borda) solid var(--contorno);border-bottom-width:9px;border-radius:var(--r);
@@ -3070,38 +3089,84 @@ function seloTrofeuJogo(jogo){
 }
 
 /* ---------- 8. TELA: ARCADE ---------- */
+// catálogo único de todo minigame do Arcade — tanto a grade de baixo quanto o carrossel
+// de destaques (topo) leem daqui, então cadastrar um jogo novo aqui já é suficiente pros
+// dois lugares (evita repetir emoji/cor/texto duas vezes feito antes)
+const JOGOS_ARCADE = [
+  {id:'memoria', emoji:'🃏', nome:'Memória do Bicho', cor:'ceu', onclick:'jogoMemoria()',
+    descricao:() => { const f = infoFaseMemoria(); return `Ache os pares (fase ${f.fase}/${f.maxFase})`; },
+    recorde:() => estado.recordes.memoria!=null ? `${estado.recordes.memoria} jogadas${estado.recordes.memoriaTempo!=null?` (${estado.recordes.memoriaTempo}s)`:''}` : '—'},
+  {id:'chuva', emoji:'🍉', nome:'Chuva de Frutas', cor:'manga', onclick:'jogoChuva()',
+    descricao:() => 'Pegue as frutas que caem', recorde:() => `${estado.recordes.chuva} pontos`},
+  {id:'toca', emoji:'🕳️', nome:'Toca do Bicho', cor:'jabuti', onclick:'jogoToca()',
+    descricao:() => 'Toque rápido, evite o raio', recorde:() => `${estado.recordes.toca} pontos`},
+  {id:'sequencia', emoji:'🎵', nome:'Sequência do Bicho', cor:'rosa', onclick:'jogoSequencia()',
+    descricao:() => 'Repita a ordem certinha', recorde:() => `${estado.recordes.sequencia} rodada(s)`},
+  {id:'corrida', emoji:'🏃', nome:'Corrida do Bicho', cor:'mata', onclick:'jogoCorrida()',
+    descricao:() => 'Pule os obstáculos correndo', recorde:() => `${estado.recordes.corrida} pontos`},
+  {id:'blocos', emoji:'🧱', nome:'Blocos do Bicho', cor:'moeda', onclick:'jogoBlocos()',
+    descricao:() => 'Empilhe e limpe fileiras', recorde:() => `${estado.recordes.blocos} pontos`},
+  {id:'rua', emoji:'🚸', nome:'Atravessar a Rua', cor:'ceu', onclick:'jogoRua()',
+    descricao:() => 'Desvie dos carros até o topo', recorde:() => `${estado.recordes.rua} pontos`},
+  {id:'pescaria', emoji:'🎣', nome:'Pescaria', cor:'manga', onclick:'jogoPescaria()',
+    descricao:() => 'Fisgue na hora certa', recorde:() => `${estado.recordes.pescaria} pontos`},
+  {id:'bolha', emoji:'🎈', nome:'Bolha de Sabão', cor:'jabuti', onclick:'jogoBolha()',
+    descricao:() => 'Mire e estoure grupos de cor', recorde:() => `${estado.recordes.bolha} pontos`},
+  {id:'sokoban', emoji:'📦', nome:'Empurra-Caixas do Bicho', cor:'rosa', onclick:'jogoSokobanSelecionarFase()',
+    descricao:() => { const f = infoSokoban(); return `${f.completas}/${f.total} fases completas`; },
+    recorde:() => estado.recordes.sokoban!=null ? `fase ${estado.recordes.sokoban}` : '—'},
+  {id:'damas', emoji:'♟️', nome:'Damas', cor:'mata', onclick:'jogoDamas()',
+    descricao:() => 'Você contra o PC — captura vale', recorde:() => `${estado.recordes.damas ?? 0} vitória(s)`},
+];
+// "top 3" do carrossel de destaques: prioriza jogo(s) onde o jogador já tem troféu — é
+// literalmente o que ele mais manda bem — e completa com um punhado de jogos-bandeira fixos
+// (os mais robustos/recentes) pra sempre fechar em 3, mesmo pra quem tá começando agora
+function calcularDestaquesArcade(){
+  const comTrofeu = JOGOS_ARCADE.filter(j => seloTrofeuJogo(j.id));
+  const escolhidos = [...comTrofeu];
+  const reservas = ['damas', 'sokoban', 'memoria', ...JOGOS_ARCADE.map(j => j.id)];
+  for(const id of reservas){
+    if(escolhidos.length >= 3) break;
+    const jogo = JOGOS_ARCADE.find(j => j.id === id);
+    if(jogo && !escolhidos.includes(jogo)) escolhidos.push(jogo);
+  }
+  return escolhidos.slice(0, 3);
+}
+function cartaoDestaqueArcade(jogo){
+  return `<button type="button" class="carrossel-item destaque-jogo" style="--cor:var(--${jogo.cor});--cor-borda:var(--${jogo.cor}-rim)" onclick="${jogo.onclick}">
+    ${seloTrofeuJogo(jogo.id)}
+    <span class="destaque-emoji">${jogo.emoji}</span>
+    <b class="destaque-nome">${esc(jogo.nome)}</b>
+    <span class="destaque-desc">${esc(jogo.descricao())}</span>
+  </button>`;
+}
+function cartaoJogoArcade(jogo){
+  return `<button class="cartao-trilha arcade" style="--cor:var(--${jogo.cor});--cor-borda:var(--${jogo.cor}-rim)" onclick="${jogo.onclick}">
+    ${seloTrofeuJogo(jogo.id)}
+    <span class="icone-jogo-arcade">${jogo.emoji}</span>
+    <h3>${esc(jogo.nome)}</h3>
+    <p>${esc(jogo.descricao())} · Recorde: ${jogo.recorde()}</p>
+  </button>`;
+}
 RENDER.arcade = () => {
-  const faseMem = infoFaseMemoria();
-  const faseSoko = infoSokoban();
+  const destaques = calcularDestaquesArcade();
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
     <div class="titulo-secao"><h2>Arcade</h2><small>ganhe moedas pro seu bicho</small></div>
     ${blocoNpcsDaTela('arcade')}
-    <div class="grade">
-      <button class="cartao-trilha" onclick="jogoMemoria()">
-        ${seloTrofeuJogo('memoria')}<span class="emoji">🃏</span><h3>Memória do Bicho</h3><p>Ache os pares (fase ${faseMem.fase}/${faseMem.maxFase}). Recorde: ${estado.recordes.memoria ?? '—'} jogadas${estado.recordes.memoriaTempo!=null?` (${estado.recordes.memoriaTempo}s)`:''}</p></button>
-      <button class="cartao-trilha" onclick="jogoChuva()">
-        <span class="emoji">🍉</span><h3>Chuva de Frutas</h3><p>Recorde: ${estado.recordes.chuva} pontos</p></button>
-      <button class="cartao-trilha" onclick="jogoToca()">
-        ${seloTrofeuJogo('toca')}<span class="emoji">🕳️</span><h3>Toca do Bicho</h3><p>Toque rápido, evite o raio. Recorde: ${estado.recordes.toca} pontos</p></button>
-      <button class="cartao-trilha" onclick="jogoSequencia()">
-        ${seloTrofeuJogo('sequencia')}<span class="emoji">🎵</span><h3>Sequência do Bicho</h3><p>Repita a ordem certinha. Recorde: ${estado.recordes.sequencia} rodada(s)</p></button>
-      <button class="cartao-trilha" onclick="jogoCorrida()">
-        ${seloTrofeuJogo('corrida')}<span class="emoji">🏃</span><h3>Corrida do Bicho</h3><p>Pule os obstáculos correndo. Recorde: ${estado.recordes.corrida} pontos</p></button>
-      <button class="cartao-trilha" onclick="jogoBlocos()">
-        ${seloTrofeuJogo('blocos')}<span class="emoji">🧱</span><h3>Blocos do Bicho</h3><p>Empilhe e limpe fileiras. Recorde: ${estado.recordes.blocos} pontos</p></button>
-      <button class="cartao-trilha" onclick="jogoRua()">
-        ${seloTrofeuJogo('rua')}<span class="emoji">🚸</span><h3>Atravessar a Rua</h3><p>Desvie dos carros até o topo. Recorde: ${estado.recordes.rua} pontos</p></button>
-      <button class="cartao-trilha" onclick="jogoPescaria()">
-        ${seloTrofeuJogo('pescaria')}<span class="emoji">🎣</span><h3>Pescaria</h3><p>Fisgue na hora certa. Recorde: ${estado.recordes.pescaria} pontos</p></button>
-      <button class="cartao-trilha" onclick="jogoBolha()">
-        ${seloTrofeuJogo('bolha')}<span class="emoji">🎈</span><h3>Bolha de Sabão</h3><p>Mire e estoure grupos de cor. Recorde: ${estado.recordes.bolha} pontos</p></button>
-      <button class="cartao-trilha" onclick="jogoSokobanSelecionarFase()">
-        ${seloTrofeuJogo('sokoban')}<span class="emoji">📦</span><h3>Empurra-Caixas do Bicho</h3><p>Empurre as caixas até os alvos. ${faseSoko.completas}/${faseSoko.total} fases completas. Recorde: fase ${estado.recordes.sokoban ?? '—'}</p></button>
-      <button class="cartao-trilha" onclick="jogoDamas()">
-        ${seloTrofeuJogo('damas')}<span class="emoji">♟️</span><h3>Damas</h3><p>Você contra o PC — captura obrigatória vale. Vitórias: ${estado.recordes.damas ?? 0}</p></button>
+    <div class="titulo-secao" style="margin:10px 4px 0"><h2 style="font-size:16px">🌟 Destaques</h2></div>
+    <div class="carrossel" id="carrossel-arcade">
+      <div class="carrossel-trilha">
+        <div class="carrossel-espaco" aria-hidden="true"></div>
+        ${destaques.map(cartaoDestaqueArcade).join('')}
+        <div class="carrossel-espaco fim" aria-hidden="true"></div>
+      </div>
     </div>
+    <div class="carrossel-pontos" id="carrossel-arcade-pontos"></div>
+    <div class="titulo-secao" style="margin:10px 4px 4px"><h2 style="font-size:16px">🕹️ Todos os jogos</h2></div>
+    <div class="grade">${JOGOS_ARCADE.map(cartaoJogoArcade).join('')}</div>
     <p class="aviso" style="margin-top:16px">Minigame gasta energia do bicho — mas ela volta sozinha com o tempo.</p>`;
+  iniciarCarrossel('carrossel-arcade', 'carrossel-arcade-pontos', 0);
 };
 
 /* --- minigame 1: memória --- */
