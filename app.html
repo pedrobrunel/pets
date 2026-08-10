@@ -4958,6 +4958,13 @@ function jogoDamas(){
     $('#tabuleiro-damas').innerHTML = cels.join('');
     const status = $('#status-damas');
     if(status) status.textContent = travado ? '' : (turno === 'jogador' ? 'Sua vez' : 'PC pensando...');
+    let pecasJogador = 0, pecasPc = 0;
+    for(const linha of tabuleiro) for(const p of linha){
+      if(p?.cor === 'jogador') pecasJogador++;
+      else if(p?.cor === 'pc') pecasPc++;
+    }
+    const placar = $('#placar-damas');
+    if(placar) placar.innerHTML = `<span class="chip">🔴 Você: ${pecasJogador}</span> <span class="chip">⚫ PC: ${pecasPc}</span>`;
   }
   function aoClicarCasa(r, c){
     if(travado || turno !== 'jogador') return;
@@ -5027,6 +5034,7 @@ function jogoDamas(){
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
     <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Toque numa peça vermelha (sua) e depois na casa marcada pra mover. Peão só anda pra frente, mas captura em qualquer direção — e captura é obrigatória: se você puder comer uma peça do PC, precisa jogar essa jogada. Chegou na última fileira? Virou dama 👑, que agora anda e captura pra qualquer lado. Quem ficar sem peça (ou sem jogada) perde.')">?</button>
     <div class="titulo-secao"><h2>♟️ Damas</h2><small id="status-damas">Sua vez</small></div>
+    <div id="placar-damas" style="text-align:center;margin-top:6px"></div>
     <div id="tabuleiro-damas" class="tabuleiro-damas"${estiloFundoMinigame('damas')}></div>
     <div style="display:flex;gap:8px;justify-content:center;margin-top:10px">
       <button class="btn pequeno branco" onclick="window._reiniciarDamas()">🔄 Reiniciar</button>
