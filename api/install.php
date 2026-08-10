@@ -297,7 +297,7 @@ try {
 
   /* config de cada minigame do Arcade além dos sprites: uma imagem de fundo (opcional) e
      os dois sons de feedback (acerto/erro) — sem nada configurado, o jogo usa o visual e o
-     bipe sintetizado padrão de sempre. Uma linha fixa por jogo (memoria/chuva/toca/sequencia). */
+     bipe sintetizado padrão de sempre. Uma linha fixa por jogo (todos os 11 do Arcade). */
   $pdo->exec('CREATE TABLE IF NOT EXISTS minigame_config (
     jogo          VARCHAR(20) PRIMARY KEY,
     fundo         VARCHAR(160) NOT NULL DEFAULT \'\',
@@ -305,6 +305,15 @@ try {
     som_erro      VARCHAR(160) NOT NULL DEFAULT \'\',
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  // "thumb" chegou depois de minigame_config já existir em produção — miniatura opcional
+  // usada no cartão/carrossel do Arcade (diferente do "fundo", que é o cenário DENTRO do
+  // jogo); sem imagem enviada, o cartão cai no ícone colorido padrão de sempre
+  $colunasMinigameConfig = array_column($pdo->query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'minigame_config'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+  if (!in_array('thumb', $colunasMinigameConfig, true)) {
+    $pdo->exec('ALTER TABLE minigame_config ADD COLUMN thumb VARCHAR(160) NOT NULL DEFAULT \'\'');
+  }
 
   $pdo->exec('CREATE TABLE IF NOT EXISTS licoes (
     id            VARCHAR(24) PRIMARY KEY,

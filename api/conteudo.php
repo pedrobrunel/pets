@@ -312,7 +312,7 @@ try {
   // fundo e sons (acerto/erro) de cada minigame — só os campos com arquivo enviado, pra não
   // entulhar quem não configurou nada (o jogo cai sozinho no visual/bipe padrão)
   $minigameConfig = [];
-  foreach (bd()->query('SELECT jogo, fundo, som_acerto, som_erro FROM minigame_config')->fetchAll(PDO::FETCH_ASSOC) as $c) {
+  foreach (bd()->query('SELECT jogo, fundo, som_acerto, som_erro, thumb FROM minigame_config')->fetchAll(PDO::FETCH_ASSOC) as $c) {
     $entrada = [];
     $fundoUrl = $urlMinigame($c['fundo']);
     if ($fundoUrl !== '') $entrada['fundoUrl'] = $fundoUrl;
@@ -320,6 +320,8 @@ try {
     if ($somAcertoUrl !== '') $entrada['somAcertoUrl'] = $somAcertoUrl;
     $somErroUrl = $urlMinigame($c['som_erro']);
     if ($somErroUrl !== '') $entrada['somErroUrl'] = $somErroUrl;
+    $thumbUrl = $urlMinigame($c['thumb']);
+    if ($thumbUrl !== '') $entrada['thumbUrl'] = $thumbUrl;
     if ($entrada) $minigameConfig[$c['jogo']] = $entrada;
   }
 
