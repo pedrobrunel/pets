@@ -996,6 +996,12 @@ body.conectando-fluxo{cursor:crosshair}
     <section id="aba-arcade" class="oculto">
       <h2>Arcade</h2>
       <p class="sub">cada minigame já vem com emoji e bipe padrão (o jogo funciona sem você mexer em nada). Escolha um jogo abaixo pra editar os sprites, o fundo e os sons dele.</p>
+
+      <h3 style="margin-top:6px">🖼️ Miniaturas dos jogos</h3>
+      <p class="sub">imagem usada no carrossel de destaques e na grade do Arcade. Sem imagem, o cartão cai no ícone colorido padrão.</p>
+      <div class="grade-sprites-minigame" id="grade-thumbs-arcade"></div>
+
+      <h3 style="margin-top:26px">Sprites, fundo e som por jogo</h3>
       <div class="sub-nav-arcade" id="sub-nav-arcade"></div>
       <div id="pagina-arcade-jogo"></div>
     </section>
@@ -3363,6 +3369,7 @@ async function carregarArcade(){
   minigameConfigCache = d2.configs;
   renderizarSubNavArcade();
   renderizarPaginaArcadeJogo();
+  renderizarThumbsArcade();
 }
 function renderizarSubNavArcade(){
   $('#sub-nav-arcade').innerHTML = GRUPOS_SPRITES_MINIGAME.map(g =>
@@ -3520,6 +3527,37 @@ async function enviarSpriteMinigame(chave, arquivo){
 async function removerSpriteMinigame(chave){
   if(!confirm('Voltar esse slot pro emoji padrão?')) return;
   await api('minigame_sprite_remover', {method:'POST', corpo:{chave}});
+  carregarArcade();
+}
+
+/* ---------- miniaturas do Arcade (carrossel de destaques + grade) — 1 imagem por jogo,
+   diferente do "fundo" (cenário dentro do jogo) e dos sprites por slot acima */
+function renderizarThumbsArcade(){
+  const alvo = $('#grade-thumbs-arcade');
+  if(!alvo) return;
+  alvo.innerHTML = Object.values(minigameConfigCache).map(cfg => `<div class="cartao-sprite-minigame">
+    <div class="preview-sprite-minigame" style="width:90px;height:90px">${cfg.thumbUrl ? `<img src="${esc(cfg.thumbUrl)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">` : `<span class="emoji-sprite-minigame">🎮</span>`}</div>
+    <p class="rotulo-sprite-minigame">${esc(cfg.nome)}</p>
+    <input type="file" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto" id="input-thumb-${cfg.jogo}" onchange="enviarThumbMinigame('${cfg.jogo}', this.files[0])">
+    <button type="button" class="btn linha branco" onclick="$('#input-thumb-${cfg.jogo}').click()">Trocar</button>
+    ${cfg.thumb ? `<button type="button" class="btn linha erro" onclick="removerThumbMinigame('${cfg.jogo}')">Remover</button>` : ''}
+  </div>`).join('');
+}
+async function enviarThumbMinigame(jogo, arquivo){
+  if(!arquivo) return;
+  try{
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    fd.append('jogo', jogo);
+    const r = await fetch('api/admin.php?acao=minigame_thumb_imagem', {method:'POST', body:fd});
+    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+    carregarArcade();
+  }catch(e){ alert(e.message); }
+}
+async function removerThumbMinigame(jogo){
+  if(!confirm('Remover a miniatura desse jogo?')) return;
+  await api('minigame_thumb_remover', {method:'POST', corpo:{jogo}});
   carregarArcade();
 }
 
