@@ -362,12 +362,15 @@ body.tela-cheia #app{padding:0;max-width:none}
   }
   .cena-moldura .cena-quadro{height:auto}
   .cena-moldura .cena-img{
-    height:auto;width:auto;max-width:min(80vw,880px);max-height:min(70vh,600px);
+    /* largura bem folgada (deixa um mapa retangular/panorâmico esticar bastante)
+       e altura só um pouco maior que antes (é o que dá o empurrãozinho no mapa
+       quadrado, já que ele esbarra na altura antes de chegar perto da largura) */
+    height:auto;width:auto;max-width:min(95vw,1400px);max-height:min(76vh,640px);
     display:block;
   }
   .cena-legenda{
     display:block;font-family:'Baloo 2';font-weight:800;font-size:18px;
-    color:var(--tinta);text-align:center;margin-top:10px;max-width:min(80vw,880px)
+    color:var(--tinta);text-align:center;margin-top:10px;max-width:min(95vw,1400px)
   }
 }
 .predio{
