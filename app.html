@@ -372,26 +372,42 @@ body.tela-cheia #app{padding:0;max-width:none}
     display:block;font-family:'Baloo 2';font-weight:800;font-size:18px;
     color:var(--tinta);text-align:center;margin-top:10px;max-width:min(95vw,1400px)
   }
-  /* nuvens bem sutis passando devagar no fundo, atrás da moldura — só ambientação,
-     baixíssima opacidade e bem lentas de propósito pra não disputar atenção com o
-     mapa. Duas camadas com velocidades diferentes dão uma sensação leve de profundidade. */
+  /* nuvens no fundo, atrás da moldura — grandes e poucas (só 1-2 por tela), pra dar
+     pra ver de verdade, mas derivando bem devagar de propósito, sem chamar atenção
+     do mapa. Cada nuvem é um cacho de elipses sobrepostas (jeito clássico de desenhar
+     nuvem só com radial-gradient). Duas camadas com velocidades/tamanhos diferentes
+     dão uma sensação leve de profundidade. */
   #tela-trilhas.ativa{overflow:hidden}
   #tela-trilhas.ativa .cena-scroll{position:relative;z-index:1}
   #tela-trilhas.ativa::before, #tela-trilhas.ativa::after{
     content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
-    background-repeat:repeat-x;background-size:900px 100%;
+    background-repeat:repeat-x;
+  }
+  /* faixa de cima: nuvem grande sempre na margem acima da moldura, longe do centro
+     onde ela ficaria escondida atrás do cartão */
+  #tela-trilhas.ativa::before{
+    background-size:2000px 100%;
     background-image:
-      radial-gradient(ellipse 130px 34px at 12% 22%, rgba(255,255,255,.8), transparent 72%),
-      radial-gradient(ellipse 90px 26px at 40% 68%, rgba(255,255,255,.7), transparent 72%),
-      radial-gradient(ellipse 150px 40px at 72% 38%, rgba(255,255,255,.75), transparent 72%);
-    opacity:.3;
+      radial-gradient(ellipse 210px 75px at 16% 8%, #fff, #fff 55%, transparent 72%),
+      radial-gradient(ellipse 150px 90px at 8% 14%, #fff, #fff 55%, transparent 72%),
+      radial-gradient(ellipse 160px 95px at 26% 6%, #fff, #fff 55%, transparent 72%),
+      radial-gradient(ellipse 190px 80px at 34% 15%, #fff, #fff 55%, transparent 72%);
+    opacity:.55;
+    animation:deriva-nuvens-1 210s linear infinite;
   }
-  #tela-trilhas.ativa::before{animation:deriva-nuvens 220s linear infinite}
+  /* faixa de baixo: outra nuvem grande, mais lenta e mais apagada, na margem abaixo */
   #tela-trilhas.ativa::after{
-    opacity:.18;
-    animation:deriva-nuvens 340s linear infinite reverse;
+    background-size:2600px 100%;
+    background-image:
+      radial-gradient(ellipse 170px 60px at 30% 90%, #fff, #fff 55%, transparent 72%),
+      radial-gradient(ellipse 120px 75px at 24% 82%, #fff, #fff 55%, transparent 72%),
+      radial-gradient(ellipse 130px 80px at 40% 92%, #fff, #fff 55%, transparent 72%),
+      radial-gradient(ellipse 150px 62px at 46% 80%, #fff, #fff 55%, transparent 72%);
+    opacity:.4;
+    animation:deriva-nuvens-2 300s linear infinite reverse;
   }
-  @keyframes deriva-nuvens{from{background-position:0 0}to{background-position:-900px 0}}
+  @keyframes deriva-nuvens-1{from{background-position:0 0}to{background-position:-2000px 0}}
+  @keyframes deriva-nuvens-2{from{background-position:0 0}to{background-position:-2600px 0}}
 }
 .predio{
   position:absolute;background:none;border:none;cursor:pointer;padding:0;
