@@ -4579,6 +4579,12 @@ function jogoSokobanSelecionarFase(){
 }
 let SOKOBAN_MAPA_TESTE_ATUAL = null; // último {nome, grade} testado — só pro botão "jogar de novo" no fim
 function jogoSokoban(numero, opcoes){
+  // "Próxima fase", "Jogar de novo" e o avanço automático chamam jogoSokoban() de novo
+  // direto, sem passar por ir() — que é o único lugar que roda pararLoops. Sem isso, o
+  // keydown da fase anterior nunca era removido: ele ficava vivo e, a cada tecla, chamava
+  // window._moverSokoban de novo (que sempre aponta pra fase ATUAL, já que é reatribuído a
+  // cada chamada) — um listener a mais por fase avançada, andando várias casas por toque.
+  if(pararLoops) pararLoops();
   const ehCustom = !!opcoes?.faseCustom;
   const fase = ehCustom ? opcoes.faseCustom : (SOKOBAN_FASES.find(f => f.numero === numero) || SOKOBAN_FASES[0]);
   if(ehCustom) SOKOBAN_MAPA_TESTE_ATUAL = fase;
