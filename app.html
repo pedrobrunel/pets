@@ -237,6 +237,11 @@ nav.rodape .aba-menu .aba{width:100%}
 body.tela-cheia #topo, body.tela-cheia #rodape{display:none}
 body.tela-cheia{overflow:hidden}
 body.tela-cheia #app{padding:0;max-width:none}
+/* a tela-cheia perde o limite de 520px do #app (é assim de propósito pra telas edge-to-edge
+   como trilhas), mas arcade e lição têm conteúdo em coluna de leitura, não um cenário — sem
+   isso o texto e os cartões ficam colados na borda esquerda da janela e espalhados até a
+   direita no PC, em vez de centralizados como o resto do app. */
+.coluna-tela-cheia{max-width:520px;margin:0 auto}
 #tela-trilhas.ativa, #tela-arcade.ativa, #tela-licao.ativa{
   position:fixed;inset:0;z-index:40;animation:none;box-sizing:border-box;
 }
@@ -3279,21 +3284,23 @@ RENDER.arcade = () => {
   const destaques = calcularDestaquesArcade();
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
-    <div class="titulo-secao"><h2>Arcade</h2><small>ganhe moedas pro seu bicho</small></div>
-    ${blocoNpcsDaTela('arcade')}
-    <div class="titulo-secao" style="margin:10px 4px 0"><h2 style="font-size:16px">🌟 Destaques</h2></div>
-    <div class="hero-arcade" id="hero-arcade">
-      ${destaques.map(slideHeroArcade).join('')}
-      ${destaques.length > 1 ? `
-      <button type="button" class="hero-seta esquerda" onclick="window._irParaSlideHero(heroArcadeIndice - 1)" aria-label="Destaque anterior">‹</button>
-      <button type="button" class="hero-seta direita" onclick="window._irParaSlideHero(heroArcadeIndice + 1)" aria-label="Próximo destaque">›</button>` : ''}
-      <div class="hero-pontos" id="hero-arcade-pontos">
-        ${destaques.map((_, i) => `<button type="button" class="hero-ponto${i===0?' ativo':''}" onclick="window._irParaSlideHero(${i})" aria-label="Slide ${i+1}"></button>`).join('')}
+    <div class="coluna-tela-cheia">
+      <div class="titulo-secao"><h2>Arcade</h2><small>ganhe moedas pro seu bicho</small></div>
+      ${blocoNpcsDaTela('arcade')}
+      <div class="titulo-secao" style="margin:10px 4px 0"><h2 style="font-size:16px">🌟 Destaques</h2></div>
+      <div class="hero-arcade" id="hero-arcade">
+        ${destaques.map(slideHeroArcade).join('')}
+        ${destaques.length > 1 ? `
+        <button type="button" class="hero-seta esquerda" onclick="window._irParaSlideHero(heroArcadeIndice - 1)" aria-label="Destaque anterior">‹</button>
+        <button type="button" class="hero-seta direita" onclick="window._irParaSlideHero(heroArcadeIndice + 1)" aria-label="Próximo destaque">›</button>` : ''}
+        <div class="hero-pontos" id="hero-arcade-pontos">
+          ${destaques.map((_, i) => `<button type="button" class="hero-ponto${i===0?' ativo':''}" onclick="window._irParaSlideHero(${i})" aria-label="Slide ${i+1}"></button>`).join('')}
+        </div>
       </div>
-    </div>
-    <div class="titulo-secao" style="margin:10px 4px 4px"><h2 style="font-size:16px">🕹️ Todos os jogos</h2></div>
-    <div class="lista-jogos-arcade">${JOGOS_ARCADE.map(cartaoJogoArcade).join('')}</div>
-    <p class="aviso" style="margin-top:16px">Minigame gasta energia do bicho — mas ela volta sozinha com o tempo.</p>`;
+      <div class="titulo-secao" style="margin:10px 4px 4px"><h2 style="font-size:16px">🕹️ Todos os jogos</h2></div>
+      <div class="lista-jogos-arcade">${JOGOS_ARCADE.map(cartaoJogoArcade).join('')}</div>
+      <p class="aviso" style="margin-top:16px">Minigame gasta energia do bicho — mas ela volta sozinha com o tempo.</p>
+    </div>`;
   iniciarHeroArcade(destaques.length);
   ativarSwipeHero();
   pararLoops = () => clearInterval(heroArcadeTimer);
