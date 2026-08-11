@@ -1030,6 +1030,27 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .dama-peca.pc{background:#2C3E50;border:2px solid #17202A}
 .dama-coroa{position:absolute;top:-38%;font-size:.9em}
 
+/* ---------- xadrez (minigame 12, jogador x PC, com dificuldade) ---------- */
+.tabuleiro-xadrez{display:grid;grid-template-columns:repeat(8,1fr);width:100%;max-width:400px;
+  margin:10px auto 0;border:3px solid var(--contorno);border-radius:10px;overflow:hidden;aspect-ratio:1}
+.xadrez-cel{aspect-ratio:1;display:grid;place-items:center;padding:0;border:none;position:relative;
+  font-size:calc(min(9vw,40px)*.62);line-height:1}
+.xadrez-cel.clara{background:#F4F1EA}
+.xadrez-cel.escura{background:#8B5A2B}
+.xadrez-cel.selecionavel{cursor:pointer}
+.xadrez-cel.selecionada{box-shadow:inset 0 0 0 3px var(--moeda)}
+.xadrez-cel.destino{cursor:pointer}
+.xadrez-cel.destino::after{content:'';position:absolute;width:26%;height:26%;border-radius:50%;background:rgba(241,196,15,.65)}
+.xadrez-cel.destino.captura::after{width:82%;height:82%;border-radius:50%;background:none;
+  box-shadow:inset 0 0 0 4px rgba(231,76,60,.75)}
+.xadrez-cel.rei-em-xeque{box-shadow:inset 0 0 0 3px #E74C3C}
+.xadrez-peca{filter:drop-shadow(0 2px 0 rgba(0,0,0,.25))}
+.xadrez-peca.jogador{color:#fff;-webkit-text-stroke:1.3px #2C3E50}
+.xadrez-peca.pc{color:#1a1a1a}
+.selecao-dificuldade-xadrez{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.selecao-dificuldade-xadrez .btn{flex-direction:column;gap:2px;padding:14px 20px}
+.selecao-dificuldade-xadrez .btn small{font-weight:700;font-size:12px;opacity:.85}
+
 /* tela de seleção de fase do Empurra-Caixas — grade de botões numerados, cadeado nas
    ainda não desbloqueadas, estrela nas já resolvidas (pode jogar de novo à vontade) */
 .grade-fases-sokoban{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:10px;margin-top:14px}
@@ -1384,7 +1405,7 @@ const estado = {
   moedas:60, xp:0,
   fome:72, felicidade:80, energia:90,
   equipado:[], mochila:[], inventario:{},
-  licoesFeitas:[], recordes:{memoria:null, memoriaTempo:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0, rua:0, pescaria:0, bolha:0, sokoban:null, damas:0},
+  licoesFeitas:[], recordes:{memoria:null, memoriaTempo:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0, rua:0, pescaria:0, bolha:0, sokoban:null, damas:0, xadrez:0},
   paresMemoria:6, faseSokobanDesbloqueada:1, sokobanCompletadas:[],
   missoes:{}, cenasVisitadas:[], gatilhosAtivos:[], itensColetados:[],
   moveisComprados:[], casaMoveis:[], casaDesbloqueada:false,
@@ -3135,7 +3156,7 @@ function celebracaoRecorde(bateu){
 const MEDALHA_DO_JOGO = {
   memoria:'memoria', toca:'reflexo', sequencia:'ouvido', corrida:'corredor',
   blocos:'empilhador', rua:'atravessador', pescaria:'pescador', bolha:'estourador', sokoban:'empurrador',
-  damas:'estrategista',
+  damas:'estrategista', xadrez:'enxadrista',
 };
 function seloTrofeuJogo(jogo){
   const id = MEDALHA_DO_JOGO[jogo];
@@ -3172,6 +3193,8 @@ const JOGOS_ARCADE = [
     recorde:() => estado.recordes.sokoban!=null ? `fase ${estado.recordes.sokoban}` : null},
   {id:'damas', emoji:'♟️', nome:'Damas', cor:'mata', onclick:'jogoDamas()',
     descricao:() => 'Você contra o PC — captura vale', recorde:() => (estado.recordes.damas ?? 0)>0 ? `${estado.recordes.damas} vitória(s)` : null},
+  {id:'xadrez', emoji:'♞', nome:'Xadrez', cor:'jabuti', onclick:'jogoXadrezSelecionarDificuldade()',
+    descricao:() => 'Fácil, médio ou difícil — você escolhe', recorde:() => (estado.recordes.xadrez ?? 0)>0 ? `${estado.recordes.xadrez} vitória(s)` : null},
 ];
 // "top 3" do carrossel de destaques: prioriza jogo(s) onde o jogador já tem troféu — é
 // literalmente o que ele mais manda bem — e completa com um punhado de jogos-bandeira fixos
@@ -5252,6 +5275,456 @@ function jogoDamas(){
   pararLoops = null;
 }
 
+/* --- minigame 12: xadrez do bicho (jogador x PC, com dificuldade) ---
+   tabuleiro 8x8 completo, todas as regras: roque (curto e longo), en passant, promoção
+   (sempre vira dama — sem escolha de peça, pra manter simples pro público do jogo),
+   xeque-mate e afogamento (empate — ninguém em xeque mas sem jogada legal, diferente de
+   damas onde "sem jogada" é sempre derrota). Validado com perft (contagem de jogadas legais
+   por profundidade) batendo os valores conhecidos da posição inicial até profundidade 5.
+   A IA (minimax com poda alfa-beta) varia por dificuldade: fácil joga metade das vezes de
+   qualquer jeito e o resto com profundidade 1 dentro de uma margem de erro; médio busca
+   profundidade 2; difícil busca profundidade 3 sem margem — sempre pega a melhor jogada. */
+const XADREZ_DIRECOES_DIAGONAIS = [[-1,-1],[-1,1],[1,-1],[1,1]];
+const XADREZ_DIRECOES_RETAS = [[-1,0],[1,0],[0,-1],[0,1]];
+const XADREZ_OFFSETS_CAVALO = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+
+function xadrezNoTabuleiro(r,c){ return r>=0 && r<8 && c>=0 && c<8; }
+
+function xadrezCriarTabuleiroInicial(){
+  const t = Array.from({length:8}, () => Array(8).fill(null));
+  const ordem = ['torre','cavalo','bispo','dama','rei','bispo','cavalo','torre'];
+  for(let c=0;c<8;c++){
+    t[0][c] = {cor:'pc', tipo:ordem[c], moveu:false};
+    t[1][c] = {cor:'pc', tipo:'peao', moveu:false};
+    t[6][c] = {cor:'jogador', tipo:'peao', moveu:false};
+    t[7][c] = {cor:'jogador', tipo:ordem[c], moveu:false};
+  }
+  return t;
+}
+
+function xadrezOposto(cor){ return cor === 'jogador' ? 'pc' : 'jogador'; }
+function xadrezDirecaoPeao(cor){ return cor === 'jogador' ? -1 : 1; }
+function xadrezLinhaPromocao(cor){ return cor === 'jogador' ? 0 : 7; }
+
+// pseudo-legais: geram todo movimento fisicamente possível pra peça, SEM checar se deixa
+// o próprio rei em xeque (isso é filtrado depois, em xadrezMovimentosLegais) e SEM roque
+// (que precisa de checagem de xeque durante a geração, então é tratado à parte)
+function xadrezMovimentosPseudoLegaisDePeca(tab, r, c, estadoExtra){
+  const peca = tab[r][c];
+  const movs = [];
+  const add = (nr, nc, extra) => movs.push(Object.assign({de:[r,c], para:[nr,nc], capturaEm: tab[nr][nc] ? [nr,nc] : null}, extra||{}));
+
+  if(peca.tipo === 'peao'){
+    const dir = xadrezDirecaoPeao(peca.cor);
+    const nr1 = r+dir;
+    const promove1 = nr1 === xadrezLinhaPromocao(peca.cor);
+    if(xadrezNoTabuleiro(nr1,c) && !tab[nr1][c]){
+      add(nr1, c, {promove: promove1});
+      const nr2 = r+dir*2;
+      if(!peca.moveu && !tab[nr2]?.[c] && xadrezNoTabuleiro(nr2,c)){
+        movs.push({de:[r,c], para:[nr2,c], capturaEm:null, duploPasso:true});
+      }
+    }
+    for(const dc of [-1,1]){
+      const nc = c+dc;
+      if(!xadrezNoTabuleiro(nr1,nc)) continue;
+      const alvo = tab[nr1][nc];
+      if(alvo && alvo.cor !== peca.cor){
+        add(nr1, nc, {promove: promove1});
+      } else if(!alvo && estadoExtra.enPassant && estadoExtra.enPassant[0]===nr1 && estadoExtra.enPassant[1]===nc){
+        movs.push({de:[r,c], para:[nr1,nc], capturaEm:[r,nc], enPassant:true});
+      }
+    }
+  } else if(peca.tipo === 'cavalo'){
+    for(const [dr,dc] of XADREZ_OFFSETS_CAVALO){
+      const nr=r+dr, nc=c+dc;
+      if(!xadrezNoTabuleiro(nr,nc)) continue;
+      const alvo = tab[nr][nc];
+      if(!alvo || alvo.cor !== peca.cor) add(nr,nc);
+    }
+  } else if(peca.tipo === 'rei'){
+    for(const [dr,dc] of [...XADREZ_DIRECOES_DIAGONAIS, ...XADREZ_DIRECOES_RETAS]){
+      const nr=r+dr, nc=c+dc;
+      if(!xadrezNoTabuleiro(nr,nc)) continue;
+      const alvo = tab[nr][nc];
+      if(!alvo || alvo.cor !== peca.cor) add(nr,nc);
+    }
+  } else {
+    const direcoes = peca.tipo === 'bispo' ? XADREZ_DIRECOES_DIAGONAIS
+      : peca.tipo === 'torre' ? XADREZ_DIRECOES_RETAS
+      : [...XADREZ_DIRECOES_DIAGONAIS, ...XADREZ_DIRECOES_RETAS]; // dama
+    for(const [dr,dc] of direcoes){
+      let nr=r+dr, nc=c+dc;
+      while(xadrezNoTabuleiro(nr,nc)){
+        const alvo = tab[nr][nc];
+        if(!alvo){ add(nr,nc); }
+        else { if(alvo.cor !== peca.cor) add(nr,nc); break; }
+        nr+=dr; nc+=dc;
+      }
+    }
+  }
+  return movs;
+}
+
+// "casa atacada": pra checagem de xeque e roque — não usa movimentos pseudo-legais (que
+// filtrariam capturas de peça aliada errado pro propósito de ataque) e ignora regras
+// especiais (en passant/roque nunca "atacam" uma casa)
+function xadrezCasaAtacada(tab, r, c, corAtacante){
+  const dirPeao = xadrezDirecaoPeao(corAtacante);
+  for(const dc of [-1,1]){
+    const p = tab[r-dirPeao]?.[c-dc];
+    if(p && p.cor===corAtacante && p.tipo==='peao') return true;
+  }
+  for(const [dr,dc] of XADREZ_OFFSETS_CAVALO){
+    const p = tab[r+dr]?.[c+dc];
+    if(p && p.cor===corAtacante && p.tipo==='cavalo') return true;
+  }
+  for(const [dr,dc] of [...XADREZ_DIRECOES_DIAGONAIS, ...XADREZ_DIRECOES_RETAS]){
+    const p = tab[r+dr]?.[c+dc];
+    if(p && p.cor===corAtacante && p.tipo==='rei') return true;
+  }
+  for(const [dr,dc] of XADREZ_DIRECOES_DIAGONAIS){
+    let nr=r+dr, nc=c+dc;
+    while(xadrezNoTabuleiro(nr,nc)){
+      const p = tab[nr][nc];
+      if(p){ if(p.cor===corAtacante && (p.tipo==='bispo'||p.tipo==='dama')) return true; break; }
+      nr+=dr; nc+=dc;
+    }
+  }
+  for(const [dr,dc] of XADREZ_DIRECOES_RETAS){
+    let nr=r+dr, nc=c+dc;
+    while(xadrezNoTabuleiro(nr,nc)){
+      const p = tab[nr][nc];
+      if(p){ if(p.cor===corAtacante && (p.tipo==='torre'||p.tipo==='dama')) return true; break; }
+      nr+=dr; nc+=dc;
+    }
+  }
+  return false;
+}
+
+function xadrezAcharRei(tab, cor){
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p = tab[r][c];
+    if(p && p.cor===cor && p.tipo==='rei') return [r,c];
+  }
+  return null;
+}
+function xadrezReiEmXeque(tab, cor){
+  const rei = xadrezAcharRei(tab, cor);
+  if(!rei) return false;
+  return xadrezCasaAtacada(tab, rei[0], rei[1], xadrezOposto(cor));
+}
+
+function xadrezAplicarMovimento(tab, estadoExtra, mov){
+  const novo = tab.map(l => l.slice());
+  const peca = novo[mov.de[0]][mov.de[1]];
+  novo[mov.de[0]][mov.de[1]] = null;
+  if(mov.capturaEm) novo[mov.capturaEm[0]][mov.capturaEm[1]] = null;
+  novo[mov.para[0]][mov.para[1]] = {cor:peca.cor, tipo: mov.promove ? 'dama' : peca.tipo, moveu:true};
+  if(mov.roque){
+    const torre = novo[mov.roque.torreDe[0]][mov.roque.torreDe[1]];
+    novo[mov.roque.torreDe[0]][mov.roque.torreDe[1]] = null;
+    novo[mov.roque.torrePara[0]][mov.roque.torrePara[1]] = {cor:torre.cor, tipo:'torre', moveu:true};
+  }
+  const novoEnPassant = mov.duploPasso ? [(mov.de[0]+mov.para[0])/2, mov.de[1]] : null;
+  return {tab: novo, estadoExtra: {enPassant: novoEnPassant}};
+}
+
+// movimentos legais de UMA peça: pseudo-legais + roque (só pro rei) — filtrando qualquer
+// um que deixe o próprio rei em xeque
+function xadrezMovimentosLegaisDePeca(tab, r, c, estadoExtra){
+  const peca = tab[r][c];
+  let candidatos = xadrezMovimentosPseudoLegaisDePeca(tab, r, c, estadoExtra);
+  if(peca.tipo === 'rei' && !peca.moveu && !xadrezReiEmXeque(tab, peca.cor)){
+    const linha = r;
+    const adversario = xadrezOposto(peca.cor);
+    const torreCurta = tab[linha][7];
+    if(torreCurta && torreCurta.tipo==='torre' && torreCurta.cor===peca.cor && !torreCurta.moveu
+      && !tab[linha][5] && !tab[linha][6]
+      && !xadrezCasaAtacada(tab, linha, 5, adversario) && !xadrezCasaAtacada(tab, linha, 6, adversario)){
+      candidatos.push({de:[r,c], para:[linha,6], capturaEm:null, roque:{torreDe:[linha,7], torrePara:[linha,5]}});
+    }
+    const torreLonga = tab[linha][0];
+    if(torreLonga && torreLonga.tipo==='torre' && torreLonga.cor===peca.cor && !torreLonga.moveu
+      && !tab[linha][1] && !tab[linha][2] && !tab[linha][3]
+      && !xadrezCasaAtacada(tab, linha, 3, adversario) && !xadrezCasaAtacada(tab, linha, 2, adversario)){
+      candidatos.push({de:[r,c], para:[linha,2], capturaEm:null, roque:{torreDe:[linha,0], torrePara:[linha,3]}});
+    }
+  }
+  return candidatos.filter(mov => {
+    const { tab: novoTab } = xadrezAplicarMovimento(tab, estadoExtra, mov);
+    return !xadrezReiEmXeque(novoTab, peca.cor);
+  });
+}
+
+function xadrezMovimentosLegais(tab, cor, estadoExtra){
+  const todos = [];
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p = tab[r][c];
+    if(p && p.cor===cor) todos.push(...xadrezMovimentosLegaisDePeca(tab, r, c, estadoExtra));
+  }
+  return todos;
+}
+
+function xadrezFimDeJogo(tab, cor, estadoExtra){
+  const movimentos = xadrezMovimentosLegais(tab, cor, estadoExtra);
+  if(movimentos.length > 0) return {fim:false};
+  const emXeque = xadrezReiEmXeque(tab, cor);
+  return {fim:true, motivo: emXeque ? 'xeque-mate' : 'afogamento'};
+}
+
+const XADREZ_VALOR = {peao:100, cavalo:320, bispo:330, torre:500, dama:900, rei:0};
+// tabelas de posição — bônus/penalidade por casa, incentivam peão avançar e cavalo/bispo
+// ocuparem o centro em vez da borda (jogo mais forte sem precisar de busca profunda demais)
+const XADREZ_PST_PEAO = [
+  [0,0,0,0,0,0,0,0], [50,50,50,50,50,50,50,50], [10,10,20,30,30,20,10,10],
+  [5,5,10,25,25,10,5,5], [0,0,0,20,20,0,0,0], [5,-5,-10,0,0,-10,-5,5],
+  [5,10,10,-20,-20,10,10,5], [0,0,0,0,0,0,0,0],
+];
+const XADREZ_PST_CAVALO = [
+  [-50,-40,-30,-30,-30,-30,-40,-50], [-40,-20,0,0,0,0,-20,-40],
+  [-30,0,10,15,15,10,0,-30], [-30,5,15,20,20,15,5,-30],
+  [-30,0,15,20,20,15,0,-30], [-30,5,10,15,15,10,5,-30],
+  [-40,-20,0,5,5,0,-20,-40], [-50,-40,-30,-30,-30,-30,-40,-50],
+];
+const XADREZ_PST_BISPO = [
+  [-20,-10,-10,-10,-10,-10,-10,-20], [-10,0,0,0,0,0,0,-10],
+  [-10,0,5,10,10,5,0,-10], [-10,5,5,10,10,5,5,-10],
+  [-10,0,10,10,10,10,0,-10], [-10,10,10,10,10,10,10,-10],
+  [-10,5,0,0,0,0,5,-10], [-20,-10,-10,-10,-10,-10,-10,-20],
+];
+const XADREZ_PST_REI = [
+  [-30,-40,-40,-50,-50,-40,-40,-30], [-30,-40,-40,-50,-50,-40,-40,-30],
+  [-30,-40,-40,-50,-50,-40,-40,-30], [-30,-40,-40,-50,-50,-40,-40,-30],
+  [-20,-30,-30,-40,-40,-30,-30,-20], [-10,-20,-20,-20,-20,-20,-20,-10],
+  [20,20,0,0,0,0,20,20], [20,30,10,0,0,10,30,20],
+];
+const XADREZ_PST = {peao:XADREZ_PST_PEAO, cavalo:XADREZ_PST_CAVALO, bispo:XADREZ_PST_BISPO, rei:XADREZ_PST_REI};
+
+function xadrezAvaliar(tab){
+  let pontos = 0;
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p = tab[r][c];
+    if(!p) continue;
+    let v = XADREZ_VALOR[p.tipo];
+    const pst = XADREZ_PST[p.tipo];
+    if(pst) v += p.cor === 'pc' ? pst[r][c] : pst[7-r][c];
+    pontos += p.cor === 'pc' ? v : -v;
+  }
+  return pontos;
+}
+
+// captura primeiro (maior valor capturado primeiro) — poda alfa-beta corta muito mais cedo
+// quando as jogadas mais fortes são avaliadas antes das fracas
+function xadrezOrdenarMovimentos(tab, movimentos){
+  return movimentos.map(mov => {
+    const capturada = mov.capturaEm ? tab[mov.capturaEm[0]][mov.capturaEm[1]] : null;
+    return {mov, chave: capturada ? XADREZ_VALOR[capturada.tipo] : -1};
+  }).sort((a,b) => b.chave - a.chave).map(x => x.mov);
+}
+
+function xadrezMinimax(tab, estadoExtra, cor, profundidade, maximizando, alfa, beta){
+  const movimentos = xadrezOrdenarMovimentos(tab, xadrezMovimentosLegais(tab, cor, estadoExtra));
+  if(movimentos.length === 0){
+    if(xadrezReiEmXeque(tab, cor)) return maximizando ? -100000 - profundidade : 100000 + profundidade;
+    return 0; // afogamento = empate
+  }
+  if(profundidade === 0) return xadrezAvaliar(tab);
+  const proximaCor = xadrezOposto(cor);
+  if(maximizando){
+    let melhor = -Infinity;
+    for(const mov of movimentos){
+      const { tab: novoTab, estadoExtra: novoEstado } = xadrezAplicarMovimento(tab, estadoExtra, mov);
+      melhor = Math.max(melhor, xadrezMinimax(novoTab, novoEstado, proximaCor, profundidade-1, false, alfa, beta));
+      alfa = Math.max(alfa, melhor);
+      if(beta <= alfa) break;
+    }
+    return melhor;
+  }
+  let melhor = Infinity;
+  for(const mov of movimentos){
+    const { tab: novoTab, estadoExtra: novoEstado } = xadrezAplicarMovimento(tab, estadoExtra, mov);
+    melhor = Math.min(melhor, xadrezMinimax(novoTab, novoEstado, proximaCor, profundidade-1, true, alfa, beta));
+    beta = Math.min(beta, melhor);
+    if(beta <= alfa) break;
+  }
+  return melhor;
+}
+
+const XADREZ_PROFUNDIDADE = {facil:1, medio:2, dificil:3};
+function xadrezMelhorMovimentoPC(tab, estadoExtra, dificuldade){
+  const movimentos = xadrezOrdenarMovimentos(tab, xadrezMovimentosLegais(tab, 'pc', estadoExtra));
+  if(!movimentos.length) return null;
+  // fácil: metade das vezes joga de qualquer jeito (aleatório entre os legais), sem nem
+  // olhar captura — erra troca, deixa peça de graça, dá pra qualquer criança ganhar
+  if(dificuldade === 'facil' && Math.random() < 0.5){
+    return movimentos[Math.floor(Math.random()*movimentos.length)];
+  }
+  const profundidade = XADREZ_PROFUNDIDADE[dificuldade] ?? 2;
+  let melhor = null, melhorValor = -Infinity;
+  const candidatos = [];
+  for(const mov of movimentos){
+    const { tab: novoTab, estadoExtra: novoEstado } = xadrezAplicarMovimento(tab, estadoExtra, mov);
+    const valor = xadrezMinimax(novoTab, novoEstado, 'jogador', profundidade-1, false, -Infinity, Infinity);
+    candidatos.push({mov, valor});
+    if(valor > melhorValor){ melhorValor = valor; melhor = mov; }
+  }
+  // fácil (a outra metade) e médio: entre as jogadas "quase tão boas quanto a melhor" (dentro
+  // de uma margem), sorteia uma — dá uma variação natural sem jogar mal de propósito toda vez
+  const margem = dificuldade === 'facil' ? 150 : dificuldade === 'medio' ? 40 : 0;
+  if(margem > 0){
+    const quaseMelhores = candidatos.filter(x => x.valor >= melhorValor - margem);
+    return quaseMelhores[Math.floor(Math.random()*quaseMelhores.length)].mov;
+  }
+  return melhor;
+}
+
+const XADREZ_EMOJI_PECA = {peao:'♟', cavalo:'♞', bispo:'♝', torre:'♜', dama:'♛', rei:'♚'};
+const XADREZ_ROTULO_DIFICULDADE = {facil:'Fácil', medio:'Médio', dificil:'Difícil'};
+function jogoXadrezSelecionarDificuldade(){
+  $('#tela-arcade').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Você joga com as peças brancas e sempre começa. Toque numa peça pra ver pra onde ela pode ir, e depois na casa marcada pra mover. Peão que chega na última fileira vira dama automaticamente. Roque (rei + torre) e captura en passant funcionam do jeito oficial. Quem deixar o próprio rei sem fuga em xeque perde (xeque-mate); se ninguém estiver em xeque mas não houver jogada legal, é empate (afogamento).')">?</button>
+    <div class="titulo-secao"><h2>♞ Xadrez</h2><small>escolha a dificuldade</small></div>
+    <div class="selecao-dificuldade-xadrez">
+      <button class="btn grande" onclick="jogoXadrez('facil')">🙂 Fácil<small>pra quem tá começando</small></button>
+      <button class="btn grande laranja" onclick="jogoXadrez('medio')">🤔 Médio<small>pensa um pouco à frente</small></button>
+      <button class="btn grande roxo" onclick="jogoXadrez('dificil')">🔥 Difícil<small>joga pra valer</small></button>
+    </div>`;
+  pararLoops = null;
+}
+const XADREZ_PREMIO = {facil:{moedas:15, xp:15}, medio:{moedas:25, xp:20}, dificil:{moedas:40, xp:30}};
+function jogoXadrez(dificuldade){
+  let tabuleiro = xadrezCriarTabuleiroInicial();
+  let estadoExtra = {enPassant:null};
+  let turno = 'jogador';
+  let selecionada = null;
+  let travado = false;
+
+  function pinta(){
+    const legaisJogador = (!travado && turno === 'jogador') ? xadrezMovimentosLegais(tabuleiro, 'jogador', estadoExtra) : [];
+    const destinos = selecionada ? legaisJogador.filter(m => m.de[0]===selecionada[0] && m.de[1]===selecionada[1]) : [];
+    const reiEmXequeAgora = !travado && xadrezReiEmXeque(tabuleiro, turno);
+    const cels = [];
+    for(let r=0;r<8;r++){
+      for(let c=0;c<8;c++){
+        const peca = tabuleiro[r][c];
+        const ehSelecionada = !!selecionada && selecionada[0]===r && selecionada[1]===c;
+        const movDestino = destinos.find(m => m.para[0]===r && m.para[1]===c);
+        const podeSelecionar = peca && peca.cor === 'jogador' && legaisJogador.some(m => m.de[0]===r && m.de[1]===c);
+        const ehReiEmXeque = reiEmXequeAgora && peca && peca.tipo === 'rei' && peca.cor === turno;
+        let classe = 'xadrez-cel ' + ((r+c)%2===0 ? 'clara' : 'escura');
+        if(ehSelecionada) classe += ' selecionada';
+        if(movDestino) classe += ' destino' + (movDestino.capturaEm ? ' captura' : '');
+        if(podeSelecionar) classe += ' selecionavel';
+        if(ehReiEmXeque) classe += ' rei-em-xeque';
+        const conteudo = peca
+          ? `<span class="xadrez-peca ${peca.cor}">${spriteOuEmoji('xadrez'+peca.tipo+peca.cor, XADREZ_EMOJI_PECA[peca.tipo], 30)}</span>`
+          : '';
+        cels.push(`<button type="button" class="${classe}" onclick="window._clicarXadrez(${r},${c})">${conteudo}</button>`);
+      }
+    }
+    $('#tabuleiro-xadrez').innerHTML = cels.join('');
+    const status = $('#status-xadrez');
+    if(status){
+      status.textContent = travado ? '' : turno === 'jogador'
+        ? (reiEmXequeAgora ? 'Xeque! Sua vez' : 'Sua vez')
+        : (reiEmXequeAgora ? 'Xeque! PC pensando...' : 'PC pensando...');
+    }
+  }
+
+  function aoClicarCasa(r, c){
+    if(travado || turno !== 'jogador') return;
+    const legais = xadrezMovimentosLegais(tabuleiro, 'jogador', estadoExtra);
+    const peca = tabuleiro[r][c];
+    if(peca && peca.cor === 'jogador'){
+      if(!legais.some(m => m.de[0]===r && m.de[1]===c)){ tocarEfeito('damas', 'erro'); return; }
+      selecionada = [r,c];
+      pinta();
+      return;
+    }
+    if(!selecionada){ tocarEfeito('damas', 'erro'); return; }
+    const mov = legais.find(m => m.de[0]===selecionada[0] && m.de[1]===selecionada[1] && m.para[0]===r && m.para[1]===c);
+    if(!mov){ tocarEfeito('damas', 'erro'); return; }
+    ({ tab: tabuleiro, estadoExtra } = xadrezAplicarMovimento(tabuleiro, estadoExtra, mov));
+    selecionada = null;
+    tocarEfeito('damas', 'acerto');
+    const fimPc = xadrezFimDeJogo(tabuleiro, 'pc', estadoExtra);
+    if(fimPc.fim){ pinta(); encerra(fimPc.motivo === 'xeque-mate' ? 'vitoria' : 'empate'); return; }
+    turno = 'pc';
+    pinta();
+    setTimeout(jogadaDoPC, 550);
+  }
+  function jogadaDoPC(){
+    // o setTimeout de 550ms pode disparar DEPOIS de o jogador ter clicado "Reiniciar" (que
+    // zera o tabuleiro mas não cancela esse timer pendente) — sem o "turno !== 'pc'" aqui,
+    // essa chamada atrasada faria o PC jogar sozinho logo após o reinício, fora de vez
+    if(travado || turno !== 'pc') return;
+    const mov = xadrezMelhorMovimentoPC(tabuleiro, estadoExtra, dificuldade);
+    if(!mov){ encerra('empate'); return; } // segurança: xadrezFimDeJogo já devia ter pego isso antes
+    ({ tab: tabuleiro, estadoExtra } = xadrezAplicarMovimento(tabuleiro, estadoExtra, mov));
+    tocarEfeito('damas', 'acerto');
+    const fimJogador = xadrezFimDeJogo(tabuleiro, 'jogador', estadoExtra);
+    if(fimJogador.fim){ pinta(); encerra(fimJogador.motivo === 'xeque-mate' ? 'derrota' : 'empate'); return; }
+    turno = 'jogador';
+    pinta();
+  }
+  function encerra(resultado){
+    travado = true;
+    estado.energia = lim(estado.energia - 10);
+    estado.felicidade = lim(estado.felicidade + (resultado === 'vitoria' ? 12 : resultado === 'empate' ? 8 : 6));
+    const rotulo = XADREZ_ROTULO_DIFICULDADE[dificuldade];
+    if(resultado === 'vitoria'){
+      estado.recordes.xadrez = (estado.recordes.xadrez ?? 0) + 1;
+      const premio = XADREZ_PREMIO[dificuldade];
+      ganhar(premio.moedas, premio.xp);
+      modal(`<h2 style="font-size:24px">Xeque-mate! Você venceu ♞</h2>
+        <p style="margin:6px 0 12px">Dificuldade ${rotulo} · ${estado.recordes.xadrez} vitória(s) no total.</p>
+        <span class="chip">🪙 +${premio.moedas}</span> <span class="chip">⭐ +${premio.xp}</span>
+        <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoXadrez('${dificuldade}')">Jogar de novo</button>
+        <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); jogoXadrezSelecionarDificuldade()">Trocar dificuldade</button>
+        <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+    } else if(resultado === 'empate'){
+      ganhar(0, 8);
+      modal(`<h2 style="font-size:24px">Empate 🤝</h2>
+        <p style="margin:6px 0 12px">Afogamento — ninguém estava em xeque, mas não sobrou jogada legal.</p>
+        <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoXadrez('${dificuldade}')">Jogar de novo</button>
+        <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+    } else {
+      ganhar(0, 5);
+      modal(`<h2 style="font-size:24px">O PC venceu dessa vez 🤖</h2>
+        <p style="margin:6px 0 12px">Xeque-mate na dificuldade ${rotulo}. Bora tentar de novo?</p>
+        <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoXadrez('${dificuldade}')">Jogar de novo</button>
+        <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); jogoXadrezSelecionarDificuldade()">Trocar dificuldade</button>
+        <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+    }
+  }
+  window._clicarXadrez = aoClicarCasa;
+  window._reiniciarXadrez = () => {
+    if(travado) return;
+    tabuleiro = xadrezCriarTabuleiroInicial();
+    estadoExtra = {enPassant:null};
+    turno = 'jogador';
+    selecionada = null;
+    pinta();
+  };
+  window._desistirXadrez = () => {
+    if(travado || !confirm('Desistir dessa partida?')) return;
+    encerra('derrota');
+  };
+  $('#tela-arcade').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Toque numa peça branca (sua) e depois na casa marcada pra mover. Peão que chega na última fileira vira dama sozinho. Roque e en passant funcionam do jeito oficial. Rei sem fuga em xeque = xeque-mate (perde); sem xeque mas sem jogada legal = empate.')">?</button>
+    <div class="titulo-secao"><h2>♞ Xadrez</h2><small id="status-xadrez">Sua vez · ${XADREZ_ROTULO_DIFICULDADE[dificuldade]}</small></div>
+    <div id="tabuleiro-xadrez" class="tabuleiro-xadrez"${estiloFundoMinigame('xadrez')}></div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:10px">
+      <button class="btn pequeno branco" onclick="window._reiniciarXadrez()">🔄 Reiniciar</button>
+      <button class="btn pequeno branco" onclick="window._desistirXadrez()">🏳️ Desistir</button>
+    </div>`;
+  pinta();
+  pararLoops = null;
+}
+
 /* ---------- 9. TELA: LOJA DA VILA ----------
    Uma loja como qualquer outra do motor genérico (ver seção 9c) — só que com id fixo
    "lojadavila" e aba própria no rodapé, por ser a lojinha padrão do jogo desde sempre. */
@@ -6250,6 +6723,7 @@ const MEDALHAS = [
   {id:'estourador', emoji:'🎈', nome:'100 pontos na Bolha', ok:()=>estado.recordes.bolha>=100},
   {id:'empurrador', emoji:'📦', nome:'Zerar o Empurra-Caixas', ok:()=>estado.recordes.sokoban!==null && estado.recordes.sokoban>=10},
   {id:'estrategista', emoji:'♟️', nome:'3 vitórias nas Damas', ok:()=>(estado.recordes.damas ?? 0)>=3},
+  {id:'enxadrista', emoji:'♞', nome:'3 vitórias no Xadrez', ok:()=>(estado.recordes.xadrez ?? 0)>=3},
   {id:'chama',    emoji:'🔥', nome:'7 dias seguidos', ok:()=>estado.streak.melhor>=7},
   {id:'estiloso', emoji:'😎', nome:'Bicho estiloso', ok:()=>estado.equipado.length>=1},
   {id:'clube',    emoji:'🏅', nome:'Em um clube', ok:()=>!!clubeAtual}
