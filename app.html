@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800;900&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --papel:#ECF0F1;
@@ -358,7 +358,7 @@ body.tela-cheia #app{padding:0;max-width:none}
   .cena-moldura{
     height:auto;display:inline-flex;flex-direction:column;align-items:center;
     background:#fff;border:var(--borda) solid var(--contorno);border-bottom-width:10px;
-    padding:14px;border-radius:var(--r);box-shadow:0 18px 34px -12px rgba(0,0,0,.5);
+    padding:14px 14px 0;border-radius:var(--r);box-shadow:0 18px 34px -12px rgba(0,0,0,.5);
   }
   .cena-moldura .cena-quadro{height:auto}
   .cena-moldura .cena-img{
@@ -368,42 +368,53 @@ body.tela-cheia #app{padding:0;max-width:none}
     height:auto;width:auto;max-width:min(95vw,1400px);max-height:min(76vh,640px);
     display:block;
   }
+  /* faixa embaixo da foto, tipo Polaroid de verdade — o texto fica centralizado
+     na altura dela, não colado na imagem */
   .cena-legenda{
-    display:block;font-family:'Baloo 2';font-weight:800;font-size:18px;
-    color:var(--tinta);text-align:center;margin-top:10px;max-width:min(95vw,1400px)
+    display:flex;align-items:center;justify-content:center;min-height:58px;
+    font-family:'Caveat',cursive;font-weight:700;font-size:28px;line-height:1;
+    color:var(--tinta);text-align:center;max-width:min(95vw,1400px);padding:0 12px;
   }
   /* nuvens no fundo, atrás da moldura — grandes e poucas (só 1-2 por tela), pra dar
      pra ver de verdade, mas derivando bem devagar de propósito, sem chamar atenção
-     do mapa. Cada nuvem é um cacho de elipses sobrepostas (jeito clássico de desenhar
-     nuvem só com radial-gradient). Duas camadas com velocidades/tamanhos diferentes
-     dão uma sensação leve de profundidade. */
+     do mapa. Cada nuvem é um cacho de círculos com uma base comum (jeito clássico de
+     desenhar nuvem só com radial-gradient: várias "corcovas" em cima, barriga lisa
+     embaixo), não uma mancha borrada qualquer. Duas camadas com velocidades/tamanhos
+     diferentes dão uma sensação leve de profundidade. */
   #tela-trilhas.ativa{overflow:hidden}
   #tela-trilhas.ativa .cena-scroll{position:relative;z-index:1}
   #tela-trilhas.ativa::before, #tela-trilhas.ativa::after{
     content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
     background-repeat:repeat-x;
   }
-  /* faixa de cima: nuvem grande sempre na margem acima da moldura, longe do centro
-     onde ela ficaria escondida atrás do cartão */
+  /* faixa de cima: nuvem grande sempre na margem acima da moldura, ancorada a uma
+     distância fixa do topo (não em %) pra não depender da altura da tela */
   #tela-trilhas.ativa::before{
     background-size:2000px 100%;
     background-image:
-      radial-gradient(ellipse 210px 75px at 16% 8%, #fff, #fff 55%, transparent 72%),
-      radial-gradient(ellipse 150px 90px at 8% 14%, #fff, #fff 55%, transparent 72%),
-      radial-gradient(ellipse 160px 95px at 26% 6%, #fff, #fff 55%, transparent 72%),
-      radial-gradient(ellipse 190px 80px at 34% 15%, #fff, #fff 55%, transparent 72%);
-    opacity:.55;
+      radial-gradient(ellipse 200px 32px at left 300px top 92px, rgba(255,255,255,.5), transparent 78%),
+      radial-gradient(circle 34px at left 216px top 74px, #fff 95%, transparent),
+      radial-gradient(circle 44px at left 252px top 58px, #fff 95%, transparent),
+      radial-gradient(circle 58px at left 302px top 42px, #fff 95%, transparent),
+      radial-gradient(circle 48px at left 354px top 54px, #fff 95%, transparent),
+      radial-gradient(circle 36px at left 390px top 72px, #fff 95%, transparent),
+      radial-gradient(ellipse 185px 34px at left 302px top 80px, #fff 93%, transparent);
+    opacity:.85;
     animation:deriva-nuvens-1 210s linear infinite;
   }
-  /* faixa de baixo: outra nuvem grande, mais lenta e mais apagada, na margem abaixo */
+  /* faixa de baixo: outra nuvem, um pouco menor e mais apagada (sensação de mais
+     longe), ancorada perto do fundo da tela */
   #tela-trilhas.ativa::after{
     background-size:2600px 100%;
     background-image:
-      radial-gradient(ellipse 170px 60px at 30% 90%, #fff, #fff 55%, transparent 72%),
-      radial-gradient(ellipse 120px 75px at 24% 82%, #fff, #fff 55%, transparent 72%),
-      radial-gradient(ellipse 130px 80px at 40% 92%, #fff, #fff 55%, transparent 72%),
-      radial-gradient(ellipse 150px 62px at 46% 80%, #fff, #fff 55%, transparent 72%);
-    opacity:.4;
+      radial-gradient(ellipse 170px 28px at left 300px bottom 86px, rgba(255,255,255,.4), transparent 78%),
+      radial-gradient(circle 26px at left 226px bottom 70px, #fff 95%, transparent),
+      radial-gradient(circle 34px at left 256px bottom 56px, #fff 95%, transparent),
+      radial-gradient(circle 44px at left 300px bottom 44px, #fff 95%, transparent),
+      radial-gradient(circle 36px at left 344px bottom 54px, #fff 95%, transparent),
+      radial-gradient(circle 28px at left 374px bottom 70px, #fff 95%, transparent),
+      radial-gradient(ellipse 150px 28px at left 300px bottom 76px, #fff 93%, transparent);
+    opacity:.55;
     animation:deriva-nuvens-2 300s linear infinite reverse;
   }
   @keyframes deriva-nuvens-1{from{background-position:0 0}to{background-position:-2000px 0}}
