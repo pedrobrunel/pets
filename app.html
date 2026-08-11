@@ -293,23 +293,36 @@ body.tela-cheia #app{padding:0;max-width:none}
 .carrossel-pontos{display:flex;justify-content:center;gap:6px;margin:0 0 8px}
 .carrossel-ponto{width:6px;height:6px;border-radius:50%;background:var(--contorno);opacity:.3;padding:0;border:none;transition:opacity .2s ease,transform .2s ease}
 .carrossel-ponto.ativo{opacity:1;transform:scale(1.5)}
-/* cartão de destaque do Arcade — maior que o item padrão do carrossel (92x92), tipo pôster
-   de app store: a miniatura enviada no painel (ou, sem ela, o degradê+emoji de sempre) cobre
-   o cartão inteiro, com o nome por cima. O fundo em si (gradiente OU imagem+véu escuro) vem
-   inline por cartão (cartaoDestaqueArcade), não daqui — aqui só o que não muda por jogo. */
-.carrossel-item.destaque-jogo{
-  position:relative;width:196px;height:156px;border-radius:24px;padding:16px;
-  align-items:flex-start;justify-content:flex-end;text-align:left;gap:4px;
-  border-bottom:8px solid var(--cor-borda);box-shadow:0 8px 16px -8px rgba(0,0,0,.4);
+/* hero de destaques do Arcade — estilo carrossel de portal de notícia: 1 imagem grande
+   por vez (cross-fade, não lado a lado), autoplay contínuo e loop infinito (o índice só
+   dá módulo no total, então nunca "para na ponta" — ver iniciarHeroArcade em RENDER.arcade).
+   A miniatura enviada no painel vira o cartão inteiro (sem ela, cai no degradê+emoji, mas
+   bem maior que antes — a imagem é a estrela aqui, não um detalhe no canto). */
+.hero-arcade{position:relative;width:100%;aspect-ratio:16/10;border-radius:22px;overflow:hidden;
+  margin-top:10px;box-shadow:0 10px 22px -10px rgba(0,0,0,.45)}
+.hero-slide{
+  position:absolute;inset:0;border:none;padding:0;cursor:pointer;display:block;
+  background-size:cover;background-position:center;opacity:0;transition:opacity .6s ease;
 }
-.carrossel-item.destaque-jogo:active{border-bottom-width:3px}
-.destaque-emoji{position:absolute;top:16px;left:16px;font-size:44px;line-height:1;filter:drop-shadow(0 3px 3px rgba(0,0,0,.25))}
-.destaque-nome{font-family:'Baloo 2';font-size:18px;line-height:1.2;text-shadow:0 2px 4px rgba(0,0,0,.55);width:calc(100% - 40px)}
-.destaque-jogar{
-  position:absolute;bottom:14px;right:14px;width:34px;height:34px;border-radius:50%;
-  background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;
-  font-size:14px;box-shadow:0 2px 5px rgba(0,0,0,.3);color:var(--tinta);
+.hero-slide.ativo{opacity:1;z-index:1}
+.hero-slide::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,.82));
 }
+.hero-slide-emoji{position:absolute;top:50%;left:50%;transform:translate(-50%,-58%);font-size:76px;
+  line-height:1;filter:drop-shadow(0 4px 6px rgba(0,0,0,.3))}
+.hero-slide-info{position:absolute;left:18px;right:18px;bottom:16px;z-index:1;text-align:left}
+.hero-kicker{
+  display:inline-block;background:rgba(255,255,255,.95);color:var(--tinta);font-size:10.5px;
+  font-weight:900;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em;
+  margin-bottom:6px;
+}
+.hero-titulo{display:flex;align-items:center;gap:8px;font-family:'Baloo 2';font-size:23px;color:#fff;
+  text-shadow:0 2px 6px rgba(0,0,0,.55);line-height:1.15}
+.hero-pontos{position:absolute;bottom:14px;right:16px;z-index:2;display:flex;gap:5px}
+.hero-ponto{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.5);padding:0;border:none;
+  transition:all .25s ease}
+.hero-ponto.ativo{background:#fff;width:18px;border-radius:4px}
 .cena-quadro{position:relative;height:100%;display:inline-block;vertical-align:top;line-height:0}
 .cena-img{display:block;height:100%;width:auto;max-width:none;-webkit-user-drag:none;user-select:none;pointer-events:none}
 .predio{
@@ -3155,20 +3168,67 @@ function calcularDestaquesArcade(){
   }
   return escolhidos.slice(0, 3);
 }
-// destaque = imagem (a miniatura que o painel deixa subir) + nome, tipo pôster de app store —
-// sem descrição/troféu competindo com a foto. Sem miniatura configurada, cai no mesmo
-// degradê+emoji de antes (o emoji some quando tem foto de verdade, viraria poluição visual)
-function cartaoDestaqueArcade(jogo){
+// slide do hero de destaques — imagem (a miniatura enviada no painel) cobre o cartão
+// inteiro, tipo capa de portal de notícia; sem miniatura, cai no degradê+emoji (bem maior
+// que o ícone de antes, já que agora a imagem é a protagonista do carrossel)
+function slideHeroArcade(jogo, i){
   const thumbUrl = MINIGAME_CONFIG[jogo.id]?.thumbUrl;
   const fundo = thumbUrl
-    ? `background-image:linear-gradient(180deg, rgba(0,0,0,.05) 40%, rgba(0,0,0,.8)), url('${esc(thumbUrl)}');background-size:cover;background-position:center`
+    ? `background-image:url('${esc(thumbUrl)}')`
     : `background:linear-gradient(155deg, var(--cor), color-mix(in srgb, var(--cor) 60%, #000))`;
-  return `<button type="button" class="carrossel-item destaque-jogo" style="--cor:var(--${jogo.cor});--cor-borda:var(--${jogo.cor}-rim);${fundo}" onclick="${jogo.onclick}">
-    ${seloTrofeuJogo(jogo.id)}
-    ${!thumbUrl ? `<span class="destaque-emoji">${jogo.emoji}</span>` : ''}
-    <b class="destaque-nome">${esc(jogo.nome)}</b>
-    <span class="destaque-jogar">▶</span>
+  return `<button type="button" class="hero-slide${i===0?' ativo':''}" style="--cor:var(--${jogo.cor});${fundo}" onclick="${jogo.onclick}">
+    ${!thumbUrl ? `<span class="hero-slide-emoji">${jogo.emoji}</span>` : ''}
+    <span class="hero-slide-info">
+      <span class="hero-kicker">🕹️ Arcade${seloTrofeuJogo(jogo.id) ? ' · 🏆 seu recorde' : ''}</span>
+      <b class="hero-titulo">${esc(jogo.nome)}</b>
+    </span>
   </button>`;
+}
+// autoplay + loop infinito do hero: o índice só dá módulo no total, nunca "trava na ponta"
+// (diferente do carrossel de scroll/snap usado em outros lugares do app, que para no
+// primeiro/último item). Reinicia o timer a cada interação manual pra não brigar com o
+// jogador arrastando justo quando ia trocar sozinho.
+let heroArcadeTimer = null, heroArcadeIndice = 0, heroArcadeTotal = 0;
+function iniciarHeroArcade(total){
+  heroArcadeTotal = total;
+  heroArcadeIndice = 0;
+  reiniciarAutoplayHero();
+}
+function irParaSlideHero(i){
+  if(heroArcadeTotal <= 0) return;
+  heroArcadeIndice = ((i % heroArcadeTotal) + heroArcadeTotal) % heroArcadeTotal;
+  document.querySelectorAll('#hero-arcade .hero-slide').forEach((el, idx) => el.classList.toggle('ativo', idx === heroArcadeIndice));
+  document.querySelectorAll('#hero-arcade-pontos .hero-ponto').forEach((el, idx) => el.classList.toggle('ativo', idx === heroArcadeIndice));
+}
+function reiniciarAutoplayHero(){
+  clearInterval(heroArcadeTimer);
+  if(heroArcadeTotal <= 1) return;
+  heroArcadeTimer = setInterval(() => irParaSlideHero(heroArcadeIndice + 1), 4500);
+}
+window._irParaSlideHero = i => { irParaSlideHero(i); reiniciarAutoplayHero(); };
+// arrasta pra trocar de slide manualmente (esquerda = próximo, direita = anterior) — o
+// clique de verdade (abrir o jogo) só dispara se o dedo mal se moveu, senão um swipe vira
+// clique sem querer no jogo errado
+function ativarSwipeHero(){
+  const el = $('#hero-arcade');
+  if(!el) return;
+  let x0 = null, arrastou = false;
+  el.addEventListener('pointerdown', e => { x0 = e.clientX; arrastou = false; }, {passive:true});
+  el.addEventListener('pointerup', e => {
+    if(x0 === null) return;
+    const dx = e.clientX - x0;
+    x0 = null;
+    if(Math.abs(dx) < 40) return; // toque normal, deixa o onclick do slide agir
+    arrastou = true; // impede o clique fantasma que abriria o jogo do slide errado
+    if(dx < 0) window._irParaSlideHero(heroArcadeIndice + 1);
+    else window._irParaSlideHero(heroArcadeIndice - 1);
+  });
+  // mouse (desktop) dispara "click" no botão mesmo após um arrasto grande — diferente do toque,
+  // que o navegador cancela sozinho quando o dedo se move além do limiar. Cancela aqui pra igualar
+  // o comportamento nos dois casos.
+  el.addEventListener('click', e => {
+    if(arrastou){ e.preventDefault(); e.stopPropagation(); arrastou = false; }
+  }, true);
 }
 // linha compacta (imagem/ícone à esquerda, texto no meio, seta à direita) — troca a grade
 // 2 colunas de cartões quadrados de antes, que ficava repetitiva e obrigava rolar demais
@@ -3195,18 +3255,18 @@ RENDER.arcade = () => {
     <div class="titulo-secao"><h2>Arcade</h2><small>ganhe moedas pro seu bicho</small></div>
     ${blocoNpcsDaTela('arcade')}
     <div class="titulo-secao" style="margin:10px 4px 0"><h2 style="font-size:16px">🌟 Destaques</h2></div>
-    <div class="carrossel" id="carrossel-arcade">
-      <div class="carrossel-trilha">
-        <div class="carrossel-espaco" aria-hidden="true"></div>
-        ${destaques.map(cartaoDestaqueArcade).join('')}
-        <div class="carrossel-espaco fim" aria-hidden="true"></div>
+    <div class="hero-arcade" id="hero-arcade">
+      ${destaques.map(slideHeroArcade).join('')}
+      <div class="hero-pontos" id="hero-arcade-pontos">
+        ${destaques.map((_, i) => `<button type="button" class="hero-ponto${i===0?' ativo':''}" onclick="window._irParaSlideHero(${i})" aria-label="Slide ${i+1}"></button>`).join('')}
       </div>
     </div>
-    <div class="carrossel-pontos" id="carrossel-arcade-pontos"></div>
     <div class="titulo-secao" style="margin:10px 4px 4px"><h2 style="font-size:16px">🕹️ Todos os jogos</h2></div>
     <div class="lista-jogos-arcade">${JOGOS_ARCADE.map(cartaoJogoArcade).join('')}</div>
     <p class="aviso" style="margin-top:16px">Minigame gasta energia do bicho — mas ela volta sozinha com o tempo.</p>`;
-  iniciarCarrossel('carrossel-arcade', 'carrossel-arcade-pontos', 0);
+  iniciarHeroArcade(destaques.length);
+  ativarSwipeHero();
+  pararLoops = () => clearInterval(heroArcadeTimer);
 };
 
 /* --- minigame 1: memória --- */
