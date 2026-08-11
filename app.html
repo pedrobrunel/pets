@@ -298,11 +298,15 @@ body.tela-cheia #app{padding:0;max-width:none}
    dá módulo no total, então nunca "para na ponta" — ver iniciarHeroArcade em RENDER.arcade).
    A miniatura enviada no painel vira o cartão inteiro (sem ela, cai no degradê+emoji, mas
    bem maior que antes — a imagem é a estrela aqui, não um detalhe no canto). */
-.hero-arcade{position:relative;width:100%;aspect-ratio:16/10;border-radius:22px;overflow:hidden;
-  margin-top:10px;box-shadow:0 10px 22px -10px rgba(0,0,0,.45)}
+/* max-width fixo pelo mesmo motivo dos tabuleiros de minigame logo abaixo: a tela de Arcade
+   é "tela-cheia" e perde o limite de 520px do #app, então sem isso o hero esticaria até a
+   largura toda da janela no PC. */
+.hero-arcade{position:relative;width:100%;max-width:520px;aspect-ratio:16/10;border-radius:22px;overflow:hidden;
+  margin:10px auto 0;box-shadow:0 10px 22px -10px rgba(0,0,0,.45);touch-action:pan-y}
 .hero-slide{
   position:absolute;inset:0;border:none;padding:0;cursor:pointer;display:block;
   background-size:cover;background-position:center;opacity:0;transition:opacity .6s ease;
+  -webkit-user-drag:none;user-select:none;
 }
 .hero-slide.ativo{opacity:1;z-index:1}
 .hero-slide::after{
@@ -323,6 +327,16 @@ body.tela-cheia #app{padding:0;max-width:none}
 .hero-ponto{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.5);padding:0;border:none;
   transition:all .25s ease}
 .hero-ponto.ativo{background:#fff;width:18px;border-radius:4px}
+/* setas de navegação — no touch o arrasto já resolve, mas no mouse/desktop ninguém "arrasta"
+   um carrossel por instinto, então essas setas dão um alvo de clique óbvio pros dois lados */
+.hero-seta{
+  position:absolute;top:50%;transform:translateY(-50%);z-index:2;
+  width:34px;height:34px;border-radius:50%;border:none;padding:0;
+  background:rgba(0,0,0,.35);color:#fff;font-size:18px;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+}
+.hero-seta.esquerda{left:10px}
+.hero-seta.direita{right:10px}
 .cena-quadro{position:relative;height:100%;display:inline-block;vertical-align:top;line-height:0}
 .cena-img{display:block;height:100%;width:auto;max-width:none;-webkit-user-drag:none;user-select:none;pointer-events:none}
 .predio{
@@ -542,7 +556,7 @@ body.tela-cheia #app{padding:0;max-width:none}
    lugar de uma grade de cartões quadrados repetidos: cabe muito mais jogo por tela e escaneia
    mais rápido (o cartão quadrado grande só compensa quando tem poucos itens; com 11 jogos
    virava parede de cards genéricos, quase todos "Recorde: 0 pontos" pra quem tá começando). */
-.lista-jogos-arcade{display:flex;flex-direction:column;gap:8px}
+.lista-jogos-arcade{display:flex;flex-direction:column;gap:8px;max-width:520px;margin:0 auto}
 .linha-jogo-arcade{
   display:flex;align-items:center;gap:12px;text-align:left;padding:9px 12px;
   border:var(--borda) solid var(--contorno);border-bottom-width:5px;border-radius:16px;
@@ -551,8 +565,8 @@ body.tela-cheia #app{padding:0;max-width:none}
 }
 .linha-jogo-arcade:active{transform:translateY(3px);border-bottom-width:1px}
 .icone-jogo-arcade{
-  flex:none;width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;
-  background:var(--cor,var(--ceu));font-size:24px;box-shadow:0 3px 0 var(--cor-borda,var(--ceu-rim));
+  flex:none;width:88px;height:56px;border-radius:13px;display:flex;align-items:center;justify-content:center;
+  background:var(--cor,var(--ceu));font-size:26px;box-shadow:0 3px 0 var(--cor-borda,var(--ceu-rim));
 }
 /* com miniatura enviada no painel, o badge vira uma fotinho de verdade em vez do emoji —
    mesmo tamanho/cantos, só troca o conteúdo */
@@ -3212,16 +3226,29 @@ window._irParaSlideHero = i => { irParaSlideHero(i); reiniciarAutoplayHero(); };
 function ativarSwipeHero(){
   const el = $('#hero-arcade');
   if(!el) return;
-  let x0 = null, arrastou = false;
-  el.addEventListener('pointerdown', e => { x0 = e.clientX; arrastou = false; }, {passive:true});
-  el.addEventListener('pointerup', e => {
-    if(x0 === null) return;
-    const dx = e.clientX - x0;
-    x0 = null;
-    if(Math.abs(dx) < 40) return; // toque normal, deixa o onclick do slide agir
-    arrastou = true; // impede o clique fantasma que abriria o jogo do slide errado
-    if(dx < 0) window._irParaSlideHero(heroArcadeIndice + 1);
-    else window._irParaSlideHero(heroArcadeIndice - 1);
+  let arrastou = false;
+  el.addEventListener('pointerdown', e => {
+    const x0 = e.clientX;
+    // escuta o solte no documento inteiro, não só dentro do hero — um arrasto rápido quase
+    // sempre termina fora do retângulo do card (o dedo/mouse não volta pro mesmo elemento), e
+    // um listener preso ao próprio hero nunca veria esse pointerup. setPointerCapture resolveria
+    // isso, mas também redireciona o "click" nativo pro elemento capturado — quebrando o clique
+    // nos botões de seta e nos próprios slides (o toque normal parava de abrir o jogo certo).
+    const aoSoltar = ev => {
+      document.removeEventListener('pointerup', aoSoltar);
+      document.removeEventListener('pointercancel', aoCancelar);
+      const dx = ev.clientX - x0;
+      if(Math.abs(dx) < 40) return; // toque normal, deixa o onclick do slide/seta agir
+      arrastou = true; // impede o clique fantasma que abriria o jogo do slide errado
+      if(dx < 0) window._irParaSlideHero(heroArcadeIndice + 1);
+      else window._irParaSlideHero(heroArcadeIndice - 1);
+    };
+    const aoCancelar = () => {
+      document.removeEventListener('pointerup', aoSoltar);
+      document.removeEventListener('pointercancel', aoCancelar);
+    };
+    document.addEventListener('pointerup', aoSoltar);
+    document.addEventListener('pointercancel', aoCancelar);
   });
   // mouse (desktop) dispara "click" no botão mesmo após um arrasto grande — diferente do toque,
   // que o navegador cancela sozinho quando o dedo se move além do limiar. Cancela aqui pra igualar
@@ -3257,6 +3284,9 @@ RENDER.arcade = () => {
     <div class="titulo-secao" style="margin:10px 4px 0"><h2 style="font-size:16px">🌟 Destaques</h2></div>
     <div class="hero-arcade" id="hero-arcade">
       ${destaques.map(slideHeroArcade).join('')}
+      ${destaques.length > 1 ? `
+      <button type="button" class="hero-seta esquerda" onclick="window._irParaSlideHero(heroArcadeIndice - 1)" aria-label="Destaque anterior">‹</button>
+      <button type="button" class="hero-seta direita" onclick="window._irParaSlideHero(heroArcadeIndice + 1)" aria-label="Próximo destaque">›</button>` : ''}
       <div class="hero-pontos" id="hero-arcade-pontos">
         ${destaques.map((_, i) => `<button type="button" class="hero-ponto${i===0?' ativo':''}" onclick="window._irParaSlideHero(${i})" aria-label="Slide ${i+1}"></button>`).join('')}
       </div>
