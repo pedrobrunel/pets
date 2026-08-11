@@ -1044,9 +1044,15 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .xadrez-cel.destino.captura::after{width:82%;height:82%;border-radius:50%;background:none;
   box-shadow:inset 0 0 0 4px rgba(231,76,60,.75)}
 .xadrez-cel.rei-em-xeque{box-shadow:inset 0 0 0 3px #E74C3C}
-.xadrez-peca{filter:drop-shadow(0 2px 0 rgba(0,0,0,.25))}
-.xadrez-peca.jogador{color:#fff;-webkit-text-stroke:1.3px #2C3E50}
-.xadrez-peca.pc{color:#1a1a1a}
+/* ficha redonda por trás da peça — mesma técnica do dama-peca: a cor de quem é dona da
+   peça vem do FUNDO da ficha (background-color simples, sempre confiável), não de tentar
+   recolorir o glifo Unicode via CSS — em vários celulares o navegador renderiza os símbolos
+   de xadrez como emoji colorido de largura fixa, ignorando "color" completamente, e branco
+   virava praticamente idêntico a preto */
+.xadrez-peca-ficha{width:82%;height:82%;border-radius:50%;display:grid;place-items:center;
+  box-shadow:0 2px 0 rgba(0,0,0,.3);font-size:calc(min(9vw,40px)*.44);line-height:1}
+.xadrez-peca-ficha.jogador{background:#fff;border:2px solid #E0DED8;color:#2C3E50}
+.xadrez-peca-ficha.pc{background:#2C3E50;border:2px solid #17202A;color:#fff}
 .selecao-dificuldade-xadrez{display:flex;flex-direction:column;gap:10px;margin-top:14px}
 .selecao-dificuldade-xadrez .btn{flex-direction:column;gap:2px;padding:14px 20px}
 .selecao-dificuldade-xadrez .btn small{font-weight:700;font-size:12px;opacity:.85}
@@ -5579,7 +5585,13 @@ function xadrezMelhorMovimentoPC(tab, estadoExtra, dificuldade){
   return melhor;
 }
 
+// a cor de quem é dona da peça vem da ficha redonda (background sólido, ver CSS
+// .xadrez-peca-ficha), não do glifo — por isso um símbolo só serve pros dois lados. O
+// sufixo ︎ (seletor de apresentação em texto) desencoraja o navegador de trocar o símbolo
+// por um emoji colorido de largura fixa, que ignoraria o "color" do CSS dentro da ficha.
+const XADREZ_SUFIXO_TEXTO = '︎';
 const XADREZ_EMOJI_PECA = {peao:'♟', cavalo:'♞', bispo:'♝', torre:'♜', dama:'♛', rei:'♚'};
+function xadrezGlifoPeca(peca){ return XADREZ_EMOJI_PECA[peca.tipo] + XADREZ_SUFIXO_TEXTO; }
 const XADREZ_ROTULO_DIFICULDADE = {facil:'Fácil', medio:'Médio', dificil:'Difícil'};
 function jogoXadrezSelecionarDificuldade(){
   $('#tela-arcade').innerHTML = `
@@ -5619,7 +5631,7 @@ function jogoXadrez(dificuldade){
         if(podeSelecionar) classe += ' selecionavel';
         if(ehReiEmXeque) classe += ' rei-em-xeque';
         const conteudo = peca
-          ? `<span class="xadrez-peca ${peca.cor}">${spriteOuEmoji('xadrez'+peca.tipo+peca.cor, XADREZ_EMOJI_PECA[peca.tipo], 30)}</span>`
+          ? `<span class="xadrez-peca-ficha ${peca.cor}">${spriteOuEmoji('xadrez'+peca.tipo+peca.cor, xadrezGlifoPeca(peca), 30)}</span>`
           : '';
         cels.push(`<button type="button" class="${classe}" onclick="window._clicarXadrez(${r},${c})">${conteudo}</button>`);
       }
