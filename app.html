@@ -383,13 +383,22 @@ body.tela-cheia #app{padding:0;max-width:none}
      diferentes dão uma sensação leve de profundidade. */
   #tela-trilhas.ativa{overflow:hidden}
   #tela-trilhas.ativa .cena-scroll{position:relative;z-index:1}
+  /* animar background-position (jeito antigo) obriga o navegador a repintar os 7+
+     radial-gradient inteiros a cada quadro — pesado o bastante pra travar em PC mais
+     fraco, ainda mais com duas camadas rodando ao mesmo tempo sem parar. Trocado por
+     transform:translateX(), que só move um "recorte" já pintado (acelerado por GPU,
+     não repinta nada) — pra isso o elemento precisa ser bem mais largo que a tela (o
+     "excesso" é o que ainda cobre a tela depois de andar um ladrilho inteiro pra
+     esquerda), já que inset:0 travaria a largura em 100% e o deslocamento revelaria
+     um vazio do lado direito. */
   #tela-trilhas.ativa::before, #tela-trilhas.ativa::after{
-    content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
-    background-repeat:repeat-x;
+    content:'';position:absolute;top:0;left:0;bottom:0;z-index:0;pointer-events:none;
+    background-repeat:repeat-x;will-change:transform;
   }
   /* faixa de cima: nuvem grande sempre na margem acima da moldura, ancorada a uma
      distância fixa do topo (não em %) pra não depender da altura da tela */
   #tela-trilhas.ativa::before{
+    width:calc(100vw + 4000px); /* ladrilho de 2000px + folga de 2000px */
     background-size:2000px 100%;
     background-image:
       radial-gradient(ellipse 200px 32px at left 300px top 92px, rgba(255,255,255,.5), transparent 78%),
@@ -405,6 +414,7 @@ body.tela-cheia #app{padding:0;max-width:none}
   /* faixa de baixo: outra nuvem, um pouco menor e mais apagada (sensação de mais
      longe), ancorada perto do fundo da tela */
   #tela-trilhas.ativa::after{
+    width:calc(100vw + 5200px); /* ladrilho de 2600px + folga de 2600px */
     background-size:2600px 100%;
     background-image:
       radial-gradient(ellipse 170px 28px at left 300px bottom 86px, rgba(255,255,255,.4), transparent 78%),
@@ -417,8 +427,8 @@ body.tela-cheia #app{padding:0;max-width:none}
     opacity:.55;
     animation:deriva-nuvens-2 300s linear infinite reverse;
   }
-  @keyframes deriva-nuvens-1{from{background-position:0 0}to{background-position:-2000px 0}}
-  @keyframes deriva-nuvens-2{from{background-position:0 0}to{background-position:-2600px 0}}
+  @keyframes deriva-nuvens-1{from{transform:translateX(0)}to{transform:translateX(-2000px)}}
+  @keyframes deriva-nuvens-2{from{transform:translateX(0)}to{transform:translateX(-2600px)}}
 }
 .predio{
   position:absolute;background:none;border:none;cursor:pointer;padding:0;
@@ -447,18 +457,18 @@ body.tela-cheia #app{padding:0;max-width:none}
    diferentes, igual todo o resto do posicionamento em % desta tela). */
 .svg-brilho-curva{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
 /* pulso próprio do brilho-curva: só opacidade, nunca transform — escalar um <path> mudava
-   o "tamanho" da linha de um jeito esquisito (o traçado distorcia), então esse aqui é
-   deliberadamente mais contido que o pulsa-dica do quadrado/círculo. O halo desfocado fica
-   com opacidade fixa (não pisca) — só a linha fina por cima pulsa de leve, pra dar uma
-   sensação de brilho ambiente em vez de "linha branca acesa". */
-@keyframes brilho-curva-pulso{0%,100%{opacity:.15}50%{opacity:.45}}
+   o "tamanho" da linha de um jeito esquisito (o traçado distorcia). Nada de linha nítida
+   aqui: as duas camadas são desfocadas e largas de propósito — é um halo de luz seguindo
+   o traçado, não um risco desenhado por cima do mapa. */
+@keyframes brilho-curva-pulso{0%,100%{opacity:.18}50%{opacity:.5}}
 .svg-brilho-curva .tracado-brilho{
-  fill:none;stroke:#fff;stroke-width:1.1;stroke-linecap:round;vector-effect:non-scaling-stroke;
-  animation:brilho-curva-pulso 2.4s ease-in-out infinite;
+  fill:none;stroke:#fff;stroke-width:14;stroke-linecap:round;vector-effect:non-scaling-stroke;
+  filter:blur(6px);
+  animation:brilho-curva-pulso 2.6s ease-in-out infinite;
 }
 .svg-brilho-curva .tracado-brilho-glow{
-  fill:none;stroke:#fff;stroke-width:5;stroke-linecap:round;vector-effect:non-scaling-stroke;
-  opacity:.14;filter:blur(3px);
+  fill:none;stroke:#fff;stroke-width:24;stroke-linecap:round;vector-effect:non-scaling-stroke;
+  opacity:.12;filter:blur(11px);
 }
 .predio-selo{
   margin-bottom:-8px;background:#fff;border:2px solid var(--contorno);border-radius:999px;
