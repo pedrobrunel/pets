@@ -451,14 +451,14 @@ body.tela-cheia #app{padding:0;max-width:none}
    deliberadamente mais contido que o pulsa-dica do quadrado/círculo. O halo desfocado fica
    com opacidade fixa (não pisca) — só a linha fina por cima pulsa de leve, pra dar uma
    sensação de brilho ambiente em vez de "linha branca acesa". */
-@keyframes brilho-curva-pulso{0%,100%{opacity:.35}50%{opacity:.85}}
+@keyframes brilho-curva-pulso{0%,100%{opacity:.15}50%{opacity:.45}}
 .svg-brilho-curva .tracado-brilho{
-  fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;vector-effect:non-scaling-stroke;
+  fill:none;stroke:#fff;stroke-width:1.1;stroke-linecap:round;vector-effect:non-scaling-stroke;
   animation:brilho-curva-pulso 2.4s ease-in-out infinite;
 }
 .svg-brilho-curva .tracado-brilho-glow{
-  fill:none;stroke:#fff;stroke-width:8;stroke-linecap:round;vector-effect:non-scaling-stroke;
-  opacity:.3;filter:blur(4px);
+  fill:none;stroke:#fff;stroke-width:5;stroke-linecap:round;vector-effect:non-scaling-stroke;
+  opacity:.14;filter:blur(3px);
 }
 .predio-selo{
   margin-bottom:-8px;background:#fff;border:2px solid var(--contorno);border-radius:999px;

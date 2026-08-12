@@ -145,8 +145,13 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
 }
 .palco-mapa .quadro{position:relative;display:inline-block;line-height:0}
 /* --zoom: 1 = largura do palco; 2/3/5 = ampliado, com rolagem. Como os pontos são
-   posicionados em % do quadro, o zoom não interfere em nenhuma coordenada gravada. */
-.palco-mapa img{display:block;width:calc(100% * var(--zoom,1));height:auto;user-select:none;-webkit-user-drag:none}
+   posicionados em % do quadro, o zoom não interfere em nenhuma coordenada gravada.
+   O zoom só é aplicado AQUI, no .quadro — a imagem dentro é sempre width:100% do
+   próprio .quadro (que já está com o tamanho certo). Aplicar var(--zoom) nos dois ao
+   mesmo tempo multiplicava o zoom por ele mesmo (100% da imagem = 100% do quadro, que
+   já tinha sido multiplicado): a 3× a imagem inflava a altura 9× em vez de 3×, e todo
+   clique/toque no mapa desalinhava da marca visível. */
+.palco-mapa img{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none}
 .palco-mapa .quadro{width:calc(100% * var(--zoom,1))}
 .palco-mapa.desenhando{cursor:crosshair}
 .ponto-marca{
