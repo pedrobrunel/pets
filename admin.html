@@ -1417,7 +1417,7 @@ pergunta     { p: "...", alts: [string,...], certa: índice numérico da alterna
     </section>
 
     <section id="aba-arquivos" class="oculto">
-      <h2>🗂️ Arquivos</h2>
+      <h2>🗂️ Arquivos <span id="resumo-biblioteca" class="selo" style="background:#EAF6FF;color:#2E86AB;vertical-align:middle;font-size:12px"></span></h2>
       <p class="sub">biblioteca central de imagens e áudios — suba um arquivo aqui e reutilize ele em vários lugares (loja, item, mapa, NPC...) sem duplicar upload. Toda imagem enviada é convertida automaticamente pra WebP (mais leve) e o arquivo original é descartado. Um arquivo que já está em uso em algum lugar não pode ser apagado — a lista abaixo mostra onde cada um é usado.</p>
 
       <div class="upload" id="zona-upload-biblioteca">🖼️🎵 Arraste imagens (webp/png/jpg) ou áudios (mp3/ogg/wav/m4a) aqui, ou clique pra escolher</div>
@@ -3601,8 +3601,7 @@ function renderizarPaginaArcadeJogo(){
           return `<div>
             <label style="margin-top:0">som de ${tipo}</label>
             ${cfg[campo + 'Url'] ? `<audio controls src="${esc(cfg[campo + 'Url'])}" style="width:100%;margin-bottom:6px"></audio>` : ''}
-            <input type="file" accept=".mp3,.ogg,.wav,.m4a,audio/*" class="oculto" id="input-som-${tipo}-arcade" onchange="enviarSomArcade('${tipo}', this.files[0])">
-            <button type="button" class="btn linha branco" onclick="$('#input-som-${tipo}-arcade').click()">Trocar</button>
+            <button type="button" class="btn linha branco" onclick="escolherSomArcade('${tipo}')">Trocar</button>
             ${cfg[campo] ? `<button type="button" class="btn linha erro" style="margin-left:8px" onclick="removerSomArcade('${tipo}')">Voltar ao padrão</button>` : ''}
           </div>`;
         }).join('')}
@@ -3629,20 +3628,16 @@ async function removerFundoArcade(){
   minigameConfigCache[jogoArcadeAtivo] = {...(minigameConfigCache[jogoArcadeAtivo] || {}), fundo:'', fundoUrl:''};
   renderizarPaginaArcadeJogo();
 }
-async function enviarSomArcade(tipo, arquivo){
-  if(!arquivo) return;
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    fd.append('jogo', jogoArcadeAtivo);
-    fd.append('evento', tipo);
-    const r = await fetch('api/admin.php?acao=minigame_som_upload', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    const campo = 'som' + tipo.charAt(0).toUpperCase() + tipo.slice(1);
-    minigameConfigCache[jogoArcadeAtivo] = {...(minigameConfigCache[jogoArcadeAtivo] || {}), [campo]: d.arquivo, [campo+'Url']: d.arquivoUrl};
-    renderizarPaginaArcadeJogo();
-  }catch(e){ alert(e.message); }
+function escolherSomArcade(tipo){
+  abrirSeletorBiblioteca(async (nomeArquivo) => {
+    try{
+      const dCopia = await api('arquivo_copiar_para', {method:'POST', corpo:{nomeArquivo, destino:'minigames'}});
+      const d = await api('minigame_som_definir', {method:'POST', corpo:{jogo: jogoArcadeAtivo, evento: tipo, nomeArquivo: dCopia.nomeArquivo}});
+      const campo = 'som' + tipo.charAt(0).toUpperCase() + tipo.slice(1);
+      minigameConfigCache[jogoArcadeAtivo] = {...(minigameConfigCache[jogoArcadeAtivo] || {}), [campo]: d.arquivo, [campo+'Url']: d.arquivoUrl};
+      renderizarPaginaArcadeJogo();
+    }catch(e){ alert(e.message); }
+  }, 'audio');
 }
 async function removerSomArcade(tipo){
   if(!confirm('Voltar esse som pro bipe padrão?')) return;
@@ -4155,8 +4150,7 @@ function cartaoSpriteTemporada(s){
     <div class="preview-sprite-minigame" style="width:${caixa}px;height:${caixa}px">${s.imagemUrl ? `<img src="${esc(s.imagemUrl)}">` : `<span class="emoji-sprite-minigame">${s.emoji || '—'}</span>`}</div>
     <p class="rotulo-sprite-minigame">${esc(s.rotulo)}</p>
     ${!s.imagem ? `<p class="dica-tamanho-sprite" style="margin-top:0">usa o sprite padrão</p>` : ''}
-    <input type="file" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto" id="input-temporada-sprite-${s.chave}" onchange="enviarSpriteTemporada('${s.chave}', this.files[0])">
-    <button type="button" class="btn linha branco" onclick="$('#input-temporada-sprite-${s.chave}').click()">Trocar</button>
+    <button type="button" class="btn linha branco" onclick="escolherSpriteTemporada('${s.chave}')">Trocar</button>
     ${s.imagem ? `<button type="button" class="btn linha erro" onclick="removerSpriteTemporada('${s.chave}')">Voltar ao padrão</button>` : ''}
     ${s.imagem ? `<div class="controle-escala-sprite"><span>Tamanho: <b id="valor-escala-temporada-${s.chave}">${s.escala}</b>%</span><input type="range" min="50" max="200" step="5" value="${s.escala}" oninput="ajustarEscalaTemporadaLocal('${s.chave}', this.value)" onchange="salvarEscalaSpriteTemporada('${s.chave}', this.value)"></div>` : ''}
   </div>`;
@@ -4171,19 +4165,15 @@ function ajustarEscalaTemporadaLocal(chave, valor){
 async function salvarEscalaSpriteTemporada(chave, valor){
   await api('temporada_sprite_escala_salvar', {method:'POST', corpo:{temporadaId: temporadaSpritesAberta, chave, escala: Number(valor)}}).catch(e => alert(e.message));
 }
-async function enviarSpriteTemporada(chave, arquivo){
-  if(!arquivo) return;
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    fd.append('temporadaId', temporadaSpritesAberta);
-    fd.append('chave', chave);
-    const r = await fetch('api/admin.php?acao=temporada_sprite_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    await carregarSpritesTemporada(temporadaSpritesAberta);
-    carregarTemporadas();
-  }catch(e){ alert(e.message); }
+function escolherSpriteTemporada(chave){
+  abrirSeletorBiblioteca(async (nomeArquivo) => {
+    try{
+      const dCopia = await api('arquivo_copiar_para', {method:'POST', corpo:{nomeArquivo, destino:'minigames'}});
+      await api('temporada_sprite_definir', {method:'POST', corpo:{temporadaId: temporadaSpritesAberta, chave, nomeArquivo: dCopia.nomeArquivo}});
+      await carregarSpritesTemporada(temporadaSpritesAberta);
+      carregarTemporadas();
+    }catch(e){ alert(e.message); }
+  }, 'imagem');
 }
 async function removerSpriteTemporada(chave){
   if(!confirm('Voltar esse slot pro sprite padrão?')) return;
@@ -4888,6 +4878,11 @@ function desenharBiblioteca(){
   if(categoria === SEM_USO_BIBLIOTECA) lista = lista.filter(a => !a.usos.length);
   else if(categoria) lista = lista.filter(a => a.usos.some(u => u.categoria === categoria));
   if(busca) lista = lista.filter(a => a.nomeOriginal.toLowerCase().includes(busca) || a.nomeArquivo.toLowerCase().includes(busca));
+
+  const pesoTotal = bibliotecaCache.reduce((soma, a) => soma + (a.tamanho || 0), 0);
+  $('#resumo-biblioteca').textContent = bibliotecaCache.length
+    ? `${bibliotecaCache.length} arquivo(s) · ${formatarTamanho(pesoTotal)} ao todo`
+    : '';
 
   $('#contagem-biblioteca').textContent = bibliotecaCache.length
     ? `Mostrando ${lista.length} de ${bibliotecaCache.length} arquivo(s).`

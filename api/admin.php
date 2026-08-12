@@ -116,6 +116,7 @@
      POST ?acao=minigame_fundo_definir  {jogo, nomeArquivo} -> mesma ideia de casa_fundo_definir, pro fundo do minigame
      POST ?acao=minigame_fundo_remover  {jogo} -> volta pro fundo padrão
      POST ?acao=minigame_som_upload     (multipart: arquivo, jogo, evento=acerto|erro) -> substitui o bipe padrão
+     POST ?acao=minigame_som_definir    {jogo, evento, nomeArquivo} -> mesma ideia de casa_fundo_definir, pro som
      POST ?acao=minigame_som_remover    {jogo, evento} -> volta pro bipe padrão
      POST ?acao=minigame_thumb_imagem   (multipart: arquivo, jogo) -> miniatura do cartão/carrossel do Arcade
      POST ?acao=minigame_thumb_definir  {jogo, nomeArquivo} -> mesma ideia de casa_fundo_definir, pra miniatura
@@ -126,6 +127,7 @@
      POST ?acao=temporada_excluir     {id}
      POST ?acao=temporada_duplicar    {id, novoId} -> clona uma temporada (agenda + sprites), fica desativada
      POST ?acao=temporada_sprite_imagem  (multipart: arquivo, temporadaId, chave) -> sobe pra assets/minigames/
+     POST ?acao=temporada_sprite_definir {temporadaId, chave, nomeArquivo} -> mesma ideia de casa_fundo_definir, pro sprite
      POST ?acao=temporada_sprite_remover {temporadaId, chave} -> volta esse slot da temporada pro sprite padrão
      POST ?acao=temporada_sprite_escala_salvar {temporadaId, chave, escala} -> tamanho (50 a 200%), só com imagem já enviada
      GET  ?acao=lojas_listar
@@ -2634,6 +2636,20 @@ try {
     responder(['ok' => true, 'arquivo' => $nome, 'arquivoUrl' => caminhoPublicoMinigame($nome)]);
   }
 
+  if ($acao === 'minigame_som_definir') {
+    $d = corpo();
+    $jogo = (string)($d['jogo'] ?? '');
+    $evento = (string)($d['evento'] ?? '');
+    if (!array_key_exists($jogo, JOGOS_ARCADE)) responder(['erro' => 'Minigame desconhecido.'], 422);
+    if (!in_array($evento, ['acerto', 'erro'], true)) responder(['erro' => '"evento" precisa ser "acerto" ou "erro".'], 422);
+    $nome = basename((string)($d['nomeArquivo'] ?? ''));
+    if ($nome === '' || !is_file(pastaMinigames() . '/' . $nome)) responder(['erro' => 'Arquivo não encontrado.'], 404);
+    $coluna = $evento === 'acerto' ? 'som_acerto' : 'som_erro';
+    bd()->prepare("INSERT INTO minigame_config (jogo, $coluna) VALUES (?, ?) ON DUPLICATE KEY UPDATE $coluna = VALUES($coluna)")
+      ->execute([$jogo, $nome]);
+    responder(['ok' => true, 'arquivo' => $nome, 'arquivoUrl' => caminhoPublicoMinigame($nome)]);
+  }
+
   if ($acao === 'minigame_som_remover') {
     $d = corpo();
     $jogo = (string)($d['jogo'] ?? '');
@@ -2772,6 +2788,21 @@ try {
     if (!@move_uploaded_file($arq['tmp_name'], pastaMinigames() . '/' . $nome)) {
       responder(['erro' => 'Não consegui gravar o arquivo em assets/minigames (confira a permissão da pasta).'], 500);
     }
+    bd()->prepare('INSERT INTO temporada_sprites (temporada_id, chave, imagem) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE imagem = VALUES(imagem)')
+      ->execute([$temporadaId, $chave, $nome]);
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoMinigame($nome)]);
+  }
+
+  if ($acao === 'temporada_sprite_definir') {
+    $d = corpo();
+    $temporadaId = (string)($d['temporadaId'] ?? '');
+    $chave = (string)($d['chave'] ?? '');
+    if (!array_key_exists($chave, SPRITES_MINIGAME)) responder(['erro' => 'Slot de sprite desconhecido.'], 422);
+    $st = bd()->prepare('SELECT COUNT(*) FROM temporadas WHERE id = ?');
+    $st->execute([$temporadaId]);
+    if (!$st->fetchColumn()) responder(['erro' => 'Temporada não encontrada.'], 404);
+    $nome = basename((string)($d['nomeArquivo'] ?? ''));
+    if ($nome === '' || !is_file(pastaMinigames() . '/' . $nome)) responder(['erro' => 'Arquivo não encontrado.'], 404);
     bd()->prepare('INSERT INTO temporada_sprites (temporada_id, chave, imagem) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE imagem = VALUES(imagem)')
       ->execute([$temporadaId, $chave, $nome]);
     responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoMinigame($nome)]);
