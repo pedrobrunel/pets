@@ -179,6 +179,7 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
   background:#fff;border:2px solid var(--erro);cursor:grab;z-index:4;
 }
 .ancora-caneta.primeira{background:var(--mata)}
+.ancora-caneta.selecionada{box-shadow:0 0 0 3px var(--moeda)}
 .alca-caneta{
   position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;
   background:var(--erro);border:1px solid #fff;cursor:grab;z-index:4;
@@ -434,13 +435,16 @@ body.conectando-fluxo{cursor:crosshair}
                   <label style="margin:0">brilho: <span id="curva-dica-resumo">quadrado ao redor (padrão)</span></label>
                   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
                     <button type="button" class="btn linha branco" id="btn-caneta" style="flex:1">🖊️ Desenhar linha</button>
-                    <button type="button" class="btn linha branco" id="btn-caneta-desfazer">↩️ Desfazer</button>
+                    <button type="button" class="btn linha branco" id="btn-caneta-desfazer" title="Desfazer (Ctrl+Z)">↩️ Desfazer</button>
+                    <button type="button" class="btn linha branco" id="btn-caneta-refazer" title="Refazer (Ctrl+Shift+Z)">↪️ Refazer</button>
                     <button type="button" class="btn linha branco" id="btn-caneta-limpar">🧹 Limpar</button>
                   </div>
                   <p class="dica-editor" id="dica-caneta">
                     Clique na imagem pra criar uma âncora; <b>clique e arraste</b> pra criar uma curva suave nesse ponto
                     (igual a caneta do Illustrator). Arraste uma âncora pra mover, ou a bolinha vermelha da alça pra
-                    ajustar a curva. Sem linha desenhada, o brilho continua o quadrado/círculo de sempre.
+                    ajustar a curva. Clique numa âncora pra selecioná-la e apertar <b>Delete</b> (ou dê duplo clique)
+                    pra apagar só ela. <b>Ctrl+Z</b> desfaz, <b>Ctrl+Shift+Z</b> refaz — errou, não precisa limpar tudo
+                    de novo. Sem linha desenhada, o brilho continua o quadrado/círculo de sempre.
                   </p>
                 </div>
                 <label style="margin-top:10px">só aparece se o aluno já tiver o item</label>
@@ -1610,7 +1614,46 @@ function desenharMarcas(){
    a curva sempre suave — o motor de render usa os dois campos, só o editor visual que
    simplifica pra alça única por âncora. */
 let modoCaneta = false;
-let modoPena = null, alvoPena = -1, inicioPena = null; // estado do arrasto atual da caneta
+let modoPena = null, alvoPena = -1, inicioPena = null, mudouAlgoPena = false; // estado do arrasto atual da caneta
+let ancoraSelecionadaCaneta = -1;
+// desfazer/refazer: pilha de fotografias do curvaDica inteiro (é pequeno, poucas dezenas
+// de âncoras no máximo — clonar tudo a cada ação é bem mais simples que registrar "diffs"
+// e não pesa nada em troca)
+let historicoCurva = [], indiceHistorico = -1;
+const LIMITE_HISTORICO_CURVA = 60;
+
+function registrarHistoricoCurva(){
+  const p = pontosEdit[pontoSel];
+  if(!p) return;
+  historicoCurva = historicoCurva.slice(0, indiceHistorico + 1); // corta o "futuro" descartado
+  historicoCurva.push(JSON.parse(JSON.stringify(p.curvaDica || [])));
+  if(historicoCurva.length > LIMITE_HISTORICO_CURVA) historicoCurva.shift();
+  indiceHistorico = historicoCurva.length - 1;
+  atualizarBotoesHistoricoCurva();
+}
+function aplicarHistoricoCurva(){
+  const p = pontosEdit[pontoSel];
+  if(!p) return;
+  p.curvaDica = JSON.parse(JSON.stringify(historicoCurva[indiceHistorico] || []));
+  ancoraSelecionadaCaneta = -1;
+  atualizarBotoesHistoricoCurva();
+  desenharCurvaCaneta();
+}
+function desfazerCurva(){
+  if(indiceHistorico <= 0) return;
+  indiceHistorico--;
+  aplicarHistoricoCurva();
+}
+function refazerCurva(){
+  if(indiceHistorico >= historicoCurva.length - 1) return;
+  indiceHistorico++;
+  aplicarHistoricoCurva();
+}
+function atualizarBotoesHistoricoCurva(){
+  const btnD = $('#btn-caneta-desfazer'), btnR = $('#btn-caneta-refazer');
+  if(btnD) btnD.disabled = indiceHistorico <= 0;
+  if(btnR) btnR.disabled = indiceHistorico >= historicoCurva.length - 1;
+}
 
 function curvaParaSvgD(pontos){
   if(!pontos || pontos.length < 2) return '';
@@ -1664,7 +1707,7 @@ function desenharCurvaCaneta(){
   if(!modoCaneta) return;
   pontosCurva.forEach((a, i) => {
     const ancora = document.createElement('div');
-    ancora.className = 'ancora-caneta' + (i === 0 ? ' primeira' : '');
+    ancora.className = 'ancora-caneta' + (i === 0 ? ' primeira' : '') + (i === ancoraSelecionadaCaneta ? ' selecionada' : '');
     ancora.style.left = a.x + '%'; ancora.style.top = a.y + '%';
     ancora.dataset.ancora = i;
     quadro.appendChild(ancora);
@@ -1682,25 +1725,50 @@ function ativarModoCaneta(ligar){
   modoCaneta = ligar && pontoSel >= 0;
   const p = pontosEdit[pontoSel];
   if(modoCaneta && p && !p.curvaDica) p.curvaDica = [];
+  if(modoCaneta){
+    // cada sessão de desenho começa com seu próprio histórico, do jeito que a curva estava
+    // ao entrar — assim "desfazer" nunca sai apagando algo de uma edição anterior já fechada
+    historicoCurva = [JSON.parse(JSON.stringify((p && p.curvaDica) || []))];
+    indiceHistorico = 0;
+    ancoraSelecionadaCaneta = -1;
+    atualizarBotoesHistoricoCurva();
+  }
   const btn = $('#btn-caneta');
   if(btn) btn.textContent = modoCaneta ? '✅ Concluir desenho' : '🖊️ Desenhar linha';
   desenharCurvaCaneta();
 }
-$('#btn-caneta').onclick = () => ativarModoCaneta(!modoCaneta);
-$('#btn-caneta-desfazer').onclick = () => {
+function excluirAncoraCaneta(i){
   const p = pontosEdit[pontoSel];
-  if(!p || !p.curvaDica || !p.curvaDica.length) return;
-  p.curvaDica.pop();
+  if(!p || !p.curvaDica || i < 0 || i >= p.curvaDica.length) return;
+  p.curvaDica.splice(i, 1);
+  ancoraSelecionadaCaneta = -1;
+  registrarHistoricoCurva();
   desenharCurvaCaneta();
-};
+}
+$('#btn-caneta').onclick = () => ativarModoCaneta(!modoCaneta);
+$('#btn-caneta-desfazer').onclick = desfazerCurva;
+$('#btn-caneta-refazer').onclick = refazerCurva;
 $('#btn-caneta-limpar').onclick = () => {
   const p = pontosEdit[pontoSel];
-  if(!p) return;
+  if(!p || !p.curvaDica || !p.curvaDica.length) return;
   p.curvaDica = [];
+  ancoraSelecionadaCaneta = -1;
+  registrarHistoricoCurva();
   desenharCurvaCaneta();
 };
 document.addEventListener('keydown', ev => {
-  if(ev.key === 'Escape' && modoCaneta) ativarModoCaneta(false);
+  if(!modoCaneta) return;
+  // não atropela atalhos de edição de texto em campos normais do formulário
+  const emCampoDeTexto = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
+  if(ev.key === 'Escape'){ ativarModoCaneta(false); return; }
+  if(emCampoDeTexto) return;
+  if((ev.ctrlKey || ev.metaKey) && !ev.shiftKey && ev.key.toLowerCase() === 'z'){
+    ev.preventDefault(); desfazerCurva();
+  } else if((ev.ctrlKey || ev.metaKey) && (ev.key.toLowerCase() === 'y' || (ev.shiftKey && ev.key.toLowerCase() === 'z'))){
+    ev.preventDefault(); refazerCurva();
+  } else if((ev.key === 'Delete' || ev.key === 'Backspace') && ancoraSelecionadaCaneta >= 0){
+    ev.preventDefault(); excluirAncoraCaneta(ancoraSelecionadaCaneta);
+  }
 });
 /* problema de um ponto, se houver: destino em branco (não leva a lugar nenhum) ou
    destino em rascunho (salva, mas conteudo.php esconde do aluno). Devolve null se ok. */
@@ -1836,16 +1904,21 @@ function ativarDesenhoMapa(){
       if(!p) return;
       if(!p.curvaDica) p.curvaDica = [];
       inicioPena = pct(ev);
+      mudouAlgoPena = false;
       const alcaEl = ev.target.closest('.alca-caneta');
       const ancoraEl = ev.target.closest('.ancora-caneta');
       if(alcaEl){
         modoPena = 'mover-alca'; alvoPena = +alcaEl.dataset.alca;
+        ancoraSelecionadaCaneta = alvoPena;
       } else if(ancoraEl){
         modoPena = 'mover-ancora'; alvoPena = +ancoraEl.dataset.ancora;
+        ancoraSelecionadaCaneta = alvoPena; // clique seco já seleciona, sem precisar arrastar
       } else {
         // âncora nova: nasce reta (sem alça); se o dedo arrastar antes de soltar, vira suave
         p.curvaDica.push({x: inicioPena.x, y: inicioPena.y, hOut: null, hIn: null});
         modoPena = 'nova-ancora'; alvoPena = p.curvaDica.length - 1;
+        ancoraSelecionadaCaneta = alvoPena;
+        mudouAlgoPena = true; // a âncora já nasceu — isso sozinho já é uma mudança de verdade
       }
       quadro.setPointerCapture(ev.pointerId);
       ev.preventDefault();
@@ -1885,10 +1958,10 @@ function ativarDesenhoMapa(){
           a.hOut = null; a.hIn = null;
         }
       } else if(modoPena === 'mover-ancora'){
-        a.x = agora.x; a.y = agora.y;
+        a.x = agora.x; a.y = agora.y; mudouAlgoPena = true;
       } else if(modoPena === 'mover-alca'){
         const dx = agora.x - a.x, dy = agora.y - a.y;
-        a.hOut = {dx, dy}; a.hIn = {dx: -dx, dy: -dy};
+        a.hOut = {dx, dy}; a.hIn = {dx: -dx, dy: -dy}; mudouAlgoPena = true;
       }
       desenharCurvaCaneta();
       return;
@@ -1920,8 +1993,11 @@ function ativarDesenhoMapa(){
             a.hIn = {dx: -a.hOut.dx, dy: -a.hOut.dy};
           }
         }
+        // só entra no histórico se algo de fato mudou — um clique seco que só seleciona
+        // a âncora (sem mover nada) não deveria empilhar um passo de "desfazer" vazio
+        if(mudouAlgoPena) registrarHistoricoCurva();
       }
-      modoPena = null; alvoPena = -1; inicioPena = null;
+      modoPena = null; alvoPena = -1; inicioPena = null; mudouAlgoPena = false;
       desenharCurvaCaneta();
       return;
     }
@@ -1947,10 +2023,8 @@ function ativarDesenhoMapa(){
   quadro.addEventListener('dblclick', ev => {
     if(!modoCaneta) return;
     const ancoraEl = ev.target.closest('.ancora-caneta');
-    const p = pontosEdit[pontoSel];
-    if(!ancoraEl || !p || !p.curvaDica) return;
-    p.curvaDica.splice(+ancoraEl.dataset.ancora, 1);
-    desenharCurvaCaneta();
+    if(!ancoraEl) return;
+    excluirAncoraCaneta(+ancoraEl.dataset.ancora);
     ev.preventDefault();
   });
 }
