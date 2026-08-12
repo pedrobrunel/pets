@@ -125,6 +125,8 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
 .uso-tag.livre{background:#D5F5E3;color:#1E8449}
 .filtro-biblioteca{background:#fff;border:1px solid var(--contorno);border-radius:8px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer}
 .filtro-biblioteca.ativo{background:var(--tinta);color:#fff;border-color:var(--tinta)}
+.aba-modal-biblioteca{background:none;border:none;border-bottom:3px solid transparent;padding:8px 12px;font-size:13px;font-weight:800;color:#7F8C8D;cursor:pointer}
+.aba-modal-biblioteca.ativo{color:var(--tinta);border-bottom-color:var(--tinta)}
 
 /* --- sub-navegação dentro da aba Arcade: uma página de edição por minigame --- */
 .sub-nav-arcade{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 20px}
@@ -409,7 +411,7 @@ body.conectando-fluxo{cursor:crosshair}
         <label>nome</label>
         <input type="text" id="cena-nome" placeholder="ex.: Porto do saber">
         <label>imagem de fundo</label>
-        <div class="upload" id="zona-upload-cena">🖼️ Arraste a imagem aqui, ou clique pra escolher (webp de preferência — é o mais leve)</div>
+        <div class="upload" id="zona-upload-cena">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — ou arraste aqui (webp de preferência)</div>
         <input type="file" id="input-imagem-cena" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <input type="text" id="cena-imagem" placeholder="nome do arquivo (preenchido pelo upload)" style="margin-top:8px">
         <p class="dica-editor">A imagem enviada fica em <code>assets/cenas/</code> no servidor. Enviar outra com o mesmo nome substitui a anterior.</p>
@@ -502,7 +504,7 @@ body.conectando-fluxo{cursor:crosshair}
         <div id="npc-aviso-lottie" class="aviso-form" style="display:none;background:#FDEBD0;color:#9C640C">
           Por enquanto o app mostra o emoji no lugar da animação. Quando o player Lottie for adicionado ao jogo, NPCs marcados assim já vão funcionar sem precisar recadastrar.
         </div>
-        <div class="upload" id="zona-upload-npc">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+        <div class="upload" id="zona-upload-npc">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — ou arraste aqui</div>
         <input type="file" id="input-imagem-npc" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <input type="text" id="npc-imagem" placeholder="nome do arquivo (preenchido pelo upload)" style="margin-top:8px">
         <p class="dica-editor">A imagem enviada fica em <code>assets/npcs/</code> no servidor.</p>
@@ -835,7 +837,7 @@ body.conectando-fluxo{cursor:crosshair}
         <input type="text" id="artigo-autor" placeholder="ex.: Redação" maxlength="60">
 
         <label style="margin-top:10px">imagem de capa <span style="font-weight:700;color:#7F8C8D">(opcional, mas deixa o artigo bem mais chamativo no feed e na manchete)</span></label>
-        <div class="upload" id="zona-upload-artigo">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+        <div class="upload" id="zona-upload-artigo">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — ou arraste aqui</div>
         <input type="file" id="input-artigo" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="preview-artigo"></div>
 
@@ -875,11 +877,9 @@ body.conectando-fluxo{cursor:crosshair}
         <input type="text" id="item-descricao" placeholder="ex.: Serve pra ver de longe.">
 
         <label>imagem (opcional)</label>
-        <div class="upload" id="zona-upload-item">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
-        <input type="file" id="input-imagem-item" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
-        <button type="button" class="btn linha branco" id="btn-escolher-biblioteca-item" style="margin-top:8px">📂 Escolher da biblioteca</button>
-        <input type="text" id="item-imagem" placeholder="nome do arquivo (preenchido pelo upload)" style="margin-top:8px">
-        <p class="dica-editor">Sem imagem, o item aparece no mapa como o emoji, num círculo. A imagem enviada fica em <code>assets/itens/</code>. "Escolher da biblioteca" reaproveita uma imagem já usada em outro lugar do site (ex.: a mesma imagem de um item de loja).</p>
+        <div class="upload" id="zona-upload-item">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — ou arraste aqui</div>
+        <input type="text" id="item-imagem" placeholder="nome do arquivo (preenchido ao escolher)" style="margin-top:8px">
+        <p class="dica-editor">Sem imagem, o item aparece no mapa como o emoji, num círculo. A imagem enviada fica em <code>assets/itens/</code>. Clicar na caixa acima abre a biblioteca — dá pra reaproveitar uma imagem já usada em outro lugar do site (ex.: a mesma imagem de um item de loja).</p>
 
         <div class="check"><input type="checkbox" id="item-publicado" checked><label style="margin:0" for="item-publicado">publicado (aparece pro aluno)</label></div>
 
@@ -902,7 +902,7 @@ body.conectando-fluxo{cursor:crosshair}
         <h3 style="font-size:16px;margin-top:0">Fundo da Casa</h3>
         <p class="sub" style="margin-top:0">a imagem do quarto onde o aluno decora com os móveis comprados. Vale pra todo mundo (não é por jogador).</p>
         <div id="preview-casa-fundo" style="margin-bottom:10px"></div>
-        <div class="upload" id="zona-upload-casa-fundo">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+        <div class="upload" id="zona-upload-casa-fundo">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — ou arraste aqui</div>
         <input type="file" id="input-casa-fundo" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="casa-fundo-aviso" class="aviso-form"></div>
         <button type="button" class="btn linha erro" id="btn-remover-casa-fundo" style="margin-top:10px">Remover fundo</button>
@@ -920,7 +920,7 @@ body.conectando-fluxo{cursor:crosshair}
         <h3 style="font-size:16px;margin-top:0">Cabeçalho da Loja de Móveis</h3>
         <p class="sub" style="margin-top:0">mesmo cabeçalho de capa das trilhas e lojas — opcional, aparece em cima da tela.</p>
         <div id="preview-capa-lojamoveis" style="margin-bottom:10px"></div>
-        <div class="upload" id="zona-upload-capa-lojamoveis">🖼️ Arraste a imagem aqui, ou clique pra escolher — proporção ideal 350×150</div>
+        <div class="upload" id="zona-upload-capa-lojamoveis">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — proporção ideal 350×150</div>
         <input type="file" id="input-capa-lojamoveis" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="capa-lojamoveis-aviso" class="aviso-form"></div>
         <div class="check" style="margin-top:8px"><input type="checkbox" id="capa-lojamoveis-ativa"><label style="margin:0" for="capa-lojamoveis-ativa">mostrar esse cabeçalho pro aluno</label></div>
@@ -949,7 +949,7 @@ body.conectando-fluxo{cursor:crosshair}
         <h3 style="font-size:16px;margin-top:0">Cabeçalho do Mural da vila</h3>
         <p class="sub" style="margin-top:0">mesmo cabeçalho de capa das trilhas e lojas — opcional, aparece em cima da tela.</p>
         <div id="preview-capa-mural" style="margin-bottom:10px"></div>
-        <div class="upload" id="zona-upload-capa-mural">🖼️ Arraste a imagem aqui, ou clique pra escolher — proporção ideal 350×150</div>
+        <div class="upload" id="zona-upload-capa-mural">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — proporção ideal 350×150</div>
         <input type="file" id="input-capa-mural" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="capa-mural-aviso" class="aviso-form"></div>
         <div class="check" style="margin-top:8px"><input type="checkbox" id="capa-mural-ativa"><label style="margin:0" for="capa-mural-ativa">mostrar esse cabeçalho pro aluno</label></div>
@@ -978,7 +978,7 @@ body.conectando-fluxo{cursor:crosshair}
         <h3 style="font-size:16px;margin-top:0">Música de fundo</h3>
         <p class="sub" style="margin-top:0">opcional — toca em loop, baixinho, enquanto o aluno joga. Ele pode mutar tudo (música + efeitos) com o botão de som no topo do jogo.</p>
         <div id="preview-musica" style="margin-bottom:10px"></div>
-        <div class="upload" id="zona-upload-musica">🎵 Arraste o áudio aqui, ou clique pra escolher — mp3, ogg, wav ou m4a</div>
+        <div class="upload" id="zona-upload-musica">🎵 Clique pra escolher da biblioteca ou enviar um novo — ou arraste aqui (mp3, ogg, wav ou m4a)</div>
         <input type="file" id="input-musica" accept=".mp3,.ogg,.wav,.m4a,audio/*" class="oculto">
         <div id="musica-aviso" class="aviso-form"></div>
         <div class="check" style="margin-top:8px"><input type="checkbox" id="musica-ativa">
@@ -1001,23 +1001,23 @@ body.conectando-fluxo{cursor:crosshair}
         <div class="check"><input type="checkbox" id="movel-rotativel"><label style="margin:0" for="movel-rotativel">rotacionável (o aluno pode girar — ex.: uma poltrona com 4 lados)</label></div>
 
         <label style="margin-top:10px">imagem de frente (obrigatória)</label>
-        <div class="upload" id="zona-upload-movel-frente">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+        <div class="upload" id="zona-upload-movel-frente">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — ou arraste aqui</div>
         <input type="file" id="input-movel-frente" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="preview-movel-frente"></div>
 
         <div id="bloco-rotacoes-movel" class="oculto">
           <label style="margin-top:10px">imagem de frente virada pra direita</label>
-          <div class="upload" id="zona-upload-movel-direita">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+          <div class="upload" id="zona-upload-movel-direita">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — ou arraste aqui</div>
           <input type="file" id="input-movel-direita" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
           <div id="preview-movel-direita"></div>
 
           <label style="margin-top:10px">imagem de costas (verso)</label>
-          <div class="upload" id="zona-upload-movel-verso">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+          <div class="upload" id="zona-upload-movel-verso">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — ou arraste aqui</div>
           <input type="file" id="input-movel-verso" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
           <div id="preview-movel-verso"></div>
 
           <label style="margin-top:10px">imagem de frente virada pra esquerda</label>
-          <div class="upload" id="zona-upload-movel-esquerda">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+          <div class="upload" id="zona-upload-movel-esquerda">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — ou arraste aqui</div>
           <input type="file" id="input-movel-esquerda" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
           <div id="preview-movel-esquerda"></div>
           <p class="dica-editor">Faltou alguma rotação? Sem problema — o jogo usa a imagem de frente nela.</p>
@@ -1170,7 +1170,7 @@ body.conectando-fluxo{cursor:crosshair}
         <div class="check"><input type="checkbox" id="loja-publicado" checked><label style="margin:0" for="loja-publicado">publicada (aparece pro aluno)</label></div>
 
         <label style="margin-top:14px">cabeçalho com imagem <span style="font-weight:700;color:#7F8C8D">(opcional — aparece em cima, na tela da loja)</span></label>
-        <div class="upload" id="zona-upload-loja">🖼️ Arraste a imagem aqui, ou clique pra escolher — proporção ideal 350×150</div>
+        <div class="upload" id="zona-upload-loja">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — proporção ideal 350×150</div>
         <input type="file" id="input-loja" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="preview-loja"></div>
         <div class="check" style="margin-top:8px"><input type="checkbox" id="loja-capa-ativa"><label style="margin:0" for="loja-capa-ativa">mostrar esse cabeçalho pro aluno</label></div>
@@ -1226,7 +1226,7 @@ body.conectando-fluxo{cursor:crosshair}
           <option value="acessorio">Acessório (veste/tira, fica guardado pra sempre)</option>
         </select>
         <label>imagem base (opcional)</label>
-        <div class="upload" id="zona-upload-item-loja">🖼️ Arraste a imagem aqui, ou clique pra escolher</div>
+        <div class="upload" id="zona-upload-item-loja">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — ou arraste aqui</div>
         <input type="file" id="input-item-loja" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="preview-item-loja"></div>
         <p class="dica-editor">Sem imagem, o item aparece com o emoji. Serve de imagem padrão quando não tiver variante escolhida (ou a variante não tiver foto própria).</p>
@@ -1292,7 +1292,7 @@ body.conectando-fluxo{cursor:crosshair}
         <div class="check"><input type="checkbox" id="mundo-publicado" checked><label style="margin:0" for="mundo-publicado">publicado (aparece pro aluno)</label></div>
 
         <label style="margin-top:14px">cabeçalho com imagem <span style="font-weight:700;color:#7F8C8D">(opcional — aparece em cima, na tela da matéria)</span></label>
-        <div class="upload" id="zona-upload-mundo">🖼️ Arraste a imagem aqui, ou clique pra escolher — proporção ideal 350×150</div>
+        <div class="upload" id="zona-upload-mundo">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — proporção ideal 350×150</div>
         <input type="file" id="input-mundo" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <div id="preview-mundo"></div>
         <div class="check" style="margin-top:8px"><input type="checkbox" id="mundo-capa-ativa"><label style="margin:0" for="mundo-capa-ativa">mostrar esse cabeçalho pro aluno</label></div>
@@ -1466,12 +1466,30 @@ pergunta     { p: "...", alts: [string,...], certa: índice numérico da alterna
 </div>
 
 <div id="modal-biblioteca" class="oculto" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px">
-  <div style="background:#fff;border-radius:12px;padding:18px;max-width:820px;width:100%;max-height:82vh;overflow:auto">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px">
-      <h3 style="margin:0;font-size:16px">📂 Escolher da biblioteca</h3>
+  <div style="background:#fff;border-radius:12px;padding:0;max-width:860px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--contorno)">
+      <div style="display:flex;gap:4px">
+        <button type="button" class="aba-modal-biblioteca ativo" id="btn-aba-modal-biblioteca" data-aba-modal="biblioteca">📚 Biblioteca</button>
+        <button type="button" class="aba-modal-biblioteca" id="btn-aba-modal-upload" data-aba-modal="upload">⬆️ Enviar novo</button>
+      </div>
       <button type="button" class="btn branco" id="btn-fechar-modal-biblioteca">Fechar</button>
     </div>
-    <div class="grade-biblioteca" id="grade-modal-biblioteca"></div>
+    <div style="padding:16px 18px;overflow:auto">
+      <div id="painel-modal-biblioteca">
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <select id="filtro-modal-categoria" style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--contorno);border-radius:8px;font-size:13px">
+            <option value="">Todas as categorias de uso</option>
+          </select>
+          <input type="text" id="busca-modal-biblioteca" placeholder="🔎 Buscar por nome…" style="flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--contorno);border-radius:8px;font-size:13px">
+        </div>
+        <div class="grade-biblioteca" id="grade-modal-biblioteca"></div>
+      </div>
+      <div id="painel-modal-upload" class="oculto">
+        <div class="upload" id="zona-modal-upload">🖼️ Arraste a imagem aqui, ou clique pra escolher (webp, png ou jpg)</div>
+        <input type="file" id="input-modal-upload" accept=".webp,.png,.jpg,.jpeg,image/*" multiple class="oculto">
+        <div id="aviso-modal-upload" class="aviso-form"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2164,30 +2182,9 @@ $('#btn-excluir-cena').onclick = async () => {
   }catch(e){ alert(e.message); }
 };
 
-/* upload da imagem de fundo */
-$('#zona-upload-cena').onclick = () => $('#input-imagem-cena').click();
-$('#input-imagem-cena').onchange = e => { if(e.target.files[0]) enviarImagemCena(e.target.files[0]); };
-['dragover','drop'].forEach(ev => $('#zona-upload-cena').addEventListener(ev, e => e.preventDefault()));
-$('#zona-upload-cena').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemCena(e.dataTransfer.files[0]); });
-async function enviarImagemCena(arquivo){
-  const aviso = $('#cena-aviso');
-  const zona = $('#zona-upload-cena');
-  const textoOriginal = zona.textContent;
-  zona.textContent = '⏳ Enviando…';
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    const r = await fetch('api/admin.php?acao=cena_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    $('#cena-imagem').value = d.imagem;
-    aviso.className = 'aviso-form ok';
-    aviso.textContent = `Imagem enviada (${d.largura}×${d.altura}px). Agora salve o mapa.`;
-    aviso.style.display = 'block';
-  }catch(e){
-    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
-  }finally{ zona.textContent = textoOriginal; }
-}
+/* upload da imagem de fundo — abre o modal de inserir imagem (biblioteca ou enviar novo) */
+tornarZonaSeletoraImagem('zona-upload-cena', {destino: 'cenas', avisoId: 'cena-aviso',
+  aoSelecionar: nomeArquivo => { $('#cena-imagem').value = nomeArquivo; }});
 
 /* ---------- NPCs (personagens + diálogo em fluxo de nós) ----------
    O diálogo é uma árvore: um nó inicial + nós com um texto (balão de fala) e até 4
@@ -2906,30 +2903,9 @@ $('#form-npc').addEventListener('submit', async e => {
   }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
 });
 
-/* upload da imagem do NPC — mesmo fluxo do upload de mapa, pasta diferente */
-$('#zona-upload-npc').onclick = () => $('#input-imagem-npc').click();
-$('#input-imagem-npc').onchange = e => { if(e.target.files[0]) enviarImagemNpc(e.target.files[0]); };
-['dragover','drop'].forEach(ev => $('#zona-upload-npc').addEventListener(ev, e => e.preventDefault()));
-$('#zona-upload-npc').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemNpc(e.dataTransfer.files[0]); });
-async function enviarImagemNpc(arquivo){
-  const aviso = $('#npc-aviso');
-  const zona = $('#zona-upload-npc');
-  const textoOriginal = zona.textContent;
-  zona.textContent = '⏳ Enviando…';
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    const r = await fetch('api/admin.php?acao=npc_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    $('#npc-imagem').value = d.imagem;
-    aviso.className = 'aviso-form ok';
-    aviso.textContent = 'Imagem enviada. Agora salve o NPC.';
-    aviso.style.display = 'block';
-  }catch(e){
-    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
-  }finally{ zona.textContent = textoOriginal; }
-}
+/* upload da imagem do NPC — abre o modal de inserir imagem */
+tornarZonaSeletoraImagem('zona-upload-npc', {destino: 'npcs', avisoId: 'npc-aviso',
+  aoSelecionar: nomeArquivo => { $('#npc-imagem').value = nomeArquivo; }});
 
 /* expressões extras do NPC — {chave: nome-do-arquivo}, reaproveita a mesma ação de upload
    da imagem principal (npc_imagem), só guarda o arquivo num slot diferente */
@@ -2940,30 +2916,24 @@ function renderExpressoesNpc(){
     return `<div class="cartao-sprite-minigame">
       <div class="preview-sprite-minigame" style="width:56px;height:56px">${url ? `<img src="${esc(url)}">` : `<span class="emoji-sprite-minigame">${e.rotulo.split(' ')[0]}</span>`}</div>
       <p class="rotulo-sprite-minigame">${esc(e.rotulo)}</p>
-      <input type="file" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto" id="input-expressao-${e.chave}" onchange="enviarExpressaoNpc('${e.chave}', this.files[0])">
-      <button type="button" class="btn linha branco" onclick="$('#input-expressao-${e.chave}').click()">Trocar</button>
+      <button type="button" class="btn linha branco" onclick="escolherExpressaoNpc('${e.chave}')">Trocar</button>
       ${npcExpressoes[e.chave] ? `<button type="button" class="btn linha erro" onclick="removerExpressaoNpc('${e.chave}')">Remover</button>` : ''}
     </div>`;
   }).join('');
 }
-window.enviarExpressaoNpc = async (chave, arquivo) => {
-  if(!arquivo) return;
-  const aviso = $('#npc-aviso');
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    const r = await fetch('api/admin.php?acao=npc_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    npcExpressoes[chave] = d.imagem;
-    npcExpressoesUrl[chave] = d.imagemUrl;
-    renderExpressoesNpc();
-    aviso.className = 'aviso-form ok';
-    aviso.textContent = 'Expressão enviada. Agora salve o NPC.';
-    aviso.style.display = 'block';
-  }catch(e){
-    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
-  }
+window.escolherExpressaoNpc = (chave) => {
+  abrirSeletorBiblioteca(async (nomeArquivo) => {
+    const aviso = $('#npc-aviso');
+    try{
+      const d = await api('arquivo_copiar_para', {method:'POST', corpo:{nomeArquivo, destino:'npcs'}});
+      npcExpressoes[chave] = d.nomeArquivo;
+      npcExpressoesUrl[chave] = 'assets/npcs/' + d.nomeArquivo;
+      renderExpressoesNpc();
+      aviso.className = 'aviso-form ok';
+      aviso.textContent = 'Expressão selecionada. Agora salve o NPC.';
+      aviso.style.display = 'block';
+    }catch(e){ aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block'; }
+  }, 'imagem');
 };
 window.removerExpressaoNpc = (chave) => {
   delete npcExpressoes[chave];
@@ -3227,28 +3197,11 @@ $('#btn-excluir-artigo').onclick = () => {
   const a = jornalCache.find(x => x.id === Number(id));
   if(a) excluirArtigo(a.id, a.titulo);
 };
-$('#zona-upload-artigo').onclick = () => $('#input-artigo').click();
-$('#input-artigo').onchange = e => { if(e.target.files[0]) enviarImagemArtigo(e.target.files[0]); };
-['dragover','drop'].forEach(ev => $('#zona-upload-artigo').addEventListener(ev, e => e.preventDefault()));
-$('#zona-upload-artigo').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemArtigo(e.dataTransfer.files[0]); });
-async function enviarImagemArtigo(arquivo){
-  const aviso = $('#artigo-aviso');
-  const zona = $('#zona-upload-artigo');
-  const textoOriginal = zona.textContent;
-  zona.textContent = '⏳ Enviando…';
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    const r = await fetch('api/admin.php?acao=jornal_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    jornalImagem = d.imagem;
-    $('#preview-artigo').innerHTML = `<img class="movel-thumb" src="${esc(d.imagemUrl)}">`;
-    aviso.className = 'aviso-form ok'; aviso.textContent = 'Imagem enviada. Agora salve o artigo.'; aviso.style.display = 'block';
-  }catch(e){
-    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
-  }finally{ zona.textContent = textoOriginal; }
-}
+tornarZonaSeletoraImagem('zona-upload-artigo', {destino: 'jornal', avisoId: 'artigo-aviso',
+  aoSelecionar: nomeArquivo => {
+    jornalImagem = nomeArquivo;
+    $('#preview-artigo').innerHTML = `<img class="movel-thumb" src="${esc('assets/jornal/' + nomeArquivo)}">`;
+  }});
 $('#form-artigo').addEventListener('submit', async (e) => {
   e.preventDefault();
   const aviso = $('#artigo-aviso');
@@ -3356,41 +3309,8 @@ $('#form-item').addEventListener('submit', async e => {
   }catch(err){ aviso.className = 'aviso-form erro'; aviso.textContent = err.message; aviso.style.display = 'block'; }
 });
 
-$('#btn-escolher-biblioteca-item').onclick = () => {
-  abrirSeletorBiblioteca(async (nomeArquivo) => {
-    const aviso = $('#item-aviso');
-    try{
-      const d = await api('arquivo_copiar_para', {method:'POST', corpo:{nomeArquivo, destino:'itens'}});
-      $('#item-imagem').value = d.nomeArquivo;
-      aviso.className = 'aviso-form ok';
-      aviso.textContent = 'Imagem da biblioteca selecionada. Agora salve o item.';
-      aviso.style.display = 'block';
-    }catch(e){ aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block'; }
-  }, 'imagem');
-};
-$('#zona-upload-item').onclick = () => $('#input-imagem-item').click();
-$('#input-imagem-item').onchange = e => { if(e.target.files[0]) enviarImagemItem(e.target.files[0]); };
-['dragover','drop'].forEach(ev => $('#zona-upload-item').addEventListener(ev, e => e.preventDefault()));
-$('#zona-upload-item').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemItem(e.dataTransfer.files[0]); });
-async function enviarImagemItem(arquivo){
-  const aviso = $('#item-aviso');
-  const zona = $('#zona-upload-item');
-  const textoOriginal = zona.textContent;
-  zona.textContent = '⏳ Enviando…';
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    const r = await fetch('api/admin.php?acao=item_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    $('#item-imagem').value = d.imagem;
-    aviso.className = 'aviso-form ok';
-    aviso.textContent = 'Imagem enviada. Agora salve o item.';
-    aviso.style.display = 'block';
-  }catch(e){
-    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
-  }finally{ zona.textContent = textoOriginal; }
-}
+tornarZonaSeletoraImagem('zona-upload-item', {destino: 'itens', avisoId: 'item-aviso',
+  aoSelecionar: nomeArquivo => { $('#item-imagem').value = nomeArquivo; }});
 
 /* ---------- Móveis (Loja de Móveis + fundo da Casa) ---------- */
 let moveisCache = [];
@@ -3504,32 +3424,9 @@ $('#form-movel').addEventListener('submit', async e => {
 });
 
 SLOTS_MOVEL.forEach(slot => {
-  $(`#zona-upload-movel-${slot}`).onclick = () => $(`#input-movel-${slot}`).click();
-  $(`#input-movel-${slot}`).onchange = e => { if(e.target.files[0]) enviarImagemMovel(slot, e.target.files[0]); };
-  ['dragover','drop'].forEach(ev => $(`#zona-upload-movel-${slot}`).addEventListener(ev, e => e.preventDefault()));
-  $(`#zona-upload-movel-${slot}`).addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemMovel(slot, e.dataTransfer.files[0]); });
+  tornarZonaSeletoraImagem(`zona-upload-movel-${slot}`, {destino: 'moveis', avisoId: 'movel-aviso',
+    aoSelecionar: nomeArquivo => { movelImg[slot] = nomeArquivo; previewsMovel(); }});
 });
-async function enviarImagemMovel(slot, arquivo){
-  const aviso = $('#movel-aviso');
-  const zona = $(`#zona-upload-movel-${slot}`);
-  const textoOriginal = zona.textContent;
-  zona.textContent = '⏳ Enviando…';
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    fd.append('slot', slot);
-    const r = await fetch('api/admin.php?acao=movel_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    movelImg[slot] = d.imagem;
-    previewsMovel();
-    aviso.className = 'aviso-form ok';
-    aviso.textContent = 'Imagem enviada. Agora salve o móvel.';
-    aviso.style.display = 'block';
-  }catch(e){
-    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
-  }finally{ zona.textContent = textoOriginal; }
-}
 
 /* fundo da Casa e preço de desbloqueio: configuração única (não é por móvel) */
 async function carregarCasaFundo(){
@@ -3545,29 +3442,11 @@ $('#btn-salvar-casa-preco').onclick = async () => {
     aviso.className = 'aviso-form ok'; aviso.textContent = 'Preço salvo!'; aviso.style.display = 'block';
   }catch(e){ aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block'; }
 };
-$('#zona-upload-casa-fundo').onclick = () => $('#input-casa-fundo').click();
-$('#input-casa-fundo').onchange = e => { if(e.target.files[0]) enviarCasaFundo(e.target.files[0]); };
-['dragover','drop'].forEach(ev => $('#zona-upload-casa-fundo').addEventListener(ev, e => e.preventDefault()));
-$('#zona-upload-casa-fundo').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarCasaFundo(e.dataTransfer.files[0]); });
-async function enviarCasaFundo(arquivo){
-  const aviso = $('#casa-fundo-aviso');
-  const zona = $('#zona-upload-casa-fundo');
-  const textoOriginal = zona.textContent;
-  zona.textContent = '⏳ Enviando…';
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    const r = await fetch('api/admin.php?acao=casa_fundo_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    aviso.className = 'aviso-form ok';
-    aviso.textContent = 'Fundo atualizado!';
-    aviso.style.display = 'block';
+tornarZonaSeletoraImagem('zona-upload-casa-fundo', {destino: 'moveis', avisoId: 'casa-fundo-aviso',
+  aoSelecionar: async nomeArquivo => {
+    await api('casa_fundo_definir', {method:'POST', corpo:{nomeArquivo}});
     carregarCasaFundo();
-  }catch(e){
-    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
-  }finally{ zona.textContent = textoOriginal; }
-}
+  }});
 $('#btn-remover-casa-fundo').onclick = async () => {
   if(!confirm('Remover o fundo da Casa? Ela volta pro visual padrão.')) return;
   await api('casa_fundo_remover', {method:'POST', corpo:{}});
@@ -3610,10 +3489,11 @@ async function salvarCapaFixa(campo){
   }
 }
 ['lojamoveis', 'mural'].forEach(campo => {
-  $('#zona-upload-capa-' + campo).onclick = () => $('#input-capa-' + campo).click();
-  $('#input-capa-' + campo).onchange = e => { if(e.target.files[0]) enviarCapaFixa(campo, e.target.files[0]); };
-  ['dragover','drop'].forEach(ev => $('#zona-upload-capa-' + campo).addEventListener(ev, e => e.preventDefault()));
-  $('#zona-upload-capa-' + campo).addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarCapaFixa(campo, e.dataTransfer.files[0]); });
+  tornarZonaSeletoraImagem('zona-upload-capa-' + campo, {destino: 'moveis', avisoId: 'capa-' + campo + '-aviso',
+    aoSelecionar: async nomeArquivo => {
+      await api('capas_definir', {method:'POST', corpo:{campo, nomeArquivo}});
+      carregarCapasFixas();
+    }});
   $('#capa-' + campo + '-ativa').onchange = () => salvarCapaFixa(campo);
   $('#capa-' + campo + '-ancora').onchange = () => salvarCapaFixa(campo);
   $('#capa-' + campo + '-dias-semana').innerHTML = DIAS_SEMANA.map(d => `<button type="button" data-dia="${d.v}">${d.rotulo}</button>`).join('');
@@ -3625,26 +3505,6 @@ async function salvarCapaFixa(campo){
   });
   $('#btn-salvar-capa-' + campo + '-agenda').onclick = () => salvarCapaFixa(campo);
 });
-async function enviarCapaFixa(campo, arquivo){
-  const aviso = $('#capa-' + campo + '-aviso');
-  const zona = $('#zona-upload-capa-' + campo);
-  const textoOriginal = zona.textContent;
-  zona.textContent = '⏳ Enviando…';
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    fd.append('campo', campo);
-    const r = await fetch('api/admin.php?acao=capas_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    aviso.className = 'aviso-form ok';
-    aviso.textContent = 'Imagem atualizada!';
-    aviso.style.display = 'block';
-    carregarCapasFixas();
-  }catch(e){
-    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
-  }finally{ zona.textContent = textoOriginal; }
-}
 
 /* música de fundo opcional (um arquivo só, tocado em loop no cliente) */
 async function carregarMusica(){
@@ -3652,27 +3512,11 @@ async function carregarMusica(){
   $('#preview-musica').innerHTML = d.url ? `<audio controls src="${esc(d.url)}" style="width:100%"></audio>` : '<p class="sub" style="margin:0">Nenhuma música enviada ainda.</p>';
   $('#musica-ativa').checked = d.ativa;
 }
-$('#zona-upload-musica').onclick = () => $('#input-musica').click();
-$('#input-musica').onchange = e => { if(e.target.files[0]) enviarMusica(e.target.files[0]); };
-['dragover','drop'].forEach(ev => $('#zona-upload-musica').addEventListener(ev, e => e.preventDefault()));
-$('#zona-upload-musica').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarMusica(e.dataTransfer.files[0]); });
-async function enviarMusica(arquivo){
-  const aviso = $('#musica-aviso');
-  const zona = $('#zona-upload-musica');
-  const textoOriginal = zona.textContent;
-  zona.textContent = '⏳ Enviando…';
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    const r = await fetch('api/admin.php?acao=musica_upload', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    aviso.className = 'aviso-form ok'; aviso.textContent = 'Música atualizada!'; aviso.style.display = 'block';
+tornarZonaSeletoraImagem('zona-upload-musica', {destino: 'moveis', tipo: 'audio', avisoId: 'musica-aviso',
+  aoSelecionar: async nomeArquivo => {
+    await api('musica_definir', {method:'POST', corpo:{nomeArquivo}});
     carregarMusica();
-  }catch(e){
-    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
-  }finally{ zona.textContent = textoOriginal; }
-}
+  }});
 $('#musica-ativa').onchange = async e => {
   const aviso = $('#musica-aviso');
   try{
@@ -3744,8 +3588,7 @@ function renderizarPaginaArcadeJogo(){
       <h3 style="font-size:16px;margin-top:0">🖼️ Fundo</h3>
       <p class="sub">imagem que aparece atrás do tabuleiro${jogoArcadeAtivo === 'chuva' ? ' — funciona melhor como paisagem/céu: a grama e a cesta continuam desenhadas por cima' : ''}.</p>
       <div class="preview-fundo-minigame">${cfg.fundoUrl ? `<img src="${esc(cfg.fundoUrl)}">` : '<p class="sub" style="margin:0">Nenhuma imagem enviada ainda.</p>'}</div>
-      <input type="file" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto" id="input-fundo-arcade" onchange="enviarFundoArcade(this.files[0])">
-      <button type="button" class="btn linha branco" onclick="$('#input-fundo-arcade').click()">Trocar</button>
+      <button type="button" class="btn linha branco" onclick="escolherFundoArcade()">Trocar</button>
       ${cfg.fundo ? `<button type="button" class="btn linha erro" style="margin-left:8px" onclick="removerFundoArcade()">Remover fundo</button>` : ''}
     </div>
 
@@ -3770,18 +3613,15 @@ function renderizarPaginaArcadeJogo(){
     ${simuladorGrupo(g.prefixo, itens)}
   `;
 }
-async function enviarFundoArcade(arquivo){
-  if(!arquivo) return;
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    fd.append('jogo', jogoArcadeAtivo);
-    const r = await fetch('api/admin.php?acao=minigame_fundo_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    minigameConfigCache[jogoArcadeAtivo] = {...(minigameConfigCache[jogoArcadeAtivo] || {}), fundo: d.imagem, fundoUrl: d.imagemUrl};
-    renderizarPaginaArcadeJogo();
-  }catch(e){ alert(e.message); }
+function escolherFundoArcade(){
+  abrirSeletorBiblioteca(async (nomeArquivo) => {
+    try{
+      const dCopia = await api('arquivo_copiar_para', {method:'POST', corpo:{nomeArquivo, destino:'minigames'}});
+      const d = await api('minigame_fundo_definir', {method:'POST', corpo:{jogo: jogoArcadeAtivo, nomeArquivo: dCopia.nomeArquivo}});
+      minigameConfigCache[jogoArcadeAtivo] = {...(minigameConfigCache[jogoArcadeAtivo] || {}), fundo: d.imagem, fundoUrl: d.imagemUrl};
+      renderizarPaginaArcadeJogo();
+    }catch(e){ alert(e.message); }
+  }, 'imagem');
 }
 async function removerFundoArcade(){
   if(!confirm('Remover o fundo desse minigame?')) return;
@@ -3818,9 +3658,7 @@ function cartaoSpriteMinigame(s){
     <div class="preview-sprite-minigame" style="width:${caixa}px;height:${caixa}px">${s.imagemUrl ? `<img src="${esc(s.imagemUrl)}">` : `<span class="emoji-sprite-minigame">${s.emoji || '—'}</span>`}</div>
     <p class="rotulo-sprite-minigame">${esc(s.rotulo)}</p>
     ${dicaExtra}
-    <input type="file" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto" id="input-sprite-${s.chave}" onchange="enviarSpriteMinigame('${s.chave}', this.files[0])">
-    <button type="button" class="btn linha branco" onclick="$('#input-sprite-${s.chave}').click()">Trocar</button>
-    <button type="button" class="btn linha branco" onclick="escolherSpriteDaBiblioteca('${s.chave}')">📂 Biblioteca</button>
+    <button type="button" class="btn linha branco" onclick="escolherSpriteDaBiblioteca('${s.chave}')">Trocar</button>
     ${s.imagem ? `<button type="button" class="btn linha erro" onclick="removerSpriteMinigame('${s.chave}')">Usar emoji</button>` : ''}
     ${s.imagem ? `<div class="controle-escala-sprite"><span>Tamanho no jogo: <b id="valor-escala-${s.chave}">${s.escala}</b>%</span><input type="range" min="50" max="200" step="5" value="${s.escala}" oninput="ajustarEscalaLocal('${s.chave}', this.value)" onchange="salvarEscalaSpriteMinigame('${s.chave}', this.value)"></div>` : ''}
   </div>`;
@@ -3870,18 +3708,6 @@ function escolherSpriteDaBiblioteca(chave){
     }catch(e){ alert(e.message); }
   }, 'imagem');
 }
-async function enviarSpriteMinigame(chave, arquivo){
-  if(!arquivo) return;
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    fd.append('chave', chave);
-    const r = await fetch('api/admin.php?acao=minigame_sprite_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    carregarArcade();
-  }catch(e){ alert(e.message); }
-}
 async function removerSpriteMinigame(chave){
   if(!confirm('Voltar esse slot pro emoji padrão?')) return;
   await api('minigame_sprite_remover', {method:'POST', corpo:{chave}});
@@ -3896,22 +3722,18 @@ function renderizarThumbsArcade(){
   alvo.innerHTML = Object.values(minigameConfigCache).map(cfg => `<div class="cartao-sprite-minigame">
     <div class="preview-sprite-minigame" style="width:90px;height:90px">${cfg.thumbUrl ? `<img src="${esc(cfg.thumbUrl)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">` : `<span class="emoji-sprite-minigame">🎮</span>`}</div>
     <p class="rotulo-sprite-minigame">${esc(cfg.nome)}</p>
-    <input type="file" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto" id="input-thumb-${cfg.jogo}" onchange="enviarThumbMinigame('${cfg.jogo}', this.files[0])">
-    <button type="button" class="btn linha branco" onclick="$('#input-thumb-${cfg.jogo}').click()">Trocar</button>
+    <button type="button" class="btn linha branco" onclick="escolherThumbMinigame('${cfg.jogo}')">Trocar</button>
     ${cfg.thumb ? `<button type="button" class="btn linha erro" onclick="removerThumbMinigame('${cfg.jogo}')">Remover</button>` : ''}
   </div>`).join('');
 }
-async function enviarThumbMinigame(jogo, arquivo){
-  if(!arquivo) return;
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    fd.append('jogo', jogo);
-    const r = await fetch('api/admin.php?acao=minigame_thumb_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    carregarArcade();
-  }catch(e){ alert(e.message); }
+function escolherThumbMinigame(jogo){
+  abrirSeletorBiblioteca(async (nomeArquivo) => {
+    try{
+      const dCopia = await api('arquivo_copiar_para', {method:'POST', corpo:{nomeArquivo, destino:'minigames'}});
+      await api('minigame_thumb_definir', {method:'POST', corpo:{jogo, nomeArquivo: dCopia.nomeArquivo}});
+      carregarArcade();
+    }catch(e){ alert(e.message); }
+  }, 'imagem');
 }
 async function removerThumbMinigame(jogo){
   if(!confirm('Remover a miniatura desse jogo?')) return;
@@ -4442,28 +4264,11 @@ window.editarLoja = async (id) => {
   $('#form-loja').classList.remove('oculto');
   $('#form-loja').scrollIntoView({behavior:'smooth'});
 };
-$('#zona-upload-loja').onclick = () => $('#input-loja').click();
-$('#input-loja').onchange = e => { if(e.target.files[0]) enviarImagemLoja(e.target.files[0]); };
-['dragover','drop'].forEach(ev => $('#zona-upload-loja').addEventListener(ev, e => e.preventDefault()));
-$('#zona-upload-loja').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemLoja(e.dataTransfer.files[0]); });
-async function enviarImagemLoja(arquivo){
-  const aviso = $('#loja-aviso');
-  const zona = $('#zona-upload-loja');
-  const textoOriginal = zona.textContent;
-  zona.textContent = '⏳ Enviando…';
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    const r = await fetch('api/admin.php?acao=loja_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    lojaCapaImagem = d.imagem;
-    $('#preview-loja').innerHTML = `<img class="movel-thumb" src="${esc(d.imagemUrl)}">`;
-    aviso.className = 'aviso-form ok'; aviso.textContent = 'Imagem enviada. Agora salve a loja.'; aviso.style.display = 'block';
-  }catch(e){
-    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
-  }finally{ zona.textContent = textoOriginal; }
-}
+tornarZonaSeletoraImagem('zona-upload-loja', {destino: 'lojas', avisoId: 'loja-aviso',
+  aoSelecionar: nomeArquivo => {
+    lojaCapaImagem = nomeArquivo;
+    $('#preview-loja').innerHTML = `<img class="movel-thumb" src="${esc('assets/lojas/' + nomeArquivo)}">`;
+  }});
 window.excluirLoja = async (id, nome) => {
   if(!confirm(`Excluir a loja "${nome}"? Todos os itens dela também somem.`)) return;
   const r = await api('loja_excluir', {method:'POST', corpo:{id}});
@@ -4535,32 +4340,26 @@ function renderVariantes(){
     ${v.imagemUrl ? `<img src="${esc(v.imagemUrl)}">` : ''}
     <input type="text" placeholder="código (ex: morango)" value="${esc(v.id)}" oninput="variantesEdit[${i}].id=this.value.trim()">
     <input type="text" placeholder="nome (ex: Morango)" value="${esc(v.nome)}" oninput="variantesEdit[${i}].nome=this.value">
-    <input type="file" class="oculto" id="input-variante-${i}" accept=".webp,.png,.jpg,.jpeg,image/*">
-    <button type="button" class="btn linha branco" onclick="$('#input-variante-${i}').click()">🖼️</button>
+    <button type="button" class="btn linha branco" onclick="escolherImagemVariante(${i})">🖼️</button>
     <button type="button" class="btn linha erro" onclick="variantesEdit.splice(${i},1); renderVariantes();">✕</button>
   </div>`).join('') || '<p class="sub" style="margin:6px 0 0">Nenhuma variante — o item vende do jeito único mesmo.</p>';
-  variantesEdit.forEach((v, i) => {
-    $(`#input-variante-${i}`)?.addEventListener('change', e => { if(e.target.files[0]) enviarImagemVariante(i, e.target.files[0]); });
-  });
 }
 $('#btn-add-variante').onclick = () => {
   if(variantesEdit.length >= 8) return alert('Máximo de 8 variantes por item.');
   variantesEdit.push({id:'', nome:'', imagem:'', imagemUrl:''});
   renderVariantes();
 };
-async function enviarImagemVariante(i, arquivo){
-  const aviso = $('#item-loja-aviso');
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    const r = await fetch('api/admin.php?acao=item_loja_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    variantesEdit[i].imagem = d.imagem;
-    variantesEdit[i].imagemUrl = d.imagemUrl;
-    renderVariantes();
-  }catch(e){ aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block'; }
-}
+window.escolherImagemVariante = (i) => {
+  abrirSeletorBiblioteca(async (nomeArquivo) => {
+    const aviso = $('#item-loja-aviso');
+    try{
+      const d = await api('arquivo_copiar_para', {method:'POST', corpo:{nomeArquivo, destino:'lojas'}});
+      variantesEdit[i].imagem = d.nomeArquivo;
+      variantesEdit[i].imagemUrl = 'assets/lojas/' + d.nomeArquivo;
+      renderVariantes();
+    }catch(e){ aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block'; }
+  }, 'imagem');
+};
 
 function limparFormItemLoja(){
   $('#form-item-loja').reset();
@@ -4642,28 +4441,11 @@ $('#btn-repor-estoque-item-loja').onclick = async () => {
     carregarItensLoja();
   }catch(e){ alert(e.message); }
 };
-$('#zona-upload-item-loja').onclick = () => $('#input-item-loja').click();
-$('#input-item-loja').onchange = e => { if(e.target.files[0]) enviarImagemItemLoja(e.target.files[0]); };
-['dragover','drop'].forEach(ev => $('#zona-upload-item-loja').addEventListener(ev, e => e.preventDefault()));
-$('#zona-upload-item-loja').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemItemLoja(e.dataTransfer.files[0]); });
-async function enviarImagemItemLoja(arquivo){
-  const aviso = $('#item-loja-aviso');
-  const zona = $('#zona-upload-item-loja');
-  const textoOriginal = zona.textContent;
-  zona.textContent = '⏳ Enviando…';
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    const r = await fetch('api/admin.php?acao=item_loja_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    itemLojaImagem = d.imagem;
-    $('#preview-item-loja').innerHTML = `<img class="movel-thumb" src="${esc(d.imagemUrl)}">`;
-    aviso.className = 'aviso-form ok'; aviso.textContent = 'Imagem enviada. Agora salve o item.'; aviso.style.display = 'block';
-  }catch(e){
-    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
-  }finally{ zona.textContent = textoOriginal; }
-}
+tornarZonaSeletoraImagem('zona-upload-item-loja', {destino: 'lojas', avisoId: 'item-loja-aviso',
+  aoSelecionar: nomeArquivo => {
+    itemLojaImagem = nomeArquivo;
+    $('#preview-item-loja').innerHTML = `<img class="movel-thumb" src="${esc('assets/lojas/' + nomeArquivo)}">`;
+  }});
 $('#form-item-loja').addEventListener('submit', async e => {
   e.preventDefault();
   const aviso = $('#item-loja-aviso');
@@ -4768,28 +4550,11 @@ window.excluirMundo = async (id, nome) => {
   await api('mundo_excluir', {method:'POST', corpo:{id}});
   carregarMundos();
 };
-$('#zona-upload-mundo').onclick = () => $('#input-mundo').click();
-$('#input-mundo').onchange = e => { if(e.target.files[0]) enviarImagemMundo(e.target.files[0]); };
-['dragover','drop'].forEach(ev => $('#zona-upload-mundo').addEventListener(ev, e => e.preventDefault()));
-$('#zona-upload-mundo').addEventListener('drop', e => { if(e.dataTransfer.files[0]) enviarImagemMundo(e.dataTransfer.files[0]); });
-async function enviarImagemMundo(arquivo){
-  const aviso = $('#mundo-aviso');
-  const zona = $('#zona-upload-mundo');
-  const textoOriginal = zona.textContent;
-  zona.textContent = '⏳ Enviando…';
-  try{
-    const fd = new FormData();
-    fd.append('arquivo', arquivo);
-    const r = await fetch('api/admin.php?acao=mundo_imagem', {method:'POST', body:fd});
-    const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
-    if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
-    mundoCapaImagem = d.imagem;
-    $('#preview-mundo').innerHTML = `<img class="movel-thumb" src="${esc(d.imagemUrl)}">`;
-    aviso.className = 'aviso-form ok'; aviso.textContent = 'Imagem enviada. Agora salve o mundo.'; aviso.style.display = 'block';
-  }catch(e){
-    aviso.className = 'aviso-form erro'; aviso.textContent = e.message; aviso.style.display = 'block';
-  }finally{ zona.textContent = textoOriginal; }
-}
+tornarZonaSeletoraImagem('zona-upload-mundo', {destino: 'mundos', avisoId: 'mundo-aviso',
+  aoSelecionar: nomeArquivo => {
+    mundoCapaImagem = nomeArquivo;
+    $('#preview-mundo').innerHTML = `<img class="movel-thumb" src="${esc('assets/mundos/' + nomeArquivo)}">`;
+  }});
 $('#form-mundo').addEventListener('submit', async (e) => {
   e.preventDefault();
   const aviso = $('#mundo-aviso');
@@ -5209,22 +4974,69 @@ async function enviarArquivosBiblioteca(arquivos){
   carregarBiblioteca();
 }
 
-/* ---------- seletor reutilizável da biblioteca ---------- */
+/* ---------- modal de inserir imagem (estilo WordPress: Biblioteca | Enviar novo) ---------- */
 let callbackSeletorBiblioteca = null;
+let tipoSeletorBiblioteca = 'imagem';
+let modalBibliotecaCache = [];
+
+/** abre o modal de inserir imagem/áudio — igual ao modal de mídia do WordPress: uma aba pra
+ * escolher um arquivo já existente (com filtro de categoria e busca) e outra pra enviar um
+ * novo. Qualquer um dos dois caminhos termina chamando `callback(nomeArquivo)` uma vez só. */
 async function abrirSeletorBiblioteca(callback, tipo = 'imagem'){
   callbackSeletorBiblioteca = callback;
+  tipoSeletorBiblioteca = tipo;
+  $('#modal-biblioteca').classList.remove('oculto');
+  trocarAbaModalBiblioteca('biblioteca');
+  $('#busca-modal-biblioteca').value = '';
+  $('#zona-modal-upload').textContent = tipo === 'audio'
+    ? '🎵 Arraste o áudio aqui, ou clique pra escolher (mp3, ogg, wav ou m4a)'
+    : '🖼️ Arraste a imagem aqui, ou clique pra escolher (webp, png ou jpg)';
+  $('#input-modal-upload').accept = tipo === 'audio' ? '.mp3,.ogg,.wav,.m4a,audio/*' : '.webp,.png,.jpg,.jpeg,image/*';
+  $('#aviso-modal-upload').style.display = 'none';
   const grade = $('#grade-modal-biblioteca');
   grade.innerHTML = '<p class="sub">Carregando…</p>';
-  $('#modal-biblioteca').classList.remove('oculto');
   const d = await api('arquivos_listar').catch(() => null);
   if(!d){ grade.innerHTML = '<p class="sub">Não consegui carregar a biblioteca.</p>'; return; }
-  const lista = d.arquivos.filter(a => a.tipo === tipo);
+  modalBibliotecaCache = d.arquivos.filter(a => a.tipo === tipo);
+  atualizarCategoriasModalBiblioteca();
+  desenharModalBiblioteca();
+}
+
+function trocarAbaModalBiblioteca(aba){
+  $('#btn-aba-modal-biblioteca').classList.toggle('ativo', aba === 'biblioteca');
+  $('#btn-aba-modal-upload').classList.toggle('ativo', aba === 'upload');
+  $('#painel-modal-biblioteca').classList.toggle('oculto', aba !== 'biblioteca');
+  $('#painel-modal-upload').classList.toggle('oculto', aba !== 'upload');
+}
+$('#btn-aba-modal-biblioteca').onclick = () => trocarAbaModalBiblioteca('biblioteca');
+$('#btn-aba-modal-upload').onclick = () => trocarAbaModalBiblioteca('upload');
+
+function atualizarCategoriasModalBiblioteca(){
+  const contagem = new Map();
+  modalBibliotecaCache.forEach(a => {
+    new Set(a.usos.map(u => u.categoria)).forEach(c => contagem.set(c, (contagem.get(c) || 0) + 1));
+  });
+  const categoriasOrdenadas = [...contagem.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  $('#filtro-modal-categoria').innerHTML = '<option value="">Todas as categorias de uso</option>'
+    + categoriasOrdenadas.map(c => `<option value="${esc(c)}">${esc(c)} (${contagem.get(c)})</option>`).join('');
+}
+
+function desenharModalBiblioteca(){
+  const grade = $('#grade-modal-biblioteca');
+  const categoria = $('#filtro-modal-categoria').value;
+  const busca = $('#busca-modal-biblioteca').value.trim().toLowerCase();
+  let lista = modalBibliotecaCache;
+  if(categoria) lista = lista.filter(a => a.usos.some(u => u.categoria === categoria));
+  if(busca) lista = lista.filter(a => a.nomeOriginal.toLowerCase().includes(busca) || a.nomeArquivo.toLowerCase().includes(busca));
   grade.innerHTML = lista.length ? lista.map(a => `
     <div class="cartao-biblioteca" style="cursor:pointer" onclick="selecionarArquivoBiblioteca('${esc(a.nomeArquivo)}')">
       <div class="miniatura-biblioteca">${a.tipo === 'audio' ? '🎵' : `<img src="${esc(a.url)}">`}</div>
       <p class="nome-biblioteca" title="${esc(a.nomeOriginal)}">${esc(a.nomeOriginal)}</p>
-    </div>`).join('') : '<p class="sub">Nenhum arquivo desse tipo na biblioteca ainda — suba um na aba Arquivos.</p>';
+    </div>`).join('') : `<p class="sub">${modalBibliotecaCache.length ? 'Nenhum arquivo bate com esse filtro.' : 'Nenhum arquivo desse tipo na biblioteca ainda — envie um na aba "Enviar novo".'}</p>`;
 }
+$('#filtro-modal-categoria').onchange = () => desenharModalBiblioteca();
+$('#busca-modal-biblioteca').addEventListener('input', () => desenharModalBiblioteca());
+
 window.selecionarArquivoBiblioteca = (nomeArquivo) => {
   $('#modal-biblioteca').classList.add('oculto');
   const cb = callbackSeletorBiblioteca;
@@ -5235,6 +5047,96 @@ $('#btn-fechar-modal-biblioteca').onclick = () => {
   $('#modal-biblioteca').classList.add('oculto');
   callbackSeletorBiblioteca = null;
 };
+
+$('#zona-modal-upload').onclick = () => $('#input-modal-upload').click();
+$('#input-modal-upload').onchange = e => { enviarPeloModalBiblioteca([...e.target.files]); e.target.value = ''; };
+['dragover', 'drop'].forEach(ev => $('#zona-modal-upload').addEventListener(ev, e => e.preventDefault()));
+$('#zona-modal-upload').addEventListener('drop', e => enviarPeloModalBiblioteca([...e.dataTransfer.files]));
+
+/** envia pelo modal e, assim que o(s) arquivo(s) terminar(em), seleciona automaticamente —
+ * enviar já é escolher, igual ao WordPress: sobe o arquivo e ele já fica "selecionado". Só o
+ * primeiro arquivo enviado (se mandar vários de uma vez) vira a seleção; os outros ficam
+ * salvos na biblioteca pra uso futuro. */
+async function enviarPeloModalBiblioteca(arquivos){
+  if(!arquivos.length) return;
+  const zona = $('#zona-modal-upload');
+  const aviso = $('#aviso-modal-upload');
+  const textoOriginal = zona.textContent;
+  aviso.style.display = 'none';
+  let primeiro = null;
+  const erros = [];
+  for(let i = 0; i < arquivos.length; i++){
+    zona.textContent = `⏳ Enviando ${i + 1}/${arquivos.length}…`;
+    try{
+      const fd = new FormData();
+      fd.append('arquivo', arquivos[i]);
+      fd.append('tipo', tipoSeletorBiblioteca);
+      const r = await fetch('api/admin.php?acao=arquivo_enviar', {method:'POST', body:fd});
+      const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+      if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+      if(!primeiro) primeiro = d.arquivo.nomeArquivo;
+    }catch(e){ erros.push(`${arquivos[i].name}: ${e.message}`); }
+  }
+  zona.textContent = textoOriginal;
+  if(!primeiro){
+    aviso.className = 'aviso-form erro';
+    aviso.textContent = erros.join(' · ') || 'Não consegui enviar o arquivo.';
+    aviso.style.display = 'block';
+    return;
+  }
+  if(erros.length){
+    aviso.className = 'aviso-form erro';
+    aviso.textContent = 'Alguns arquivos falharam: ' + erros.join(' · ');
+    aviso.style.display = 'block';
+  }
+  selecionarArquivoBiblioteca(primeiro);
+}
+
+/** faz um <div class="upload"> (zona de arraste) abrir o modal de inserir imagem ao clicar,
+ * em vez de ir direto pro seletor de arquivo nativo — igual ao "Selecionar imagem" do
+ * WordPress. Arrastar um arquivo direto em cima da zona continua funcionando como atalho
+ * rápido (sem abrir o modal), passando pelo mesmo pipeline (biblioteca central + cópia pra
+ * pasta da feature) por baixo dos panos. `aoSelecionar(nomeArquivo)` decide o que fazer com
+ * o nome do arquivo depois de copiado pra pasta certa (setar campo, chamar endpoint que
+ * salva direto, etc.) — pode ser assíncrona. */
+function tornarZonaSeletoraImagem(zonaId, {destino, tipo = 'imagem', aoSelecionar, avisoId}){
+  const zona = $('#' + zonaId);
+  const mostrarAviso = (ok, msg) => {
+    if(!avisoId){ if(!ok) alert(msg); return; }
+    const aviso = $('#' + avisoId);
+    aviso.className = 'aviso-form ' + (ok ? 'ok' : 'erro');
+    aviso.textContent = msg;
+    aviso.style.display = 'block';
+  };
+  zona.onclick = () => {
+    abrirSeletorBiblioteca(async (nomeArquivo) => {
+      try{
+        const d = await api('arquivo_copiar_para', {method:'POST', corpo:{nomeArquivo, destino}});
+        await aoSelecionar(d.nomeArquivo);
+        mostrarAviso(true, 'Arquivo selecionado.');
+      }catch(e){ mostrarAviso(false, e.message); }
+    }, tipo);
+  };
+  ['dragover', 'drop'].forEach(ev => zona.addEventListener(ev, e => e.preventDefault()));
+  zona.addEventListener('drop', async e => {
+    const arquivo = e.dataTransfer.files[0];
+    if(!arquivo) return;
+    const textoOriginal = zona.textContent;
+    zona.textContent = '⏳ Enviando…';
+    try{
+      const fd = new FormData();
+      fd.append('arquivo', arquivo);
+      fd.append('tipo', tipo);
+      const r = await fetch('api/admin.php?acao=arquivo_enviar', {method:'POST', body:fd});
+      const d = await r.json().catch(() => ({erro:'Resposta inválida do servidor.'}));
+      if(!r.ok) throw new Error(d.erro || 'Falha no envio.');
+      const dCopia = await api('arquivo_copiar_para', {method:'POST', corpo:{nomeArquivo: d.arquivo.nomeArquivo, destino}});
+      await aoSelecionar(dCopia.nomeArquivo);
+      mostrarAviso(true, 'Arquivo enviado e selecionado.');
+    }catch(e){ mostrarAviso(false, e.message); }
+    finally{ zona.textContent = textoOriginal; }
+  });
+}
 
 /* ---------- backup ---------- */
 function baixarArquivo(nome, conteudo){

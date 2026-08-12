@@ -19,8 +19,9 @@
                                        converte imagem pra webp automaticamente
      GET  ?acao=arquivos_listar       -> lista biblioteca central com uso (onde cada arquivo aparece)
      POST ?acao=arquivo_excluir       {id} -> só apaga se o arquivo não estiver em uso em nenhum lugar
-     POST ?acao=arquivo_copiar_para   {nomeArquivo, destino=itens|minigames} -> copia da biblioteca pra
-                                        pasta de outra feature, pro seletor reutilizável reaproveitar o arquivo
+     POST ?acao=arquivo_copiar_para   {nomeArquivo, destino=itens|npcs|mundos|moveis|lojas|jornal|minigames|cenas}
+                                        -> copia da biblioteca pra pasta de outra feature, pro modal de
+                                        inserir imagem reaproveitar um arquivo já existente
      GET  ?acao=licoes_listar         [?mundo=xx]
      GET  ?acao=licao_obter           ?id=xx
      POST ?acao=licao_salvar          {id, mundoId, titulo, emoji, serie, ordem, publicado, blocos:[...]}
@@ -90,15 +91,19 @@
      POST ?acao=movel_imagem          (multipart: arquivo, slot=frente|direita|verso|esquerda) -> sobe imagem pra assets/moveis/
      GET  ?acao=casa_config_obter     -> fundo e preço de desbloqueio atuais da Casa
      POST ?acao=casa_fundo_imagem     (multipart: arquivo) -> sobe e já grava o fundo da Casa
+     POST ?acao=casa_fundo_definir    {nomeArquivo} -> usa um arquivo já copiado pra assets/moveis/
+                                        (modal de inserir imagem), sem novo upload
      POST ?acao=casa_fundo_remover    -> volta a Casa pro visual padrão (sem fundo)
      POST ?acao=casa_preco_salvar     {precoCasa} -> preço em moedas pra desbloquear a decoração
      GET  ?acao=capas_obter           -> capas de cabeçalho da Loja de Móveis e do Mural
      POST ?acao=capas_salvar          {campo, ativa, diasSemana, horaInicio, horaFim, dataInicio, dataFim,
                                         ancora=top|center|bottom} -> campo = lojamoveis|mural
      POST ?acao=capas_imagem          (multipart: arquivo, campo=lojamoveis|mural) -> sobe pra assets/moveis/
+     POST ?acao=capas_definir         {campo, nomeArquivo} -> mesma ideia de casa_fundo_definir, pra capa
      GET  ?acao=musica_obter          -> música de fundo (opcional) atual
      POST ?acao=musica_ativa_salvar   {ativa}
      POST ?acao=musica_upload         (multipart: arquivo) -> sobe e já grava a música de fundo
+     POST ?acao=musica_definir        {nomeArquivo} -> mesma ideia de casa_fundo_definir, pra música
      POST ?acao=musica_remover        -> remove a música (volta a não ter trilha sonora)
      GET  ?acao=minigame_sprites_listar -> os 20 slots de sprite dos 4 minigames (emoji padrão + imagem/escala, se configurados)
      POST ?acao=minigame_sprite_imagem  (multipart: arquivo, chave) -> sobe pra assets/minigames/
@@ -108,10 +113,12 @@
      POST ?acao=minigame_sprite_escala_salvar {chave, escala} -> tamanho da imagem (50 a 200%), só com imagem já enviada
      GET  ?acao=minigame_configs_listar -> fundo + sons + miniatura dos 11 minigames do Arcade
      POST ?acao=minigame_fundo_imagem   (multipart: arquivo, jogo) -> imagem de fundo desse minigame, sobe pra assets/minigames/
+     POST ?acao=minigame_fundo_definir  {jogo, nomeArquivo} -> mesma ideia de casa_fundo_definir, pro fundo do minigame
      POST ?acao=minigame_fundo_remover  {jogo} -> volta pro fundo padrão
      POST ?acao=minigame_som_upload     (multipart: arquivo, jogo, evento=acerto|erro) -> substitui o bipe padrão
      POST ?acao=minigame_som_remover    {jogo, evento} -> volta pro bipe padrão
      POST ?acao=minigame_thumb_imagem   (multipart: arquivo, jogo) -> miniatura do cartão/carrossel do Arcade
+     POST ?acao=minigame_thumb_definir  {jogo, nomeArquivo} -> mesma ideia de casa_fundo_definir, pra miniatura
      POST ?acao=minigame_thumb_remover  {jogo} -> volta pro ícone colorido padrão
      GET  ?acao=temporadas_listar     -> pacotes de sprite por período (ex.: "Festa Junina"), com agenda e quantos slots têm override
      GET  ?acao=temporada_obter       ?id=xx -> temporada + seus 20 slots (override ou vazio = usa o sprite padrão)
@@ -1033,7 +1040,7 @@ try {
     $d = corpo();
     $nome = basename((string)($d['nomeArquivo'] ?? ''));
     $destino = (string)($d['destino'] ?? '');
-    $pastasDestinoValidas = ['itens', 'minigames'];
+    $pastasDestinoValidas = ['itens', 'npcs', 'mundos', 'moveis', 'lojas', 'jornal', 'minigames', 'cenas'];
     if ($nome === '' || !in_array($destino, $pastasDestinoValidas, true)) {
       responder(['erro' => 'Parâmetros inválidos.'], 422);
     }
@@ -2249,6 +2256,13 @@ try {
     responder(['ok' => true, 'fundo' => $nome, 'fundoUrl' => 'assets/moveis/' . $nome]);
   }
 
+  if ($acao === 'casa_fundo_definir') {
+    $nome = basename((string)(corpo()['nomeArquivo'] ?? ''));
+    if ($nome === '' || !is_file(pastaMoveis() . '/' . $nome)) responder(['erro' => 'Arquivo não encontrado.'], 404);
+    bd()->prepare('UPDATE configuracoes SET casa_fundo = ? WHERE id = 1')->execute([$nome]);
+    responder(['ok' => true, 'fundo' => $nome, 'fundoUrl' => 'assets/moveis/' . $nome]);
+  }
+
   if ($acao === 'casa_fundo_remover') {
     bd()->prepare('UPDATE configuracoes SET casa_fundo = \'\' WHERE id = 1')->execute();
     responder(['ok' => true]);
@@ -2331,6 +2345,16 @@ try {
     responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => 'assets/moveis/' . $nome]);
   }
 
+  if ($acao === 'capas_definir') {
+    $d = corpo();
+    $campo = (string)($d['campo'] ?? '');
+    if (!in_array($campo, $camposCapaValidos, true)) responder(['erro' => '"campo" precisa ser lojamoveis ou mural.'], 422);
+    $nome = basename((string)($d['nomeArquivo'] ?? ''));
+    if ($nome === '' || !is_file(pastaMoveis() . '/' . $nome)) responder(['erro' => 'Arquivo não encontrado.'], 404);
+    bd()->prepare("UPDATE configuracoes SET capa_{$campo}_imagem = ? WHERE id = 1")->execute([$nome]);
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => 'assets/moveis/' . $nome]);
+  }
+
   /* ---------- Música de fundo (opcional, um arquivo só, tocado em loop no cliente) ---------- */
 
   if ($acao === 'musica_obter') {
@@ -2365,6 +2389,13 @@ try {
     if (!@move_uploaded_file($arq['tmp_name'], pastaMoveis() . '/' . $nome)) {
       responder(['erro' => 'Não consegui gravar o arquivo em assets/moveis (confira a permissão da pasta).'], 500);
     }
+    bd()->prepare('UPDATE configuracoes SET musica_fundo = ? WHERE id = 1')->execute([$nome]);
+    responder(['ok' => true, 'url' => 'assets/moveis/' . $nome]);
+  }
+
+  if ($acao === 'musica_definir') {
+    $nome = basename((string)(corpo()['nomeArquivo'] ?? ''));
+    if ($nome === '' || !is_file(pastaMoveis() . '/' . $nome)) responder(['erro' => 'Arquivo não encontrado.'], 404);
     bd()->prepare('UPDATE configuracoes SET musica_fundo = ? WHERE id = 1')->execute([$nome]);
     responder(['ok' => true, 'url' => 'assets/moveis/' . $nome]);
   }
@@ -2504,6 +2535,17 @@ try {
     responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoMinigame($nome)]);
   }
 
+  if ($acao === 'minigame_fundo_definir') {
+    $d = corpo();
+    $jogo = (string)($d['jogo'] ?? '');
+    if (!array_key_exists($jogo, JOGOS_ARCADE)) responder(['erro' => 'Minigame desconhecido.'], 422);
+    $nome = basename((string)($d['nomeArquivo'] ?? ''));
+    if ($nome === '' || !is_file(pastaMinigames() . '/' . $nome)) responder(['erro' => 'Arquivo não encontrado.'], 404);
+    bd()->prepare('INSERT INTO minigame_config (jogo, fundo) VALUES (?, ?) ON DUPLICATE KEY UPDATE fundo = VALUES(fundo)')
+      ->execute([$jogo, $nome]);
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoMinigame($nome)]);
+  }
+
   if ($acao === 'minigame_fundo_remover') {
     $jogo = (string)(corpo()['jogo'] ?? '');
     if (!array_key_exists($jogo, JOGOS_ARCADE)) responder(['erro' => 'Minigame desconhecido.'], 422);
@@ -2539,6 +2581,17 @@ try {
     if (!@move_uploaded_file($arq['tmp_name'], pastaMinigames() . '/' . $nome)) {
       responder(['erro' => 'Não consegui gravar o arquivo em assets/minigames (confira a permissão da pasta).'], 500);
     }
+    bd()->prepare('INSERT INTO minigame_config (jogo, thumb) VALUES (?, ?) ON DUPLICATE KEY UPDATE thumb = VALUES(thumb)')
+      ->execute([$jogo, $nome]);
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoMinigame($nome)]);
+  }
+
+  if ($acao === 'minigame_thumb_definir') {
+    $d = corpo();
+    $jogo = (string)($d['jogo'] ?? '');
+    if (!array_key_exists($jogo, JOGOS_ARCADE)) responder(['erro' => 'Minigame desconhecido.'], 422);
+    $nome = basename((string)($d['nomeArquivo'] ?? ''));
+    if ($nome === '' || !is_file(pastaMinigames() . '/' . $nome)) responder(['erro' => 'Arquivo não encontrado.'], 404);
     bd()->prepare('INSERT INTO minigame_config (jogo, thumb) VALUES (?, ?) ON DUPLICATE KEY UPDATE thumb = VALUES(thumb)')
       ->execute([$jogo, $nome]);
     responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoMinigame($nome)]);
