@@ -212,6 +212,24 @@ try {
     criado_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
+  // biblioteca central de arquivos (estilo WordPress): todo upload novo passa a cair aqui
+  // em vez de espalhado pasta por pasta — nome_arquivo é sempre aleatório (nunca vem do
+  // usuário) e, se for imagem, sempre vira .webp (convertido de verdade via GD, não só
+  // renomeado). "Onde é usado" não é uma coluna aqui — é calculado na hora varrendo as
+  // tabelas que guardam nome_arquivo, pra nunca ficar dessincronizado.
+  $pdo->exec('CREATE TABLE IF NOT EXISTS arquivos (
+    id            VARCHAR(24) PRIMARY KEY,
+    nome_arquivo  VARCHAR(160) NOT NULL UNIQUE,
+    nome_original VARCHAR(160) NOT NULL DEFAULT \'\',
+    tipo          VARCHAR(10) NOT NULL DEFAULT \'imagem\',
+    tamanho       INT NOT NULL DEFAULT 0,
+    largura       INT NULL,
+    altura        INT NULL,
+    enviado_por   VARCHAR(60) NOT NULL DEFAULT \'\',
+    criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX (tipo)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
   $pdo->exec('CREATE TABLE IF NOT EXISTS mundos (
     id            VARCHAR(24) PRIMARY KEY,
     nome          VARCHAR(60) NOT NULL,

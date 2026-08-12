@@ -15,6 +15,12 @@
                                         capaAncora=top|center|bottom}
      POST ?acao=mundo_excluir         {id}
      POST ?acao=mundo_imagem          (multipart: arquivo) -> sobe imagem de capa pra assets/mundos/
+     POST ?acao=arquivo_enviar        (multipart: arquivo, tipo=imagem|audio) -> biblioteca central,
+                                       converte imagem pra webp automaticamente
+     GET  ?acao=arquivos_listar       -> lista biblioteca central com uso (onde cada arquivo aparece)
+     POST ?acao=arquivo_excluir       {id} -> só apaga se o arquivo não estiver em uso em nenhum lugar
+     POST ?acao=arquivo_copiar_para   {nomeArquivo, destino=itens|minigames} -> copia da biblioteca pra
+                                        pasta de outra feature, pro seletor reutilizável reaproveitar o arquivo
      GET  ?acao=licoes_listar         [?mundo=xx]
      GET  ?acao=licao_obter           ?id=xx
      POST ?acao=licao_salvar          {id, mundoId, titulo, emoji, serie, ordem, publicado, blocos:[...]}
@@ -96,6 +102,8 @@
      POST ?acao=musica_remover        -> remove a música (volta a não ter trilha sonora)
      GET  ?acao=minigame_sprites_listar -> os 20 slots de sprite dos 4 minigames (emoji padrão + imagem/escala, se configurados)
      POST ?acao=minigame_sprite_imagem  (multipart: arquivo, chave) -> sobe pra assets/minigames/
+     POST ?acao=minigame_sprite_definir {chave, nomeArquivo} -> usa um arquivo já copiado pra assets/minigames/
+                                        (seletor da biblioteca), sem novo upload
      POST ?acao=minigame_sprite_remover {chave} -> volta esse slot pro emoji padrão
      POST ?acao=minigame_sprite_escala_salvar {chave, escala} -> tamanho da imagem (50 a 200%), só com imagem já enviada
      GET  ?acao=minigame_configs_listar -> fundo + sons + miniatura dos 11 minigames do Arcade
@@ -224,6 +232,165 @@ function caminhoPublicoMovel(string $nome): string { return $nome === '' ? '' : 
 function caminhoPublicoLoja(string $nome): string { return $nome === '' ? '' : 'assets/lojas/' . $nome; }
 function caminhoPublicoMinigame(string $nome): string { return $nome === '' ? '' : 'assets/minigames/' . $nome; }
 function caminhoPublicoJornal(string $nome): string { return $nome === '' ? '' : 'assets/jornal/' . $nome; }
+
+/* ---------- biblioteca central de arquivos ----------
+   Todo upload novo (a partir daqui) cai numa pasta só, com nome sempre aleatório — nunca
+   derivado do que o usuário mandou, então não tem como um envio sobrescrever outro arquivo
+   nem "escapar" da pasta. Imagem sempre vira .webp de verdade (GD decodifica os pixels e
+   reescreve do zero — o que também descarta qualquer coisa escondida num arquivo disfarçado
+   de imagem); se o GD do servidor não tiver suporte a webp, cai pro formato original em vez
+   de travar o envio inteiro. */
+function pastaBiblioteca(): string { return dirname(__DIR__) . '/assets/biblioteca'; }
+function caminhoPublicoBiblioteca(string $nome): string { return $nome === '' ? '' : 'assets/biblioteca/' . $nome; }
+const TAMANHO_MAX_IMAGEM_BIBLIOTECA = 8 * 1024 * 1024;  // 8 MB
+const TAMANHO_MAX_AUDIO_BIBLIOTECA  = 15 * 1024 * 1024; // 15 MB
+const DIMENSAO_MAX_IMAGEM_BIBLIOTECA = 6000; // px, em qualquer lado — trava decodificação gigante
+
+/** tenta converter uma imagem recém-enviada pra webp de verdade (decodifica os pixels via
+ * GD e reescreve do zero, não é um "rename"). @return string|null caminho de um arquivo
+ * temporário .webp, ou null se não deu (GD sem suporte, ou mime não reconhecido). */
+function converterParaWebp(string $caminhoTmp, string $mime): ?string {
+  if (!function_exists('imagewebp')) return null;
+  $img = match ($mime) {
+    'image/jpeg' => @imagecreatefromjpeg($caminhoTmp),
+    'image/png'  => @imagecreatefrompng($caminhoTmp),
+    'image/webp' => @imagecreatefromwebp($caminhoTmp),
+    default => null,
+  };
+  if (!$img) return null;
+  imagepalettetotruecolor($img);
+  imagealphablending($img, false);
+  imagesavealpha($img, true);
+  $destino = $caminhoTmp . '.conv.webp';
+  $ok = @imagewebp($img, $destino, 85);
+  imagedestroy($img);
+  return $ok ? $destino : null;
+}
+
+/** upload seguro pra biblioteca central: valida tamanho/extensão/conteúdo real, converte
+ * imagem pra webp quando possível, grava com nome aleatório e registra na tabela `arquivos`.
+ * @return array dados do arquivo salvo — ou nunca retorna (chama responder() com erro 4xx/5xx
+ * e encerra a requisição), igual ao resto dos endpoints de upload deste arquivo. */
+function salvarArquivoBiblioteca(array $arq, string $tipo): array {
+  if (($arq['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+    $limite = ini_get('upload_max_filesize');
+    $motivo = ($arq['error'] ?? null) === UPLOAD_ERR_INI_SIZE
+      ? "O arquivo passou do limite do servidor ($limite)." : 'Nenhum arquivo recebido.';
+    responder(['erro' => $motivo], 422);
+  }
+  $tamanhoMax = $tipo === 'audio' ? TAMANHO_MAX_AUDIO_BIBLIOTECA : TAMANHO_MAX_IMAGEM_BIBLIOTECA;
+  if ((int)$arq['size'] > $tamanhoMax) {
+    responder(['erro' => 'Arquivo grande demais (máx. ' . round($tamanhoMax / 1024 / 1024) . ' MB).'], 422);
+  }
+  $ext = strtolower(pathinfo((string)$arq['name'], PATHINFO_EXTENSION));
+  if (!is_dir(pastaBiblioteca()) && !@mkdir(pastaBiblioteca(), 0755, true)) {
+    responder(['erro' => 'Não consegui criar a pasta assets/biblioteca no servidor.'], 500);
+  }
+
+  if ($tipo === 'audio') {
+    if (!isset(EXTENSOES_AUDIO[$ext])) responder(['erro' => 'Formato de áudio não aceito. Use mp3, ogg, wav ou m4a.'], 422);
+    $nome = bin2hex(random_bytes(16)) . '.' . $ext;
+    if (!@move_uploaded_file($arq['tmp_name'], pastaBiblioteca() . '/' . $nome)) {
+      responder(['erro' => 'Não consegui gravar o arquivo (confira a permissão da pasta).'], 500);
+    }
+    $largura = $altura = null;
+  } else {
+    if (!isset(EXTENSOES_IMAGEM[$ext])) responder(['erro' => 'Formato não aceito. Use webp, png ou jpg.'], 422);
+    $info = @getimagesize($arq['tmp_name']);
+    if (!$info || !in_array($info['mime'], EXTENSOES_IMAGEM, true)) {
+      responder(['erro' => 'O arquivo não é uma imagem válida.'], 422);
+    }
+    if ($info[0] > DIMENSAO_MAX_IMAGEM_BIBLIOTECA || $info[1] > DIMENSAO_MAX_IMAGEM_BIBLIOTECA) {
+      responder(['erro' => 'Imagem grande demais (máx. ' . DIMENSAO_MAX_IMAGEM_BIBLIOTECA . 'px de largura/altura).'], 422);
+    }
+    $convertido = converterParaWebp($arq['tmp_name'], $info['mime']);
+    if ($convertido) {
+      $nome = bin2hex(random_bytes(16)) . '.webp';
+      $gravou = @rename($convertido, pastaBiblioteca() . '/' . $nome);
+      @unlink($convertido);
+      if (!$gravou) responder(['erro' => 'Não consegui gravar o arquivo convertido.'], 500);
+      $medidas = @getimagesize(pastaBiblioteca() . '/' . $nome);
+      $largura = $medidas[0] ?? $info[0]; $altura = $medidas[1] ?? $info[1];
+    } else {
+      $nome = bin2hex(random_bytes(16)) . '.' . $ext;
+      if (!@move_uploaded_file($arq['tmp_name'], pastaBiblioteca() . '/' . $nome)) {
+        responder(['erro' => 'Não consegui gravar o arquivo (confira a permissão da pasta).'], 500);
+      }
+      $largura = $info[0]; $altura = $info[1];
+    }
+  }
+
+  $tamanhoFinal = @filesize(pastaBiblioteca() . '/' . $nome) ?: 0;
+  $id = bin2hex(random_bytes(12));
+  $nomeOriginal = mb_substr(trim((string)$arq['name']), 0, 160);
+  bd()->prepare('INSERT INTO arquivos (id, nome_arquivo, nome_original, tipo, tamanho, largura, altura, enviado_por)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    ->execute([$id, $nome, $nomeOriginal, $tipo, $tamanhoFinal, $largura, $altura, $_SESSION['admin_usuario'] ?? '']);
+
+  return [
+    'id' => $id, 'nomeArquivo' => $nome, 'nomeOriginal' => $nomeOriginal, 'tipo' => $tipo,
+    'tamanho' => $tamanhoFinal, 'largura' => $largura, 'altura' => $altura,
+    'url' => caminhoPublicoBiblioteca($nome),
+  ];
+}
+
+/** varre TODAS as tabelas/colunas que guardam nome de arquivo (imagem ou áudio), incluindo
+ * as duas que ficam dentro de JSON (npcs.expressoes, itens_loja.variantes), numa passada só
+ * — devolve nomeArquivo => [{categoria, rotulo}, ...]. É recalculado a cada listagem (não
+ * fica guardado em lugar nenhum) pra nunca ficar dessincronizado do que realmente está em
+ * uso — o preço é N consultas simples, não é caro pro tamanho deste banco. */
+function todosUsosPorArquivo(): array {
+  $usos = [];
+  $add = function (?string $nome, string $categoria, string $rotulo) use (&$usos) {
+    if (!$nome) return;
+    $usos[$nome][] = ['categoria' => $categoria, 'rotulo' => $rotulo];
+  };
+  $bd = bd();
+  foreach ($bd->query('SELECT nome, capa_imagem FROM mundos') as $r) $add($r['capa_imagem'], 'Mundo', $r['nome']);
+  foreach ($bd->query('SELECT nome, imagem FROM cenas') as $r) $add($r['imagem'], 'Mapa', $r['nome']);
+  foreach ($bd->query('SELECT nome, imagem, expressoes FROM npcs') as $r) {
+    $add($r['imagem'], 'NPC', $r['nome']);
+    foreach ((json_decode((string)$r['expressoes'], true) ?: []) as $chave => $arqExpr) {
+      $add(is_string($arqExpr) ? $arqExpr : null, 'NPC (expressão)', $r['nome'] . ' — ' . $chave);
+    }
+  }
+  foreach ($bd->query('SELECT titulo, imagem FROM jornal_artigos') as $r) $add($r['imagem'], 'Jornal', $r['titulo']);
+  foreach ($bd->query('SELECT nome, imagem FROM itens') as $r) $add($r['imagem'], 'Item', $r['nome']);
+  foreach ($bd->query('SELECT nome, imagem_frente, imagem_direita, imagem_verso, imagem_esquerda FROM moveis') as $r) {
+    $add($r['imagem_frente'], 'Móvel', $r['nome'] . ' (frente)');
+    $add($r['imagem_direita'], 'Móvel', $r['nome'] . ' (direita)');
+    $add($r['imagem_verso'], 'Móvel', $r['nome'] . ' (verso)');
+    $add($r['imagem_esquerda'], 'Móvel', $r['nome'] . ' (esquerda)');
+  }
+  foreach ($bd->query('SELECT nome, capa_imagem FROM lojas') as $r) $add($r['capa_imagem'], 'Loja', $r['nome']);
+  foreach ($bd->query('SELECT nome, imagem, variantes FROM itens_loja') as $r) {
+    $add($r['imagem'], 'Item de loja', $r['nome']);
+    foreach ((json_decode((string)$r['variantes'], true) ?: []) as $v) {
+      $add($v['imagem'] ?? null, 'Item de loja (variante)', $r['nome'] . ' — ' . ($v['nome'] ?? '?'));
+    }
+  }
+  $config = $bd->query('SELECT casa_fundo, capa_lojamoveis_imagem, capa_mural_imagem, musica_fundo FROM configuracoes WHERE id = 1')->fetch(PDO::FETCH_ASSOC);
+  if ($config) {
+    $add($config['casa_fundo'], 'Casa', 'Fundo da Casa');
+    $add($config['capa_lojamoveis_imagem'], 'Capa', 'Loja de Móveis');
+    $add($config['capa_mural_imagem'], 'Capa', 'Mural');
+    $add($config['musica_fundo'], 'Áudio', 'Música de fundo');
+  }
+  foreach ($bd->query('SELECT chave, imagem FROM minigame_sprites') as $r) {
+    $add($r['imagem'], 'Sprite de minigame', SPRITES_MINIGAME[$r['chave']]['rotulo'] ?? $r['chave']);
+  }
+  foreach ($bd->query('SELECT jogo, fundo, thumb, som_acerto, som_erro FROM minigame_config') as $r) {
+    $rotuloJogo = JOGOS_ARCADE[$r['jogo']] ?? $r['jogo'];
+    $add($r['fundo'], 'Fundo de minigame', $rotuloJogo);
+    $add($r['thumb'], 'Miniatura de minigame', $rotuloJogo);
+    $add($r['som_acerto'], 'Som de minigame', $rotuloJogo . ' (acerto)');
+    $add($r['som_erro'], 'Som de minigame', $rotuloJogo . ' (erro)');
+  }
+  foreach ($bd->query('SELECT temporada_id, chave, imagem FROM temporada_sprites') as $r) {
+    $add($r['imagem'], 'Sprite de temporada', $r['temporada_id'] . ' — ' . $r['chave']);
+  }
+  return $usos;
+}
 
 /* catálogo fechado dos "slots" de sprite dos minigames (Arcade) — cada um tem um emoji
    padrão (o que já vinha embutido no jogo) que continua valendo enquanto o Hostmaster não
@@ -763,6 +930,65 @@ try {
   }
 
   if (!isset($_SESSION['admin_id'])) responder(['erro' => 'Entre no painel primeiro.'], 401);
+
+  /* ---------- biblioteca central de arquivos ---------- */
+
+  if ($acao === 'arquivo_enviar') {
+    $tipo = ($_POST['tipo'] ?? 'imagem') === 'audio' ? 'audio' : 'imagem';
+    $arq = $_FILES['arquivo'] ?? null;
+    if (!$arq) responder(['erro' => 'Nenhum arquivo recebido.'], 422);
+    responder(['ok' => true, 'arquivo' => salvarArquivoBiblioteca($arq, $tipo)]);
+  }
+
+  if ($acao === 'arquivos_listar') {
+    $usos = todosUsosPorArquivo();
+    $linhas = bd()->query('SELECT * FROM arquivos ORDER BY criado_em DESC')->fetchAll(PDO::FETCH_ASSOC);
+    responder(['arquivos' => array_map(fn($a) => [
+      'id' => $a['id'], 'nomeArquivo' => $a['nome_arquivo'], 'nomeOriginal' => $a['nome_original'],
+      'tipo' => $a['tipo'], 'tamanho' => (int)$a['tamanho'],
+      'largura' => $a['largura'] !== null ? (int)$a['largura'] : null,
+      'altura' => $a['altura'] !== null ? (int)$a['altura'] : null,
+      'url' => caminhoPublicoBiblioteca($a['nome_arquivo']),
+      'criadoEm' => $a['criado_em'], 'enviadoPor' => $a['enviado_por'],
+      'usos' => $usos[$a['nome_arquivo']] ?? [],
+    ], $linhas)]);
+  }
+
+  if ($acao === 'arquivo_excluir') {
+    $d = corpo();
+    $id = (string)($d['id'] ?? '');
+    $st = bd()->prepare('SELECT nome_arquivo FROM arquivos WHERE id = ?');
+    $st->execute([$id]);
+    $nome = $st->fetchColumn();
+    if ($nome === false) responder(['erro' => 'Arquivo não encontrado.'], 404);
+    $usos = todosUsosPorArquivo()[$nome] ?? [];
+    if ($usos) {
+      responder(['erro' => 'Esse arquivo está em uso e não pode ser apagado: ' .
+        implode(', ', array_map(fn($u) => $u['categoria'] . ' — ' . $u['rotulo'], $usos))], 422);
+    }
+    @unlink(pastaBiblioteca() . '/' . $nome);
+    bd()->prepare('DELETE FROM arquivos WHERE id = ?')->execute([$id]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'arquivo_copiar_para') {
+    $d = corpo();
+    $nome = basename((string)($d['nomeArquivo'] ?? ''));
+    $destino = (string)($d['destino'] ?? '');
+    $pastasDestino = ['itens' => pastaItens(), 'minigames' => pastaMinigames()];
+    if ($nome === '' || !isset($pastasDestino[$destino])) responder(['erro' => 'Parâmetros inválidos.'], 422);
+    $origem = pastaBiblioteca() . '/' . $nome;
+    if (!is_file($origem)) responder(['erro' => 'Arquivo não encontrado na biblioteca.'], 404);
+    $pastaDestino = $pastasDestino[$destino];
+    if (!is_dir($pastaDestino) && !@mkdir($pastaDestino, 0755, true)) {
+      responder(['erro' => 'Não consegui criar a pasta de destino.'], 500);
+    }
+    $caminhoDestino = $pastaDestino . '/' . $nome;
+    if (!is_file($caminhoDestino) && !@copy($origem, $caminhoDestino)) {
+      responder(['erro' => 'Não consegui copiar o arquivo pro destino.'], 500);
+    }
+    responder(['ok' => true, 'nomeArquivo' => $nome]);
+  }
 
   if ($acao === 'mundos_listar') {
     $linhas = bd()->query('SELECT m.id, m.nome, m.emoji, m.cor, m.ordem, m.publicado, m.capa_imagem, m.capa_ativa,
@@ -2122,6 +2348,17 @@ try {
     if (!@move_uploaded_file($arq['tmp_name'], pastaMinigames() . '/' . $nome)) {
       responder(['erro' => 'Não consegui gravar o arquivo em assets/minigames (confira a permissão da pasta).'], 500);
     }
+    bd()->prepare('INSERT INTO minigame_sprites (chave, imagem) VALUES (?, ?) ON DUPLICATE KEY UPDATE imagem = VALUES(imagem)')
+      ->execute([$chave, $nome]);
+    responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoMinigame($nome)]);
+  }
+
+  if ($acao === 'minigame_sprite_definir') {
+    $d = corpo();
+    $chave = (string)($d['chave'] ?? '');
+    $nome = basename((string)($d['nomeArquivo'] ?? ''));
+    if (!array_key_exists($chave, SPRITES_MINIGAME)) responder(['erro' => 'Slot de sprite desconhecido.'], 422);
+    if ($nome === '' || !is_file(pastaMinigames() . '/' . $nome)) responder(['erro' => 'Arquivo não encontrado.'], 404);
     bd()->prepare('INSERT INTO minigame_sprites (chave, imagem) VALUES (?, ?) ON DUPLICATE KEY UPDATE imagem = VALUES(imagem)')
       ->execute([$chave, $nome]);
     responder(['ok' => true, 'imagem' => $nome, 'imagemUrl' => caminhoPublicoMinigame($nome)]);

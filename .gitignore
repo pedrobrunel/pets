@@ -28,3 +28,9 @@ assets/cenas/*
 # de assets/cenas/ acima: vivem no servidor, não no repositório.
 assets/minigames/*
 !assets/minigames/.gitkeep
+
+# biblioteca central de arquivos (aba Arquivos do painel), mesmo esquema de assets/cenas/
+# acima: vivem no servidor, não no repositório. ⚠️ inclua assets/biblioteca/ no seu backup.
+assets/biblioteca/*
+!assets/biblioteca/.gitkeep
+!assets/biblioteca/.htaccess
