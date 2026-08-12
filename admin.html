@@ -1424,11 +1424,19 @@ pergunta     { p: "...", alts: [string,...], certa: índice numérico da alterna
       <input type="file" id="input-biblioteca" accept=".webp,.png,.jpg,.jpeg,.mp3,.ogg,.wav,.m4a" multiple class="oculto">
       <div id="biblioteca-aviso" class="aviso-form"></div>
 
-      <div style="display:flex;gap:8px;margin:14px 0">
+      <div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap">
         <button type="button" class="filtro-biblioteca ativo" data-filtro-biblioteca="todos">Todos</button>
         <button type="button" class="filtro-biblioteca" data-filtro-biblioteca="imagem">🖼️ Imagens</button>
         <button type="button" class="filtro-biblioteca" data-filtro-biblioteca="audio">🎵 Áudios</button>
       </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+        <select id="filtro-biblioteca-categoria" style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--contorno);border-radius:8px;font-size:13px">
+          <option value="">Todas as categorias de uso</option>
+        </select>
+        <input type="text" id="busca-biblioteca" placeholder="🔎 Buscar por nome do arquivo…" style="flex:2;min-width:200px;padding:8px 10px;border:1px solid var(--contorno);border-radius:8px;font-size:13px">
+      </div>
+      <p class="sub" id="contagem-biblioteca" style="margin-top:-8px"></p>
 
       <div class="grade-biblioteca" id="grade-biblioteca"></div>
     </section>
@@ -5068,6 +5076,7 @@ window.removerPalavraProibida = async (palavra) => {
 /* ---------- biblioteca central de arquivos ---------- */
 let bibliotecaCache = [];
 let bibliotecaFiltro = 'todos';
+const SEM_USO_BIBLIOTECA = '__sem_uso__';
 
 function formatarTamanho(bytes){
   if(bytes < 1024) return bytes + ' B';
@@ -5079,13 +5088,49 @@ async function carregarBiblioteca(){
   const d = await api('arquivos_listar').catch(() => null);
   if(!d) return;
   bibliotecaCache = d.arquivos;
+  atualizarCategoriasBiblioteca();
   desenharBiblioteca();
+}
+
+/* monta o <select> de categorias a partir do que realmente existe nos usos dos arquivos —
+   "inteligente" no sentido de que a lista se ajusta sozinha ao conteúdo do site (sem
+   precisar manter uma lista fixa de categorias em algum outro lugar do código), com a
+   contagem de quantos arquivos caem em cada uma. Preserva a seleção atual se ela continuar
+   valendo depois de recarregar. */
+function atualizarCategoriasBiblioteca(){
+  const contagem = new Map();
+  let semUso = 0;
+  bibliotecaCache.forEach(a => {
+    if(!a.usos.length){ semUso++; return; }
+    const categoriasDoArquivo = new Set(a.usos.map(u => u.categoria));
+    categoriasDoArquivo.forEach(c => contagem.set(c, (contagem.get(c) || 0) + 1));
+  });
+  const categoriasOrdenadas = [...contagem.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const select = $('#filtro-biblioteca-categoria');
+  const valorAnterior = select.value;
+  select.innerHTML = '<option value="">Todas as categorias de uso</option>'
+    + categoriasOrdenadas.map(c => `<option value="${esc(c)}">${esc(c)} (${contagem.get(c)})</option>`).join('')
+    + (semUso ? `<option value="${SEM_USO_BIBLIOTECA}">🗑️ Sem uso — órfãos (${semUso})</option>` : '');
+  const aindaExiste = [...select.options].some(o => o.value === valorAnterior);
+  select.value = aindaExiste ? valorAnterior : '';
 }
 
 function desenharBiblioteca(){
   const grade = $('#grade-biblioteca');
-  const lista = bibliotecaCache.filter(a => bibliotecaFiltro === 'todos' || a.tipo === bibliotecaFiltro);
-  if(!lista.length){ grade.innerHTML = '<p class="sub">Nenhum arquivo ainda — suba um acima.</p>'; return; }
+  const categoria = $('#filtro-biblioteca-categoria').value;
+  const busca = $('#busca-biblioteca').value.trim().toLowerCase();
+  let lista = bibliotecaCache.filter(a => bibliotecaFiltro === 'todos' || a.tipo === bibliotecaFiltro);
+  if(categoria === SEM_USO_BIBLIOTECA) lista = lista.filter(a => !a.usos.length);
+  else if(categoria) lista = lista.filter(a => a.usos.some(u => u.categoria === categoria));
+  if(busca) lista = lista.filter(a => a.nomeOriginal.toLowerCase().includes(busca) || a.nomeArquivo.toLowerCase().includes(busca));
+
+  $('#contagem-biblioteca').textContent = bibliotecaCache.length
+    ? `Mostrando ${lista.length} de ${bibliotecaCache.length} arquivo(s).`
+    : '';
+  if(!lista.length){
+    grade.innerHTML = `<p class="sub">${bibliotecaCache.length ? 'Nenhum arquivo bate com esse filtro.' : 'Nenhum arquivo ainda — suba um acima.'}</p>`;
+    return;
+  }
   grade.innerHTML = lista.map(a => {
     const miniatura = a.tipo === 'audio'
       ? '🎵'
@@ -5111,6 +5156,13 @@ window.excluirArquivoBiblioteca = async (id) => {
     carregarBiblioteca();
   }catch(e){ alert(e.message); }
 };
+
+$('#filtro-biblioteca-categoria').onchange = () => desenharBiblioteca();
+let temporizadorBuscaBiblioteca = null;
+$('#busca-biblioteca').addEventListener('input', () => {
+  clearTimeout(temporizadorBuscaBiblioteca);
+  temporizadorBuscaBiblioteca = setTimeout(desenharBiblioteca, 150);
+});
 
 $$('.filtro-biblioteca').forEach(btn => btn.onclick = () => {
   $$('.filtro-biblioteca').forEach(b => b.classList.remove('ativo'));
