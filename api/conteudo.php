@@ -230,7 +230,7 @@ try {
     'gatilho' => array_map(fn($m) => json_decode($m['objetivo'], true)['chave'] ?? '',
       array_filter(bd()->query("SELECT objetivo FROM missoes WHERE tipo = 'gatilho'")->fetchAll(PDO::FETCH_ASSOC))),
   ];
-  $stPontos = bd()->prepare('SELECT rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item
+  $stPontos = bd()->prepare('SELECT rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item, curva_dica
     FROM pontos WHERE cena_id = ? AND publicado = 1 ORDER BY id');
 
   $pastaCenas = dirname(__DIR__) . '/assets/cenas';
@@ -267,6 +267,7 @@ try {
         'tipo' => $tipo, 'destino' => $destino,
         'mostrarSelo' => $mostrarSelo, 'mostrarDica' => (bool)$p['mostrar_dica'],
         'requisitoItem' => $p['requisito_item'],
+        'curvaDica' => $p['curva_dica'] !== '' ? json_decode($p['curva_dica'], true) : [],
       ];
     }
     $saidaCenas[] = [

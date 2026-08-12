@@ -495,6 +495,13 @@ try {
   if (!in_array('requisito_item', $colunasPontos, true)) {
     $pdo->exec("ALTER TABLE pontos ADD COLUMN requisito_item VARCHAR(24) NOT NULL DEFAULT ''");
   }
+  // curva_dica: caminho (bezier) opcional que o "brilho" de destaque do ponto segue, em vez
+  // do quadrado/círculo pulsando padrão. JSON: array de âncoras {x,y,hIn:{dx,dy}|null,hOut:{dx,dy}|null}
+  // em % da imagem — mesma unidade de x/y/largura/altura do ponto. Vazio ('') = sem curva,
+  // cai no efeito antigo.
+  if (!in_array('curva_dica', $colunasPontos, true)) {
+    $pdo->exec("ALTER TABLE pontos ADD COLUMN curva_dica MEDIUMTEXT NOT NULL DEFAULT ''");
+  }
 
   /* móveis: catálogo pra decorar a Casa, estilo Club Penguin. Comprados na "Loja de
      Móveis" (uma tela só alcançada por ponto no mapa, tipo "tela") com as mesmas moedas
