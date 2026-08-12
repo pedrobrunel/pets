@@ -222,6 +222,7 @@ try {
     nome_arquivo  VARCHAR(160) NOT NULL UNIQUE,
     nome_original VARCHAR(160) NOT NULL DEFAULT \'\',
     tipo          VARCHAR(10) NOT NULL DEFAULT \'imagem\',
+    pasta         VARCHAR(20) NOT NULL DEFAULT \'biblioteca\',
     tamanho       INT NOT NULL DEFAULT 0,
     largura       INT NULL,
     altura        INT NULL,
@@ -229,6 +230,16 @@ try {
     criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX (tipo)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  // pasta: onde o arquivo físico realmente mora (assets/<pasta>/) — "biblioteca" pros
+  // uploads novos feitos pela aba Arquivos, ou o nome de uma pasta antiga (itens, npcs,
+  // mundos...) quando o registro veio da sincronização de arquivos que já existiam antes
+  // dessa feature existir (sincronizarArquivosExistentes(), chamada a cada listagem).
+  $colunasArquivos = array_column($pdo->query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'arquivos'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+  if (!in_array('pasta', $colunasArquivos, true)) {
+    $pdo->exec("ALTER TABLE arquivos ADD COLUMN pasta VARCHAR(20) NOT NULL DEFAULT 'biblioteca'");
+  }
 
   $pdo->exec('CREATE TABLE IF NOT EXISTS mundos (
     id            VARCHAR(24) PRIMARY KEY,

@@ -246,6 +246,15 @@ const TAMANHO_MAX_IMAGEM_BIBLIOTECA = 8 * 1024 * 1024;  // 8 MB
 const TAMANHO_MAX_AUDIO_BIBLIOTECA  = 15 * 1024 * 1024; // 15 MB
 const DIMENSAO_MAX_IMAGEM_BIBLIOTECA = 6000; // px, em qualquer lado — trava decodificação gigante
 
+/* pastas onde um arquivo registrado na tabela `arquivos` pode realmente morar em disco:
+   "biblioteca" pros uploads novos (aba Arquivos), ou uma pasta de feature antiga quando o
+   registro veio de sincronizarArquivosExistentes() — arquivo que já existia antes dessa
+   aba existir e nunca foi movido. Nunca aceite um valor de "pasta" fora desta lista (evita
+   caminho arbitrário em disco vindo de entrada do usuário). */
+const PASTAS_ARQUIVO_VALIDAS = ['biblioteca', 'itens', 'npcs', 'mundos', 'moveis', 'lojas', 'minigames', 'jornal', 'cenas'];
+function pastaDisco(string $pasta): string { return dirname(__DIR__) . '/assets/' . $pasta; }
+function caminhoPublicoArquivo(string $pasta, string $nome): string { return $nome === '' ? '' : 'assets/' . $pasta . '/' . $nome; }
+
 /** tenta converter uma imagem recém-enviada pra webp de verdade (decodifica os pixels via
  * GD e reescreve do zero, não é um "rename"). @return string|null caminho de um arquivo
  * temporário .webp, ou null se não deu (GD sem suporte, ou mime não reconhecido). */
@@ -323,8 +332,8 @@ function salvarArquivoBiblioteca(array $arq, string $tipo): array {
   $tamanhoFinal = @filesize(pastaBiblioteca() . '/' . $nome) ?: 0;
   $id = bin2hex(random_bytes(12));
   $nomeOriginal = mb_substr(trim((string)$arq['name']), 0, 160);
-  bd()->prepare('INSERT INTO arquivos (id, nome_arquivo, nome_original, tipo, tamanho, largura, altura, enviado_por)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+  bd()->prepare('INSERT INTO arquivos (id, nome_arquivo, nome_original, tipo, pasta, tamanho, largura, altura, enviado_por)
+    VALUES (?, ?, ?, ?, \'biblioteca\', ?, ?, ?, ?)')
     ->execute([$id, $nome, $nomeOriginal, $tipo, $tamanhoFinal, $largura, $altura, $_SESSION['admin_usuario'] ?? '']);
 
   return [
@@ -390,6 +399,51 @@ function todosUsosPorArquivo(): array {
     $add($r['imagem'], 'Sprite de temporada', $r['temporada_id'] . ' — ' . $r['chave']);
   }
   return $usos;
+}
+
+/* pastas de upload que existiam antes da biblioteca central — cada arquivo aqui foi subido
+   por uma feature específica antes dessa aba existir, então nunca passou pelo cadastro em
+   `arquivos`. Varrida a cada listagem (arquivos_listar), pra aba Arquivos mostrar TUDO que
+   já está em uso no site, não só o que foi enviado depois dessa feature existir. */
+const PASTAS_ARQUIVO_ANTIGAS = ['itens', 'npcs', 'mundos', 'moveis', 'lojas', 'minigames', 'jornal', 'cenas'];
+
+/** registra na tabela `arquivos` qualquer arquivo que já exista numa pasta de upload antiga
+ * e ainda não tenha registro — nome_original fica igual ao nome_arquivo (o nome original de
+ * quando foi enviado não foi guardado antes dessa feature existir). Idempotente: só insere o
+ * que ainda não está lá. @return int quantos arquivos novos foram registrados. */
+function sincronizarArquivosExistentes(): int {
+  $existentes = array_flip(bd()->query('SELECT nome_arquivo FROM arquivos')->fetchAll(PDO::FETCH_COLUMN));
+  $stIns = bd()->prepare('INSERT INTO arquivos (id, nome_arquivo, nome_original, tipo, pasta, tamanho, largura, altura, enviado_por)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, \'\')');
+  $inseridos = 0;
+  foreach (PASTAS_ARQUIVO_ANTIGAS as $pasta) {
+    $caminhoPasta = pastaDisco($pasta);
+    if (!is_dir($caminhoPasta)) continue;
+    foreach (scandir($caminhoPasta) as $arquivo) {
+      if ($arquivo === '' || $arquivo[0] === '.') continue; // pula ".", "..", ".htaccess", ".gitkeep"
+      if (isset($existentes[$arquivo])) continue;
+      $caminhoArquivo = $caminhoPasta . '/' . $arquivo;
+      if (!is_file($caminhoArquivo)) continue;
+      $ext = strtolower(pathinfo($arquivo, PATHINFO_EXTENSION));
+      $largura = $altura = null;
+      if (isset(EXTENSOES_IMAGEM[$ext])) {
+        $tipo = 'imagem';
+        $medidas = @getimagesize($caminhoArquivo);
+        if ($medidas) { $largura = $medidas[0]; $altura = $medidas[1]; }
+      } elseif (isset(EXTENSOES_AUDIO[$ext])) {
+        $tipo = 'audio';
+      } else {
+        continue; // extensão desconhecida nessa pasta — não registra
+      }
+      $stIns->execute([
+        bin2hex(random_bytes(12)), $arquivo, $arquivo, $tipo, $pasta,
+        @filesize($caminhoArquivo) ?: 0, $largura, $altura,
+      ]);
+      $existentes[$arquivo] = true;
+      $inseridos++;
+    }
+  }
+  return $inseridos;
 }
 
 /* catálogo fechado dos "slots" de sprite dos minigames (Arcade) — cada um tem um emoji
@@ -941,14 +995,15 @@ try {
   }
 
   if ($acao === 'arquivos_listar') {
+    sincronizarArquivosExistentes();
     $usos = todosUsosPorArquivo();
     $linhas = bd()->query('SELECT * FROM arquivos ORDER BY criado_em DESC')->fetchAll(PDO::FETCH_ASSOC);
     responder(['arquivos' => array_map(fn($a) => [
       'id' => $a['id'], 'nomeArquivo' => $a['nome_arquivo'], 'nomeOriginal' => $a['nome_original'],
-      'tipo' => $a['tipo'], 'tamanho' => (int)$a['tamanho'],
+      'tipo' => $a['tipo'], 'pasta' => $a['pasta'], 'tamanho' => (int)$a['tamanho'],
       'largura' => $a['largura'] !== null ? (int)$a['largura'] : null,
       'altura' => $a['altura'] !== null ? (int)$a['altura'] : null,
-      'url' => caminhoPublicoBiblioteca($a['nome_arquivo']),
+      'url' => caminhoPublicoArquivo($a['pasta'], $a['nome_arquivo']),
       'criadoEm' => $a['criado_em'], 'enviadoPor' => $a['enviado_por'],
       'usos' => $usos[$a['nome_arquivo']] ?? [],
     ], $linhas)]);
@@ -957,16 +1012,19 @@ try {
   if ($acao === 'arquivo_excluir') {
     $d = corpo();
     $id = (string)($d['id'] ?? '');
-    $st = bd()->prepare('SELECT nome_arquivo FROM arquivos WHERE id = ?');
+    $st = bd()->prepare('SELECT nome_arquivo, pasta FROM arquivos WHERE id = ?');
     $st->execute([$id]);
-    $nome = $st->fetchColumn();
-    if ($nome === false) responder(['erro' => 'Arquivo não encontrado.'], 404);
+    $linha = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$linha) responder(['erro' => 'Arquivo não encontrado.'], 404);
+    $nome = $linha['nome_arquivo'];
     $usos = todosUsosPorArquivo()[$nome] ?? [];
     if ($usos) {
       responder(['erro' => 'Esse arquivo está em uso e não pode ser apagado: ' .
         implode(', ', array_map(fn($u) => $u['categoria'] . ' — ' . $u['rotulo'], $usos))], 422);
     }
-    @unlink(pastaBiblioteca() . '/' . $nome);
+    if (in_array($linha['pasta'], PASTAS_ARQUIVO_VALIDAS, true)) {
+      @unlink(pastaDisco($linha['pasta']) . '/' . $nome);
+    }
     bd()->prepare('DELETE FROM arquivos WHERE id = ?')->execute([$id]);
     responder(['ok' => true]);
   }
@@ -975,11 +1033,21 @@ try {
     $d = corpo();
     $nome = basename((string)($d['nomeArquivo'] ?? ''));
     $destino = (string)($d['destino'] ?? '');
-    $pastasDestino = ['itens' => pastaItens(), 'minigames' => pastaMinigames()];
-    if ($nome === '' || !isset($pastasDestino[$destino])) responder(['erro' => 'Parâmetros inválidos.'], 422);
-    $origem = pastaBiblioteca() . '/' . $nome;
+    $pastasDestinoValidas = ['itens', 'minigames'];
+    if ($nome === '' || !in_array($destino, $pastasDestinoValidas, true)) {
+      responder(['erro' => 'Parâmetros inválidos.'], 422);
+    }
+    // a origem real do arquivo pode não ser mais assets/biblioteca/ — se veio de
+    // sincronizarArquivosExistentes() ele mora na pasta de onde já estava (ex.: assets/npcs/)
+    $st = bd()->prepare('SELECT pasta FROM arquivos WHERE nome_arquivo = ?');
+    $st->execute([$nome]);
+    $pastaOrigem = $st->fetchColumn();
+    if ($pastaOrigem === false || !in_array($pastaOrigem, PASTAS_ARQUIVO_VALIDAS, true)) {
+      responder(['erro' => 'Arquivo não encontrado na biblioteca.'], 404);
+    }
+    $origem = pastaDisco($pastaOrigem) . '/' . $nome;
     if (!is_file($origem)) responder(['erro' => 'Arquivo não encontrado na biblioteca.'], 404);
-    $pastaDestino = $pastasDestino[$destino];
+    $pastaDestino = pastaDisco($destino);
     if (!is_dir($pastaDestino) && !@mkdir($pastaDestino, 0755, true)) {
       responder(['erro' => 'Não consegui criar a pasta de destino.'], 500);
     }
