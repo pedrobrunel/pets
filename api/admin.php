@@ -46,7 +46,7 @@
      POST ?acao=importar              {mundos:[...]}   (mesmo formato do exportar)
      GET  ?acao=cenas_listar
      GET  ?acao=cena_obter            ?id=xx           -> cena + seus pontos
-     POST ?acao=cena_salvar           {id, nome, imagem, inicial, publicado, ordem}
+     POST ?acao=cena_salvar           {id, nome, imagem, somAmbiente, inicial, publicado, ordem}
      POST ?acao=cena_excluir          {id}
      POST ?acao=pontos_salvar         {cenaId, pontos:[...]}  -> substitui os pontos da cena
      POST ?acao=cena_imagem           (multipart: arquivo) -> sobe imagem pra assets/cenas/
@@ -218,6 +218,16 @@ function validarNomeImagem(string $nome): bool {
   if (str_contains($nome, '..')) return false;
   $ext = strtolower(pathinfo($nome, PATHINFO_EXTENSION));
   return isset(EXTENSOES_IMAGEM[$ext]);
+}
+/* mesma validação de validarNomeImagem, mas pra extensão de áudio — usada em campos opcionais
+   de som (ex.: som ambiente da cena) onde '' é um valor válido (sem áudio configurado) */
+function validarNomeAudio(string $nome): bool {
+  if ($nome === '') return true;
+  if (strlen($nome) > 160) return false;
+  if (!preg_match('/^[A-Za-z0-9._-]+$/', $nome)) return false;
+  if (str_contains($nome, '..')) return false;
+  $ext = strtolower(pathinfo($nome, PATHINFO_EXTENSION));
+  return isset(EXTENSOES_AUDIO[$ext]);
 }
 function pastaCenas(): string { return dirname(__DIR__) . '/assets/cenas'; }
 function pastaNpcs(): string { return dirname(__DIR__) . '/assets/npcs'; }
@@ -1422,14 +1432,14 @@ try {
         'publicado' => (bool)$p['publicado'],
       ];
     }
-    $cenas = bd()->query('SELECT id, nome, imagem, inicial, publicado, ordem FROM cenas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
+    $cenas = bd()->query('SELECT id, nome, imagem, som_ambiente, inicial, publicado, ordem FROM cenas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
     responder([
       'mundos' => array_map(fn($m) => [
         'id' => $m['id'], 'nome' => $m['nome'], 'emoji' => $m['emoji'], 'cor' => $m['cor'],
         'ordem' => (int)$m['ordem'], 'publicado' => (bool)$m['publicado'], 'licoes' => $porMundo[$m['id']] ?? [],
       ], $mundos),
       'cenas' => array_map(fn($c) => [
-        'id' => $c['id'], 'nome' => $c['nome'], 'imagem' => $c['imagem'],
+        'id' => $c['id'], 'nome' => $c['nome'], 'imagem' => $c['imagem'], 'somAmbiente' => $c['som_ambiente'],
         'inicial' => (bool)$c['inicial'], 'publicado' => (bool)$c['publicado'], 'ordem' => (int)$c['ordem'],
         'pontos' => $porCena[$c['id']] ?? [],
       ], $cenas),
@@ -1446,6 +1456,7 @@ try {
     foreach ($cenasImp as $c) {
       if (!validarId((string)($c['id'] ?? ''))) responder(['erro' => 'Mapa com "id" inválido: ' . json_encode($c['id'] ?? null)], 422);
       if (!validarNomeImagem((string)($c['imagem'] ?? ''))) responder(['erro' => 'Mapa "' . $c['id'] . '": nome de imagem inválido.'], 422);
+      if (!validarNomeAudio((string)($c['somAmbiente'] ?? ''))) responder(['erro' => 'Mapa "' . $c['id'] . '": som ambiente inválido.'], 422);
       if (trim((string)($c['nome'] ?? '')) === '') responder(['erro' => 'Mapa "' . $c['id'] . '": falta o nome.'], 422);
     }
     foreach ($mundos as $m) {
@@ -1481,11 +1492,11 @@ try {
          ponto confere se o mundo/lição/cena de destino existe, e agora eles já existem
          (mesma transação). Se um ponto falhar, o rollback desfaz a importação inteira. */
       if ($cenasImp) {
-        $insCena = $bdc->prepare('INSERT INTO cenas (id, nome, imagem, inicial, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE nome=VALUES(nome), imagem=VALUES(imagem), inicial=VALUES(inicial),
-            publicado=VALUES(publicado), ordem=VALUES(ordem)');
+        $insCena = $bdc->prepare('INSERT INTO cenas (id, nome, imagem, som_ambiente, inicial, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE nome=VALUES(nome), imagem=VALUES(imagem), som_ambiente=VALUES(som_ambiente),
+            inicial=VALUES(inicial), publicado=VALUES(publicado), ordem=VALUES(ordem)');
         foreach ($cenasImp as $c) {
-          $insCena->execute([$c['id'], trim((string)$c['nome']), (string)$c['imagem'],
+          $insCena->execute([$c['id'], trim((string)$c['nome']), (string)$c['imagem'], (string)($c['somAmbiente'] ?? ''),
             !empty($c['inicial']) ? 1 : 0, !empty($c['publicado']) ? 1 : 0, (int)($c['ordem'] ?? 0)]);
         }
         $delPontos = $bdc->prepare('DELETE FROM pontos WHERE cena_id = ?');
@@ -1521,19 +1532,20 @@ try {
   /* ---------- cenas (mapas) e seus pontos clicáveis ---------- */
 
   if ($acao === 'cenas_listar') {
-    $linhas = bd()->query('SELECT c.id, c.nome, c.imagem, c.inicial, c.publicado, c.ordem, COUNT(p.id) AS pontos
+    $linhas = bd()->query('SELECT c.id, c.nome, c.imagem, c.som_ambiente, c.inicial, c.publicado, c.ordem, COUNT(p.id) AS pontos
       FROM cenas c LEFT JOIN pontos p ON p.cena_id = c.id
       GROUP BY c.id ORDER BY c.inicial DESC, c.ordem, c.nome')->fetchAll(PDO::FETCH_ASSOC);
     responder(['cenas' => array_map(fn($c) => [
       'id' => $c['id'], 'nome' => $c['nome'], 'imagem' => $c['imagem'],
       'imagemUrl' => caminhoPublicoImagem($c['imagem']),
+      'somAmbiente' => $c['som_ambiente'], 'somAmbienteUrl' => caminhoPublicoArquivo('cenas', $c['som_ambiente']),
       'inicial' => (bool)$c['inicial'], 'publicado' => (bool)$c['publicado'],
       'ordem' => (int)$c['ordem'], 'pontos' => (int)$c['pontos'],
     ], $linhas)]);
   }
 
   if ($acao === 'cena_obter') {
-    $st = bd()->prepare('SELECT id, nome, imagem, inicial, publicado, ordem FROM cenas WHERE id = ?');
+    $st = bd()->prepare('SELECT id, nome, imagem, som_ambiente, inicial, publicado, ordem FROM cenas WHERE id = ?');
     $st->execute([(string)($_GET['id'] ?? '')]);
     $c = $st->fetch(PDO::FETCH_ASSOC);
     if (!$c) responder(['erro' => 'Cena não encontrada.'], 404);
@@ -1543,6 +1555,7 @@ try {
     responder([
       'id' => $c['id'], 'nome' => $c['nome'], 'imagem' => $c['imagem'],
       'imagemUrl' => caminhoPublicoImagem($c['imagem']),
+      'somAmbiente' => $c['som_ambiente'], 'somAmbienteUrl' => caminhoPublicoArquivo('cenas', $c['som_ambiente']),
       'inicial' => (bool)$c['inicial'], 'publicado' => (bool)$c['publicado'], 'ordem' => (int)$c['ordem'],
       'pontos' => array_map(fn($p) => [
         'rotulo' => $p['rotulo'], 'x' => (float)$p['x'], 'y' => (float)$p['y'],
@@ -1563,14 +1576,16 @@ try {
     if ($nome === '' || mb_strlen($nome) > 60) responder(['erro' => 'O nome precisa ter de 1 a 60 caracteres.'], 422);
     $imagem = trim((string)($d['imagem'] ?? ''));
     if (!validarNomeImagem($imagem)) responder(['erro' => 'Escolha ou envie a imagem de fundo da cena (webp, png ou jpg).'], 422);
+    $somAmbiente = trim((string)($d['somAmbiente'] ?? ''));
+    if (!validarNomeAudio($somAmbiente)) responder(['erro' => 'Som ambiente inválido. Use mp3, ogg, wav ou m4a.'], 422);
     $inicial = !empty($d['inicial']) ? 1 : 0;
     $bdc = bd();
     $bdc->beginTransaction();
     try {
-      $bdc->prepare('INSERT INTO cenas (id, nome, imagem, inicial, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE nome=VALUES(nome), imagem=VALUES(imagem), inicial=VALUES(inicial),
-          publicado=VALUES(publicado), ordem=VALUES(ordem)')
-        ->execute([$id, $nome, $imagem, $inicial, !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0)]);
+      $bdc->prepare('INSERT INTO cenas (id, nome, imagem, som_ambiente, inicial, publicado, ordem) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE nome=VALUES(nome), imagem=VALUES(imagem), som_ambiente=VALUES(som_ambiente),
+          inicial=VALUES(inicial), publicado=VALUES(publicado), ordem=VALUES(ordem)')
+        ->execute([$id, $nome, $imagem, $somAmbiente, $inicial, !empty($d['publicado']) ? 1 : 0, (int)($d['ordem'] ?? 0)]);
       // só uma cena pode ser a inicial (a que abre na aba Trilhas)
       if ($inicial) $bdc->prepare('UPDATE cenas SET inicial = 0 WHERE id <> ?')->execute([$id]);
       $bdc->commit();

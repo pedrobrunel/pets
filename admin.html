@@ -412,9 +412,15 @@ body.conectando-fluxo{cursor:crosshair}
         <input type="text" id="cena-nome" placeholder="ex.: Porto do saber">
         <label>imagem de fundo</label>
         <div class="upload" id="zona-upload-cena">🖼️ Clique pra escolher da biblioteca ou enviar uma nova — ou arraste aqui (webp de preferência)</div>
-        <input type="file" id="input-imagem-cena" accept=".webp,.png,.jpg,.jpeg,image/*" class="oculto">
         <input type="text" id="cena-imagem" placeholder="nome do arquivo (preenchido pelo upload)" style="margin-top:8px">
         <p class="dica-editor">A imagem enviada fica em <code>assets/cenas/</code> no servidor. Enviar outra com o mesmo nome substitui a anterior.</p>
+
+        <label>som ambiente (opcional)</label>
+        <div id="preview-cena-som" style="margin-bottom:8px"></div>
+        <div class="upload" id="zona-upload-cena-som">🎵 Clique pra escolher da biblioteca ou enviar um novo — ou arraste aqui (mp3, ogg, wav ou m4a)</div>
+        <input type="text" id="cena-som-ambiente" class="oculto">
+        <button type="button" class="btn linha erro" id="btn-remover-cena-som" style="margin-top:8px">Remover som ambiente</button>
+        <p class="dica-editor">Toca em loop, baixinho, enquanto o aluno estiver nesse mapa — junto com a música de fundo geral do site, se tiver uma ativa. Sem som configurado, o mapa fica só com a música geral.</p>
         <div id="cena-aviso" class="aviso-form"></div>
         <div class="rodape-form">
           <button type="submit" class="btn mata">Salvar mapa</button>
@@ -2128,8 +2134,13 @@ $('#btn-salvar-pontos').onclick = async () => {
 function limparFormCena(){
   $('#form-cena').reset();
   $('#cena-id').disabled = false;
+  $('#cena-som-ambiente').value = '';
+  $('#preview-cena-som').innerHTML = '';
   $('#cena-aviso').style.display = 'none';
   $('#btn-excluir-cena').classList.add('oculto');
+}
+function renderPreviewCenaSom(url){
+  $('#preview-cena-som').innerHTML = url ? `<audio controls src="${esc(url)}" style="width:100%"></audio>` : '';
 }
 $('#btn-nova-cena').onclick = () => {
   limparFormCena();
@@ -2147,6 +2158,8 @@ $('#btn-editar-cena').onclick = () => {
   $('#cena-ordem').value = cenaEdit.ordem;
   $('#cena-inicial').checked = cenaEdit.inicial;
   $('#cena-publicado').checked = cenaEdit.publicado;
+  $('#cena-som-ambiente').value = cenaEdit.somAmbiente || '';
+  renderPreviewCenaSom(cenaEdit.somAmbienteUrl);
   $('#btn-excluir-cena').classList.remove('oculto');
   $('#form-cena').classList.remove('oculto');
 };
@@ -2161,6 +2174,7 @@ $('#form-cena').addEventListener('submit', async e => {
     const id = $('#cena-id').value.trim();
     await api('cena_salvar', {method:'POST', corpo:{
       id, nome: $('#cena-nome').value.trim(), imagem: $('#cena-imagem').value.trim(),
+      somAmbiente: $('#cena-som-ambiente').value.trim(),
       inicial: $('#cena-inicial').checked, publicado: $('#cena-publicado').checked,
       ordem: Number($('#cena-ordem').value) || 0,
     }});
@@ -2185,6 +2199,15 @@ $('#btn-excluir-cena').onclick = async () => {
 /* upload da imagem de fundo — abre o modal de inserir imagem (biblioteca ou enviar novo) */
 tornarZonaSeletoraImagem('zona-upload-cena', {destino: 'cenas', avisoId: 'cena-aviso',
   aoSelecionar: nomeArquivo => { $('#cena-imagem').value = nomeArquivo; }});
+tornarZonaSeletoraImagem('zona-upload-cena-som', {destino: 'cenas', tipo: 'audio', avisoId: 'cena-aviso',
+  aoSelecionar: nomeArquivo => {
+    $('#cena-som-ambiente').value = nomeArquivo;
+    renderPreviewCenaSom('assets/cenas/' + nomeArquivo);
+  }});
+$('#btn-remover-cena-som').onclick = () => {
+  $('#cena-som-ambiente').value = '';
+  renderPreviewCenaSom('');
+};
 
 /* ---------- NPCs (personagens + diálogo em fluxo de nós) ----------
    O diálogo é uma árvore: um nó inicial + nós com um texto (balão de fala) e até 4

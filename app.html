@@ -1555,6 +1555,7 @@ function alternarMudo(){
   localStorage.setItem('bichoteca-mudo', mudo ? '1' : '0');
   atualizarBotaoMudo();
   if(elementoMusica){ if(mudo) elementoMusica.pause(); else elementoMusica.play().catch(()=>{}); }
+  if(elementoAmbiente){ if(mudo) elementoAmbiente.pause(); else elementoAmbiente.play().catch(()=>{}); }
 }
 atualizarBotaoMudo();
 
@@ -2417,6 +2418,37 @@ function iniciarMusicaFundo(){
     document.addEventListener('click', () => { if(!mudo) elementoMusica.play().catch(()=>{}); }, {once:true});
   });
 }
+/* ---------- som ambiente por mapa (opcional, tocado em loop junto com a música geral) ---------- */
+let elementoAmbiente = null, somAmbienteUrlAtual = '';
+const VOLUME_AMBIENTE = 0.16; // mais baixo que a música (0.25) — é camada de atmosfera, não a trilha principal
+function fadeAudio(audio, alvo, duracaoMs, aoTerminar){
+  const inicio = audio.volume, delta = alvo - inicio;
+  if(!delta){ if(aoTerminar) aoTerminar(); return; }
+  const t0 = performance.now();
+  (function passo(agora){
+    const p = Math.min(1, (agora - t0) / duracaoMs);
+    audio.volume = inicio + delta * p;
+    if(p < 1) requestAnimationFrame(passo);
+    else if(aoTerminar) aoTerminar();
+  })(t0);
+}
+function atualizarSomAmbiente(url){
+  if(url === somAmbienteUrlAtual) return; // mesma cena redesenhada — não reinicia o áudio
+  somAmbienteUrlAtual = url;
+  const antigo = elementoAmbiente;
+  if(antigo) fadeAudio(antigo, 0, 500, () => antigo.pause());
+  elementoAmbiente = null;
+  if(!url || mudo) return;
+  const novo = new Audio(url);
+  novo.loop = true;
+  novo.volume = 0;
+  elementoAmbiente = novo;
+  novo.play().catch(() => {
+    // idem música de fundo: autoplay bloqueado sem interação ainda — tenta no próximo toque
+    document.addEventListener('click', () => { if(!mudo && elementoAmbiente === novo) novo.play().catch(()=>{}); }, {once:true});
+  });
+  fadeAudio(novo, VOLUME_AMBIENTE, 500);
+}
 // lojas genéricas (aba Lojas): cada ponto tipo "loja" num mapa aponta pro id de uma
 // loja daqui, e os itens (com variantes/agenda opcionais) ficam em ITENS_LOJA
 let LOJAS = [];
@@ -2845,6 +2877,7 @@ RENDER.trilhas = (idCena) => {
   if(!idCena) pilhaCenas = [];
   cenaAtual = (idCena && acharCena(idCena)) || cenaInicial();
   if(!cenaAtual){
+    atualizarSomAmbiente('');
     $('#tela-trilhas').innerHTML = `
       <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('casa')">Voltar</button>
       <p class="vazio" style="margin-top:80px"><span class="emoji">🗺️</span>Nenhum mapa publicado ainda.</p>`;
@@ -2853,6 +2886,11 @@ RENDER.trilhas = (idCena) => {
   // marca o mapa como visitado (pra missão tipo "visitar_cena") assim que ele é aberto
   if(!estado.cenasVisitadas.includes(cenaAtual.id)){ estado.cenasVisitadas.push(cenaAtual.id); agendarSalvar(); }
   const c = cenaAtual;
+  // som ambiente (opcional, por mapa): toca em loop, baixinho, junto com a música geral —
+  // só reinicia se o áudio mudou de verdade (evita cortar/reiniciar num redesenho da MESMA
+  // cena, tipo depois de coletar um item). Some quando o aluno sai da tela de mapas.
+  atualizarSomAmbiente(c.somAmbienteUrl || '');
+  pararLoops = () => atualizarSomAmbiente('');
   $('#tela-trilhas').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="voltarDaCena()">Voltar</button>
     <div class="cena-scroll" id="cena-scroll">

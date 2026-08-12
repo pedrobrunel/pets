@@ -386,6 +386,15 @@ try {
     criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+  // som_ambiente: áudio opcional em loop enquanto o aluno está nessa cena (passos, vento,
+  // água...) — chegou depois da tabela já existir em produção, mesma checagem por
+  // INFORMATION_SCHEMA usada pra requisito_item/curva_dica em pontos
+  $colunasCenas = array_column($pdo->query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cenas'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+  if (!in_array('som_ambiente', $colunasCenas, true)) {
+    $pdo->exec("ALTER TABLE cenas ADD COLUMN som_ambiente VARCHAR(160) NOT NULL DEFAULT ''");
+  }
 
   // pontos clicáveis de uma cena. posição/tamanho em % da imagem (não em pixel), pra
   // funcionar igual em qualquer tela. destino = par (tipo, destino) do catálogo de links

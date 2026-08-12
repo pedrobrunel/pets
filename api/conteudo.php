@@ -49,7 +49,7 @@ try {
        Antes ele era removido, e aí tocar nele não fazia nada: parecia defeito tanto pro
        aluno quanto pra quem montou o mapa. Melhor dar retorno do que sumir;
      - destino que não existe mais (apagado) -> aí sim removido, é lixo. */
-  $cenas = bd()->query('SELECT id, nome, imagem, inicial FROM cenas WHERE publicado = 1 ORDER BY ordem, nome')
+  $cenas = bd()->query('SELECT id, nome, imagem, som_ambiente, inicial FROM cenas WHERE publicado = 1 ORDER BY ordem, nome')
     ->fetchAll(PDO::FETCH_ASSOC);
   $cenasPublicadas = array_column($cenas, 'id');
 
@@ -274,6 +274,8 @@ try {
       'id' => $c['id'], 'nome' => $c['nome'], 'inicial' => (bool)$c['inicial'],
       // imagem enviada pelo painel vive em assets/cenas/; a que veio no repositório, em assets/
       'imagem' => is_file($pastaCenas . '/' . $c['imagem']) ? 'assets/cenas/' . $c['imagem'] : 'assets/' . $c['imagem'],
+      // som ambiente (opcional): sempre enviado pelo painel, sempre em assets/cenas/
+      'somAmbienteUrl' => $c['som_ambiente'] !== '' && is_file($pastaCenas . '/' . $c['som_ambiente']) ? 'assets/cenas/' . $c['som_ambiente'] : '',
       'pontos' => $pontos,
     ];
   }
