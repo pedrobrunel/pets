@@ -311,7 +311,43 @@ function validarPonto(array $p, int $i): ?string {
     $st->execute([$requisitoItem]);
     if (!$st->fetchColumn()) return "Ponto \"$rotulo\": o item exigido \"$requisitoItem\" não existe.";
   }
+
+  // curva de destaque (opcional): caminho que o "brilho" desenha em vez do quadrado/círculo
+  // padrão. Cada âncora tem posição (x,y) e, opcionalmente, alças de curva (hIn/hOut) — mesma
+  // ideia da caneta do Illustrator, só que sempre suave/espelhada (sem alça independente por lado).
+  $curvaDica = $p['curvaDica'] ?? null;
+  if ($curvaDica !== null && $curvaDica !== []) {
+    if (!is_array($curvaDica)) return "Ponto \"$rotulo\": curva de destaque inválida.";
+    if (count($curvaDica) > 60) return "Ponto \"$rotulo\": a curva de destaque tem âncoras demais (máx. 60).";
+    foreach ($curvaDica as $j => $ancora) {
+      if (!is_array($ancora)) return "Ponto \"$rotulo\": âncora $j da curva de destaque inválida.";
+      foreach (['x', 'y'] as $campo) {
+        if (!is_numeric($ancora[$campo] ?? null)) return "Ponto \"$rotulo\": âncora $j da curva — $campo inválido.";
+      }
+      foreach (['hIn', 'hOut'] as $alca) {
+        $h = $ancora[$alca] ?? null;
+        if ($h !== null && (!is_array($h) || !is_numeric($h['dx'] ?? null) || !is_numeric($h['dy'] ?? null))) {
+          return "Ponto \"$rotulo\": alça \"$alca\" da âncora $j da curva inválida.";
+        }
+      }
+    }
+  }
   return null;
+}
+
+/** normaliza a curva de destaque validada em validarPonto() pro formato salvo no banco.
+ * Menos de 2 âncoras não desenha linha nenhuma, então vira "sem curva" (string vazia). */
+function curvaDicaParaJson($curvaDica): string {
+  if (!is_array($curvaDica) || count($curvaDica) < 2) return '';
+  $limpa = array_values(array_map(function ($a) {
+    $out = ['x' => (float)$a['x'], 'y' => (float)$a['y']];
+    foreach (['hIn', 'hOut'] as $alca) {
+      $h = $a[$alca] ?? null;
+      $out[$alca] = (is_array($h) && isset($h['dx'], $h['dy'])) ? ['dx' => (float)$h['dx'], 'dy' => (float)$h['dy']] : null;
+    }
+    return $out;
+  }, $curvaDica));
+  return json_encode($limpa, JSON_UNESCAPED_UNICODE);
 }
 
 /** valida um item colecionável. @return string|null mensagem de erro, ou null se ok */
@@ -1073,13 +1109,14 @@ try {
     // cenas entram no backup junto: é o desenho dos mapas. O arquivo de imagem em si
     // não cabe aqui (é binário) — ele vive em assets/cenas/ no servidor.
     $porCena = [];
-    foreach (bd()->query('SELECT cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item, publicado FROM pontos ORDER BY id') as $p) {
+    foreach (bd()->query('SELECT cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item, curva_dica, publicado FROM pontos ORDER BY id') as $p) {
       $porCena[$p['cena_id']][] = [
         'rotulo' => $p['rotulo'], 'x' => (float)$p['x'], 'y' => (float)$p['y'],
         'largura' => (float)$p['largura'], 'altura' => (float)$p['altura'],
         'tipo' => $p['tipo'], 'destino' => $p['destino'],
         'mostrarSelo' => (bool)$p['mostrar_selo'], 'mostrarDica' => (bool)$p['mostrar_dica'],
-        'requisitoItem' => $p['requisito_item'], 'publicado' => (bool)$p['publicado'],
+        'requisitoItem' => $p['requisito_item'], 'curvaDica' => $p['curva_dica'] !== '' ? json_decode($p['curva_dica'], true) : [],
+        'publicado' => (bool)$p['publicado'],
       ];
     }
     $cenas = bd()->query('SELECT id, nome, imagem, inicial, publicado, ordem FROM cenas ORDER BY ordem, nome')->fetchAll(PDO::FETCH_ASSOC);
@@ -1149,8 +1186,8 @@ try {
             !empty($c['inicial']) ? 1 : 0, !empty($c['publicado']) ? 1 : 0, (int)($c['ordem'] ?? 0)]);
         }
         $delPontos = $bdc->prepare('DELETE FROM pontos WHERE cena_id = ?');
-        $insPonto = $bdc->prepare('INSERT INTO pontos (cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item, publicado)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $insPonto = $bdc->prepare('INSERT INTO pontos (cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item, curva_dica, publicado)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         foreach ($cenasImp as $c) {
           $delPontos->execute([$c['id']]);
           foreach (($c['pontos'] ?? []) as $i => $p) {
@@ -1161,7 +1198,7 @@ try {
               $c['id'], trim((string)$p['rotulo']), (float)$p['x'], (float)$p['y'], (float)$p['largura'], (float)$p['altura'],
               $p['tipo'], trim((string)$p['destino']),
               !empty($p['mostrarSelo']) ? 1 : 0, !empty($p['mostrarDica']) ? 1 : 0,
-              trim((string)($p['requisitoItem'] ?? '')),
+              trim((string)($p['requisitoItem'] ?? '')), curvaDicaParaJson($p['curvaDica'] ?? null),
               array_key_exists('publicado', $p) ? (!empty($p['publicado']) ? 1 : 0) : 1,
             ]);
           }
@@ -1197,7 +1234,7 @@ try {
     $st->execute([(string)($_GET['id'] ?? '')]);
     $c = $st->fetch(PDO::FETCH_ASSOC);
     if (!$c) responder(['erro' => 'Cena não encontrada.'], 404);
-    $st = bd()->prepare('SELECT id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item, publicado
+    $st = bd()->prepare('SELECT id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item, curva_dica, publicado
       FROM pontos WHERE cena_id = ? ORDER BY id');
     $st->execute([$c['id']]);
     responder([
@@ -1209,7 +1246,8 @@ try {
         'largura' => (float)$p['largura'], 'altura' => (float)$p['altura'],
         'tipo' => $p['tipo'], 'destino' => $p['destino'],
         'mostrarSelo' => (bool)$p['mostrar_selo'], 'mostrarDica' => (bool)$p['mostrar_dica'],
-        'requisitoItem' => $p['requisito_item'], 'publicado' => (bool)$p['publicado'],
+        'requisitoItem' => $p['requisito_item'], 'curvaDica' => $p['curva_dica'] !== '' ? json_decode($p['curva_dica'], true) : [],
+        'publicado' => (bool)$p['publicado'],
       ], $st->fetchAll(PDO::FETCH_ASSOC)),
     ]);
   }
@@ -1276,14 +1314,14 @@ try {
     $bdc->beginTransaction();
     try {
       $bdc->prepare('DELETE FROM pontos WHERE cena_id = ?')->execute([$cenaId]);
-      $ins = $bdc->prepare('INSERT INTO pontos (cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item, publicado)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+      $ins = $bdc->prepare('INSERT INTO pontos (cena_id, rotulo, x, y, largura, altura, tipo, destino, mostrar_selo, mostrar_dica, requisito_item, curva_dica, publicado)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
       foreach ($pontos as $p) {
         $ins->execute([
           $cenaId, trim((string)$p['rotulo']), (float)$p['x'], (float)$p['y'], (float)$p['largura'], (float)$p['altura'],
           $p['tipo'], trim((string)$p['destino']),
           !empty($p['mostrarSelo']) ? 1 : 0, !empty($p['mostrarDica']) ? 1 : 0,
-          trim((string)($p['requisitoItem'] ?? '')),
+          trim((string)($p['requisitoItem'] ?? '')), curvaDicaParaJson($p['curvaDica'] ?? null),
           array_key_exists('publicado', $p) ? (!empty($p['publicado']) ? 1 : 0) : 1,
         ]);
       }

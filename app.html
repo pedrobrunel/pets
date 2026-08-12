@@ -422,6 +422,7 @@ body.tela-cheia #app{padding:0;max-width:none}
 }
 .predio{
   position:absolute;background:none;border:none;cursor:pointer;padding:0;
+  z-index:1; /* sempre acima do .svg-brilho-curva, pro toque nunca ficar "atrás" da linha */
   display:flex;align-items:flex-end;justify-content:center;
   min-width:56px;min-height:56px; /* área de toque confortável mesmo quando o % da imagem dá um retângulo pequeno */
 }
@@ -438,6 +439,21 @@ body.tela-cheia #app{padding:0;max-width:none}
   animation:pulsa-dica 1.8s ease-in-out infinite;pointer-events:none;
 }
 @keyframes pulsa-dica{0%,100%{opacity:.25;transform:scale(.97)}50%{opacity:.9;transform:scale(1.02)}}
+/* brilho-curva: mesma ideia da dica acima (piscar mostrando que dá pra tocar), só que
+   seguindo a linha desenhada no painel (editor de mapa > ponto > "Desenhar linha") em vez
+   de ficar preso no quadrado/círculo do ponto. Fica atrás dos prédios (z-index), então não
+   atrapalha o toque; non-scaling-stroke evita que a linha fique grossa de um lado e fina do
+   outro quando a imagem do mapa não é quadrada (o viewBox estica x/y em proporções
+   diferentes, igual todo o resto do posicionamento em % desta tela). */
+.svg-brilho-curva{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.svg-brilho-curva .tracado-brilho{
+  fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;vector-effect:non-scaling-stroke;
+  animation:pulsa-dica 1.8s ease-in-out infinite;
+}
+.svg-brilho-curva .tracado-brilho-glow{
+  fill:none;stroke:#fff;stroke-width:9;stroke-linecap:round;vector-effect:non-scaling-stroke;
+  opacity:.55;filter:blur(3px);animation:pulsa-dica 1.8s ease-in-out infinite;
+}
 .predio-selo{
   margin-bottom:-8px;background:#fff;border:2px solid var(--contorno);border-radius:999px;
   padding:2px 8px;font-size:11px;font-weight:900;box-shadow:0 2px 0 var(--contorno);white-space:nowrap;
@@ -2780,6 +2796,34 @@ function esperarImagemDaCena(tetoMs){
     esperar(tetoMs),
   ]);
 }
+/* ponto de mapa some da tela (sem virar botão morto) quando: mundo/npc de destino não
+   existe mais ou está fora da agenda, item já foi coletado, ou falta o item exigido no
+   inventário. Compartilhado entre os prédios e o brilho-curva (task #162), pra os dois
+   concordarem sobre o que está mesmo visível na cena. */
+function pontoVisivelNaCena(p){
+  if(p.tipo === 'mundo' && !TRILHAS.find(t => t.id === p.destino)) return false;
+  if(p.tipo === 'npc'){
+    const npc = acharNpc(p.destino);
+    if(!npc || !npcAtivoAgora(npc)) return false;
+  }
+  if(p.tipo === 'item' && estado.itensColetados.includes(p.destino)) return false;
+  if(p.requisitoItem && !estado.itensColetados.includes(p.requisitoItem)) return false;
+  return true;
+}
+/* traçado bezier do brilho-curva, mesma lógica do editor em admin.html — cada âncora
+   {x,y,hIn,hOut} em % da imagem, hIn/hOut são deslocamentos (dx,dy) relativos à própria
+   âncora. Sem alça de um lado = segmento reto até/desde ali. */
+function curvaParaSvgD(pontos){
+  if(!pontos || pontos.length < 2) return '';
+  let d = `M ${pontos[0].x} ${pontos[0].y}`;
+  for(let i=1;i<pontos.length;i++){
+    const a = pontos[i-1], b = pontos[i];
+    const c1 = a.hOut ? {x:a.x+a.hOut.dx, y:a.y+a.hOut.dy} : {x:a.x, y:a.y};
+    const c2 = b.hIn ? {x:b.x+b.hIn.dx, y:b.y+b.hIn.dy} : {x:b.x, y:b.y};
+    d += ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${b.x} ${b.y}`;
+  }
+  return d;
+}
 RENDER.trilhas = (idCena) => {
   // sem argumento (toque na aba Trilhas) = volta pro começo do mapa e esquece o caminho
   if(!idCena) pilhaCenas = [];
@@ -2799,38 +2843,41 @@ RENDER.trilhas = (idCena) => {
       <div class="cena-moldura">
       <div class="cena-quadro">
         <img class="cena-img" src="${esc(c.imagem)}" alt="${esc(c.nome)}">
-        ${(c.pontos || []).map((p, i) => {
-          const mundo = p.tipo === 'mundo' ? TRILHAS.find(t => t.id === p.destino) : null;
-          // ponto de mundo que não existe mais (rascunho, apagado) não vira botão morto
-          if(p.tipo === 'mundo' && !mundo) return '';
-          // NPC fora da agenda (dia/horário/data) não aparece no mapa — sem prédio com
-          // ninguém dentro, e sem estragar a surpresa de tocar e não dar em nada
-          if(p.tipo === 'npc'){
-            const npc = acharNpc(p.destino);
-            if(!npc || !npcAtivoAgora(npc)) return '';
-          }
-          // item já coletado não aparece mais (foi pego, some pra sempre); e QUALQUER
-          // ponto pode exigir um item no inventário pra sequer aparecer no mapa
-          if(p.tipo === 'item' && estado.itensColetados.includes(p.destino)) return '';
-          if(p.requisitoItem && !estado.itensColetados.includes(p.requisitoItem)) return '';
-          let selo = '';
-          if(mundo && p.mostrarSelo){
-            const {feitas, total, completo} = progressoMundo(mundo);
-            selo = `<span class="predio-selo ${completo?'completo':''}">${completo?'👑':`${feitas}/${total}`}</span>`;
-          }
-          if(p.tipo === 'item'){
-            const item = acharItemMapa(p.destino);
-            const figura = item?.imagemUrl
-              ? `<img class="item-figura" src="${esc(item.imagemUrl)}" alt="">`
-              : `<span class="item-figura item-emoji">${esc(item?.emoji || '🔹')}</span>`;
-            return `<button class="predio item-mapa ${p.mostrarDica?'com-dica':''}"
+        ${(() => {
+          const visiveis = (c.pontos || []).map((p, i) => ({p, i})).filter(({p}) => pontoVisivelNaCena(p));
+          // brilho-curva: um <svg> só pra cena inteira, com um traçado por ponto que tem
+          // linha desenhada — se o ponto não tiver curva, cai no quadrado/círculo de
+          // sempre (.com-dica), aplicado direto no botão logo abaixo
+          const comCurva = visiveis.filter(({p}) => p.mostrarDica && p.curvaDica && p.curvaDica.length >= 2);
+          const svgCurvas = comCurva.length ? `<svg class="svg-brilho-curva" viewBox="0 0 100 100" preserveAspectRatio="none">
+            ${comCurva.map(({p}) => {
+              const d = curvaParaSvgD(p.curvaDica);
+              return `<path class="tracado-brilho-glow" d="${d}"/><path class="tracado-brilho" d="${d}"/>`;
+            }).join('')}
+          </svg>` : '';
+          const botoes = visiveis.map(({p, i}) => {
+            const mundo = p.tipo === 'mundo' ? TRILHAS.find(t => t.id === p.destino) : null;
+            const temCurva = p.mostrarDica && p.curvaDica && p.curvaDica.length >= 2;
+            let selo = '';
+            if(mundo && p.mostrarSelo){
+              const {feitas, total, completo} = progressoMundo(mundo);
+              selo = `<span class="predio-selo ${completo?'completo':''}">${completo?'👑':`${feitas}/${total}`}</span>`;
+            }
+            if(p.tipo === 'item'){
+              const item = acharItemMapa(p.destino);
+              const figura = item?.imagemUrl
+                ? `<img class="item-figura" src="${esc(item.imagemUrl)}" alt="">`
+                : `<span class="item-figura item-emoji">${esc(item?.emoji || '🔹')}</span>`;
+              return `<button class="predio item-mapa ${p.mostrarDica && !temCurva?'com-dica':''}"
+                style="left:${p.x}%;top:${p.y}%;width:${p.largura}%;height:${p.altura}%"
+                onclick="abrirPonto(${i}, this)" aria-label="${esc(p.rotulo)}">${figura}</button>`;
+            }
+            return `<button class="predio ${p.mostrarDica && !temCurva?'com-dica':''}"
               style="left:${p.x}%;top:${p.y}%;width:${p.largura}%;height:${p.altura}%"
-              onclick="abrirPonto(${i}, this)" aria-label="${esc(p.rotulo)}">${figura}</button>`;
-          }
-          return `<button class="predio ${p.mostrarDica?'com-dica':''}"
-            style="left:${p.x}%;top:${p.y}%;width:${p.largura}%;height:${p.altura}%"
-            onclick="abrirPonto(${i}, this)" aria-label="${esc(p.rotulo)}">${selo}</button>`;
-        }).join('')}
+              onclick="abrirPonto(${i}, this)" aria-label="${esc(p.rotulo)}">${selo}</button>`;
+          }).join('');
+          return svgCurvas + botoes;
+        })()}
       </div>
       <p class="cena-legenda">${esc(c.nome)}</p>
       </div>

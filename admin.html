@@ -166,6 +166,24 @@ details.ajuda pre{background:#F4F6F7;padding:10px;border-radius:8px;overflow:aut
   border:2px solid var(--erro);border-radius:3px;cursor:nwse-resize;
 }
 .ponto-marca:not(.selecionada) .alca{display:none}
+/* editor de curva do brilho (caneta estilo Illustrator): o traçado em si é um <svg>
+   (só ele desenha curva de verdade), âncoras e alças são <div> igual .ponto-marca, pro
+   mesmo padrão de clique/arrasto já usado no resto do editor de mapa funcionar aqui também. */
+.svg-caneta{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3}
+.svg-caneta path.tracado{fill:none;stroke:#fff;stroke-width:2.5;vector-effect:non-scaling-stroke;
+  stroke-linecap:round;filter:drop-shadow(0 0 3px rgba(0,0,0,.6))}
+.svg-caneta path.guia-alca{fill:none;stroke:var(--erro);stroke-width:1;stroke-dasharray:3 3;
+  vector-effect:non-scaling-stroke}
+.ancora-caneta{
+  position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+  background:#fff;border:2px solid var(--erro);cursor:grab;z-index:4;
+}
+.ancora-caneta.primeira{background:var(--mata)}
+.alca-caneta{
+  position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;
+  background:var(--erro);border:1px solid #fff;cursor:grab;z-index:4;
+}
+.palco-mapa.modo-caneta{cursor:crosshair}
 /* item: mostra a imagem/emoji de verdade dentro da caixa, do tamanho dela — é a mesma
    arte que o aluno vê, pra dar pra posicionar/redimensionar olhando o objeto real */
 .figura-marca{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
@@ -412,6 +430,19 @@ body.conectando-fluxo{cursor:crosshair}
                 <div id="ponto-destino-wrap" style="margin-top:8px"></div>
                 <label style="margin-top:10px"><input type="checkbox" id="ponto-selo" style="width:auto"> mostrar progresso (X/Y)</label>
                 <label style="margin:6px 0 0"><input type="checkbox" id="ponto-dica" style="width:auto"> piscar pra indicar que dá pra tocar</label>
+                <div id="curva-dica-wrap" class="oculto" style="margin-top:8px;background:#F4F6F7;border-radius:8px;padding:8px">
+                  <label style="margin:0">brilho: <span id="curva-dica-resumo">quadrado ao redor (padrão)</span></label>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+                    <button type="button" class="btn linha branco" id="btn-caneta" style="flex:1">🖊️ Desenhar linha</button>
+                    <button type="button" class="btn linha branco" id="btn-caneta-desfazer">↩️ Desfazer</button>
+                    <button type="button" class="btn linha branco" id="btn-caneta-limpar">🧹 Limpar</button>
+                  </div>
+                  <p class="dica-editor" id="dica-caneta">
+                    Clique na imagem pra criar uma âncora; <b>clique e arraste</b> pra criar uma curva suave nesse ponto
+                    (igual a caneta do Illustrator). Arraste uma âncora pra mover, ou a bolinha vermelha da alça pra
+                    ajustar a curva. Sem linha desenhada, o brilho continua o quadrado/círculo de sempre.
+                  </p>
+                </div>
                 <label style="margin-top:10px">só aparece se o aluno já tiver o item</label>
                 <select id="ponto-requisito"></select>
                 <p class="dica-editor">Opcional. Ex.: o binóculo destrava a janela — deixe "nenhum" pra sempre aparecer.</p>
@@ -1569,7 +1600,108 @@ function desenharMarcas(){
     quadro.appendChild(el);
   });
   pintarListaPontos();
+  desenharCurvaCaneta();
 }
+
+/* ---------- editor de curva do brilho (caneta estilo Illustrator) ----------
+   Cada âncora: {x,y,hOut:{dx,dy}|null,hIn:{dx,dy}|null} em % da imagem (dx/dy também em
+   %, relativos à própria âncora — por isso mover a âncora já leva a alça junto de graça).
+   Só hOut é editável na UI (a alça "de saída"); hIn nasce sempre espelhada dela, pra manter
+   a curva sempre suave — o motor de render usa os dois campos, só o editor visual que
+   simplifica pra alça única por âncora. */
+let modoCaneta = false;
+let modoPena = null, alvoPena = -1, inicioPena = null; // estado do arrasto atual da caneta
+
+function curvaParaSvgD(pontos){
+  if(!pontos || pontos.length < 2) return '';
+  let d = `M ${pontos[0].x} ${pontos[0].y}`;
+  for(let i=1;i<pontos.length;i++){
+    const a = pontos[i-1], b = pontos[i];
+    const c1 = a.hOut ? {x:a.x+a.hOut.dx, y:a.y+a.hOut.dy} : {x:a.x, y:a.y};
+    const c2 = b.hIn ? {x:b.x+b.hIn.dx, y:b.y+b.hIn.dy} : {x:b.x, y:b.y};
+    d += ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${b.x} ${b.y}`;
+  }
+  return d;
+}
+
+function desenharCurvaCaneta(){
+  const quadro = $('#quadro-mapa');
+  if(!quadro) return;
+  quadro.querySelectorAll('.svg-caneta, .ancora-caneta, .alca-caneta').forEach(el => el.remove());
+  $('#palco-mapa')?.classList.toggle('modo-caneta', modoCaneta);
+  const p = pontosEdit[pontoSel];
+  const resumo = $('#curva-dica-resumo');
+  if(resumo) resumo.textContent = (p && p.curvaDica && p.curvaDica.length >= 2)
+    ? `linha desenhada (${p.curvaDica.length} âncora${p.curvaDica.length > 1 ? 's' : ''})`
+    : 'quadrado ao redor (padrão)';
+  if(!p || (!p.mostrarDica && !modoCaneta)) return;
+
+  const pontosCurva = p.curvaDica || [];
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('class', 'svg-caneta');
+  svg.setAttribute('viewBox', '0 0 100 100');
+  svg.setAttribute('preserveAspectRatio', 'none');
+
+  if(modoCaneta){
+    pontosCurva.forEach(a => {
+      if(a.hOut){
+        const guia = document.createElementNS(ns, 'path');
+        guia.setAttribute('class', 'guia-alca');
+        guia.setAttribute('d', `M ${a.x} ${a.y} L ${a.x + a.hOut.dx} ${a.y + a.hOut.dy}`);
+        svg.appendChild(guia);
+      }
+    });
+  }
+  if(pontosCurva.length >= 2){
+    const tracado = document.createElementNS(ns, 'path');
+    tracado.setAttribute('class', 'tracado');
+    tracado.setAttribute('d', curvaParaSvgD(pontosCurva));
+    svg.appendChild(tracado);
+  }
+  quadro.appendChild(svg);
+
+  if(!modoCaneta) return;
+  pontosCurva.forEach((a, i) => {
+    const ancora = document.createElement('div');
+    ancora.className = 'ancora-caneta' + (i === 0 ? ' primeira' : '');
+    ancora.style.left = a.x + '%'; ancora.style.top = a.y + '%';
+    ancora.dataset.ancora = i;
+    quadro.appendChild(ancora);
+    if(a.hOut){
+      const alca = document.createElement('div');
+      alca.className = 'alca-caneta';
+      alca.style.left = (a.x + a.hOut.dx) + '%'; alca.style.top = (a.y + a.hOut.dy) + '%';
+      alca.dataset.alca = i;
+      quadro.appendChild(alca);
+    }
+  });
+}
+
+function ativarModoCaneta(ligar){
+  modoCaneta = ligar && pontoSel >= 0;
+  const p = pontosEdit[pontoSel];
+  if(modoCaneta && p && !p.curvaDica) p.curvaDica = [];
+  const btn = $('#btn-caneta');
+  if(btn) btn.textContent = modoCaneta ? '✅ Concluir desenho' : '🖊️ Desenhar linha';
+  desenharCurvaCaneta();
+}
+$('#btn-caneta').onclick = () => ativarModoCaneta(!modoCaneta);
+$('#btn-caneta-desfazer').onclick = () => {
+  const p = pontosEdit[pontoSel];
+  if(!p || !p.curvaDica || !p.curvaDica.length) return;
+  p.curvaDica.pop();
+  desenharCurvaCaneta();
+};
+$('#btn-caneta-limpar').onclick = () => {
+  const p = pontosEdit[pontoSel];
+  if(!p) return;
+  p.curvaDica = [];
+  desenharCurvaCaneta();
+};
+document.addEventListener('keydown', ev => {
+  if(ev.key === 'Escape' && modoCaneta) ativarModoCaneta(false);
+});
 /* problema de um ponto, se houver: destino em branco (não leva a lugar nenhum) ou
    destino em rascunho (salva, mas conteudo.php esconde do aluno). Devolve null se ok. */
 function problemaDoPonto(p){
@@ -1595,11 +1727,14 @@ function pintarListaPontos(){
 window.selecionarPonto = (i) => {
   pontoSel = i;
   const p = pontosEdit[i];
+  modoCaneta = false; // trocar de ponto sempre sai do modo de desenho, evita confusão
   $('#form-ponto').classList.remove('oculto');
   $('#ponto-rotulo').value = p.rotulo || '';
   $('#ponto-tipo').innerHTML = TIPOS_PONTO.map(t => `<option value="${t.v}" ${t.v===p.tipo?'selected':''}>${t.rotulo}</option>`).join('');
   $('#ponto-selo').checked = !!p.mostrarSelo;
   $('#ponto-dica').checked = !!p.mostrarDica;
+  $('#curva-dica-wrap').classList.toggle('oculto', !p.mostrarDica);
+  $('#btn-caneta').textContent = '🖊️ Desenhar linha';
   const itensDisponiveis = (destinosCache && destinosCache.item) || [];
   $('#ponto-requisito').innerHTML = `<option value="">— nenhum —</option>` +
     itensDisponiveis.map(o => `<option value="${esc(o.id)}" ${o.id===p.requisitoItem?'selected':''}>${esc(o.rotulo)}</option>`).join('');
@@ -1655,6 +1790,8 @@ function salvarCampoPonto(){
   p.mostrarSelo = $('#ponto-selo').checked;
   p.mostrarDica = $('#ponto-dica').checked;
   p.requisitoItem = $('#ponto-requisito').value;
+  $('#curva-dica-wrap').classList.toggle('oculto', !p.mostrarDica);
+  if(!p.mostrarDica && modoCaneta) ativarModoCaneta(false); // desligou o brilho: sai do desenho
   desenharMarcas();
 }
 ['#ponto-rotulo','#ponto-selo','#ponto-dica','#ponto-requisito'].forEach(s => {
@@ -1691,8 +1828,30 @@ function ativarDesenhoMapa(){
     };
   };
   let modo = null, inicio = null, alvo = -1, base = null;
+  const LIMIAR_ALCA = 1.2; // % de arrasto mínimo pra virar âncora suave (em vez de reta/canto)
 
   quadro.addEventListener('pointerdown', ev => {
+    if(modoCaneta){
+      const p = pontosEdit[pontoSel];
+      if(!p) return;
+      if(!p.curvaDica) p.curvaDica = [];
+      inicioPena = pct(ev);
+      const alcaEl = ev.target.closest('.alca-caneta');
+      const ancoraEl = ev.target.closest('.ancora-caneta');
+      if(alcaEl){
+        modoPena = 'mover-alca'; alvoPena = +alcaEl.dataset.alca;
+      } else if(ancoraEl){
+        modoPena = 'mover-ancora'; alvoPena = +ancoraEl.dataset.ancora;
+      } else {
+        // âncora nova: nasce reta (sem alça); se o dedo arrastar antes de soltar, vira suave
+        p.curvaDica.push({x: inicioPena.x, y: inicioPena.y, hOut: null, hIn: null});
+        modoPena = 'nova-ancora'; alvoPena = p.curvaDica.length - 1;
+      }
+      quadro.setPointerCapture(ev.pointerId);
+      ev.preventDefault();
+      desenharCurvaCaneta();
+      return;
+    }
     const marca = ev.target.closest('.ponto-marca');
     inicio = pct(ev);
     if(ev.target.classList.contains('alca') && marca){
@@ -1704,7 +1863,7 @@ function ativarDesenhoMapa(){
       // ponto novo: nasce com tamanho zero e cresce enquanto arrasta
       modo = 'criar';
       pontosEdit.push({rotulo:'Novo ponto', x:inicio.x, y:inicio.y, largura:0, altura:0,
-        tipo:'mundo', destino:'', mostrarSelo:true, mostrarDica:false, requisitoItem:'', publicado:true});
+        tipo:'mundo', destino:'', mostrarSelo:true, mostrarDica:false, requisitoItem:'', curvaDica:[], publicado:true});
       alvo = pontosEdit.length - 1;
       selecionarPonto(alvo);
     }
@@ -1713,6 +1872,27 @@ function ativarDesenhoMapa(){
   });
 
   quadro.addEventListener('pointermove', ev => {
+    if(modoCaneta){
+      if(!modoPena) return;
+      const agora = pct(ev), p = pontosEdit[pontoSel];
+      const a = p && p.curvaDica[alvoPena];
+      if(!a) return;
+      if(modoPena === 'nova-ancora'){
+        const dx = agora.x - a.x, dy = agora.y - a.y;
+        if(Math.hypot(dx, dy) >= LIMIAR_ALCA){
+          a.hOut = {dx, dy}; a.hIn = {dx: -dx, dy: -dy};
+        } else {
+          a.hOut = null; a.hIn = null;
+        }
+      } else if(modoPena === 'mover-ancora'){
+        a.x = agora.x; a.y = agora.y;
+      } else if(modoPena === 'mover-alca'){
+        const dx = agora.x - a.x, dy = agora.y - a.y;
+        a.hOut = {dx, dy}; a.hIn = {dx: -dx, dy: -dy};
+      }
+      desenharCurvaCaneta();
+      return;
+    }
     if(!modo) return;
     const agora = pct(ev), p = pontosEdit[alvo];
     if(modo === 'criar'){
@@ -1729,6 +1909,22 @@ function ativarDesenhoMapa(){
   });
 
   const soltar = () => {
+    if(modoCaneta){
+      if(modoPena){
+        const p = pontosEdit[pontoSel];
+        const a = p && p.curvaDica[alvoPena];
+        if(a){
+          a.x = Math.round(a.x * 100) / 100; a.y = Math.round(a.y * 100) / 100;
+          if(a.hOut){
+            a.hOut = {dx: Math.round(a.hOut.dx * 100) / 100, dy: Math.round(a.hOut.dy * 100) / 100};
+            a.hIn = {dx: -a.hOut.dx, dy: -a.hOut.dy};
+          }
+        }
+      }
+      modoPena = null; alvoPena = -1; inicioPena = null;
+      desenharCurvaCaneta();
+      return;
+    }
     if(modo === 'criar'){
       const p = pontosEdit[alvo];
       // clique seco (sem arrastar) não deve deixar um ponto invisível pra trás
@@ -1747,6 +1943,16 @@ function ativarDesenhoMapa(){
   };
   quadro.addEventListener('pointerup', soltar);
   quadro.addEventListener('pointercancel', soltar);
+
+  quadro.addEventListener('dblclick', ev => {
+    if(!modoCaneta) return;
+    const ancoraEl = ev.target.closest('.ancora-caneta');
+    const p = pontosEdit[pontoSel];
+    if(!ancoraEl || !p || !p.curvaDica) return;
+    p.curvaDica.splice(+ancoraEl.dataset.ancora, 1);
+    desenharCurvaCaneta();
+    ev.preventDefault();
+  });
 }
 
 $$('[data-zoom]').forEach(b => b.onclick = () => {
