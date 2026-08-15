@@ -3561,16 +3561,18 @@ const GRUPOS_SPRITES_MINIGAME = [
   {titulo: '🍉 Chuva de Frutas', prefixo: 'chuva'},
   {titulo: '🕳️ Toca do Bicho', prefixo: 'toca'},
   {titulo: '🎵 Sequência do Bicho', prefixo: 'sequencia'},
+  {titulo: '🍕 Pizzaria do Bicho', prefixo: 'pizza'},
 ];
 // tamanho base (px) que cada sprite usa DENTRO do jogo real, antes da escala —
 // mesmos números usados em spriteOuEmoji()/desenharSprite() no app.html, pra prévia bater com o jogo de verdade
-const TAMANHO_BASE_SPRITE_MINIGAME = {memoria: 30, toca: 36, sequencia: 34, chuva: 36, chuvacesta: 74};
+const TAMANHO_BASE_SPRITE_MINIGAME = {memoria: 30, toca: 36, sequencia: 34, chuva: 36, chuvacesta: 74, pizza: 26};
 const DICA_TAMANHO_SPRITE_MINIGAME = {
   memoria: 'imagem quadrada, ~300×300px. A proporção original é sempre preservada.',
   chuva: 'quadrada, ~200×200px (ícone que cai na tela).',
   chuvacesta: 'retangular e larga (ex.: 300×140px) — é a cesta no chão, não precisa ser quadrada.',
   toca: 'quadrada, ~200×200px (aparece dentro de um buraco redondo).',
   sequencia: 'quadrada, ~250×250px.',
+  pizza: 'quadrada, ~200×200px (aparece pequeno no pedido, no botão e espalhado na pizza).',
 };
 let spritesMinigameCache = [];
 let minigameConfigCache = {}; // {memoria:{fundo,fundoUrl,somAcerto,somAcertoUrl,somErro,somErroUrl}, ...}

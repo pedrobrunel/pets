@@ -1168,11 +1168,15 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 /* ---------- pizzaria do bicho (minigame 13, ref: Pizzatron 3000 do Club Penguin) ---------- */
 .pizzaria-jogo{max-width:360px;margin:0 auto}
 .pedido-cliente{display:flex;align-items:center;gap:10px;background:#fff;border:var(--borda) solid var(--contorno);
-  border-bottom-width:6px;border-radius:var(--r);padding:10px 12px;margin-bottom:8px}
-.pedido-cliente-emoji{flex:none;width:46px;height:46px;border-radius:50%;background:#F4F1EA;
+  border-bottom-width:6px;border-radius:var(--r);padding:10px 12px;margin-bottom:8px;transition:box-shadow .2s ease}
+.pedido-cliente.vip{box-shadow:inset 0 0 0 3px var(--moeda)}
+.pedido-cliente-emoji{position:relative;flex:none;width:46px;height:46px;border-radius:50%;background:#F4F1EA;
   display:grid;place-items:center;font-size:26px}
+.vip-coroa{position:absolute;top:-9px;right:-6px;font-size:17px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))}
 .pedido-cliente-ticket{flex:1;min-width:0}
 .pedido-cliente-ticket small{font-weight:800;color:#7F8C8D;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.vip-tag{color:var(--moeda-rim);text-transform:none;letter-spacing:0}
+.combo-pizza{color:var(--manga-rim);font-weight:900}
 .pedido-itens{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
 .pedido-item{font-size:22px;line-height:1}
 .paciencia-barra{height:10px;border-radius:5px;background:#0001;overflow:hidden;margin-bottom:10px}
@@ -3375,7 +3379,7 @@ function celebracaoRecorde(bateu){
 const MEDALHA_DO_JOGO = {
   memoria:'memoria', toca:'reflexo', sequencia:'ouvido', corrida:'corredor',
   blocos:'empilhador', rua:'atravessador', pescaria:'pescador', bolha:'estourador', sokoban:'empurrador',
-  damas:'estrategista', xadrez:'enxadrista',
+  damas:'estrategista', xadrez:'enxadrista', pizzaria:'pizzaiolo',
 };
 function seloTrofeuJogo(jogo){
   const id = MEDALHA_DO_JOGO[jogo];
@@ -5964,13 +5968,13 @@ const TOPPINGS_PIZZA = [
 function jogoPizzaria(){
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Veja o pedido do cliente e toque nos ingredientes certinhos pra montar a pizza igualzinha ao pedido. Depois toque em Assar e, quando sair do forno, em Entregar antes que a paciência do cliente acabe. Montar errado ou demorar demais custa uma vida!')">?</button>
-    <div class="titulo-secao"><h2>🍕 Pizzaria do Bicho</h2><small>vidas: <b id="placar-pizza-vidas">3</b> · pontos: <b id="placar-pizza">0</b></small></div>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Veja o pedido do cliente e toque nos ingredientes certinhos pra montar a pizza igualzinha ao pedido. Depois toque em Assar e, quando sair do forno, em Entregar antes que a paciência do cliente acabe. Montar errado ou demorar demais custa uma vida! Acertos seguidos rendem um bônus de combo, e de vez em quando aparece um cliente VIP (coroa) que paga em dobro.')">?</button>
+    <div class="titulo-secao"><h2>🍕 Pizzaria do Bicho</h2><small>vidas: <b id="placar-pizza-vidas">3</b> · pontos: <b id="placar-pizza">0</b><span id="placar-pizza-combo" class="combo-pizza" hidden> · 🔥 combo x<b id="valor-combo-pizza">0</b></span></small></div>
     <div class="pizzaria-jogo"${estiloFundoMinigame('pizzaria')}>
-      <div class="pedido-cliente">
-        <div class="pedido-cliente-emoji" id="pizza-cliente-emoji">🐨</div>
+      <div class="pedido-cliente" id="pizza-pedido-cliente">
+        <div class="pedido-cliente-emoji"><span id="pizza-cliente-emoji">🐨</span><span id="pizza-cliente-vip" class="vip-coroa" hidden>👑</span></div>
         <div class="pedido-cliente-ticket">
-          <small>Pedido</small>
+          <small>Pedido<span id="pizza-vip-tag" class="vip-tag" hidden> · cliente VIP, 2x pontos!</span></small>
           <div id="pizza-pedido-itens" class="pedido-itens"></div>
         </div>
       </div>
@@ -5986,14 +5990,14 @@ function jogoPizzaria(){
       </div>
     </div>`;
   const CLIENTES_PIZZA = ['🐨','🐰','🦊','🐸','🐵','🐷','🐭','🐻'];
-  let vidas = 3, pontos = 0, rodando = false, rodada = 0;
+  let vidas = 3, pontos = 0, rodando = false, rodada = 0, combo = 0, pedidoVip = false;
   let pedido = [], montado = new Set(), estagio = 'montando';
   let pacienciaTimer = null, pacienciaFim = 0, pacienciaDuracao = 0;
 
   function renderPedido(){
     $('#pizza-pedido-itens').innerHTML = pedido.map(id => {
       const t = TOPPINGS_PIZZA.find(x => x.id === id);
-      return `<span class="pedido-item">${t.emoji}</span>`;
+      return `<span class="pedido-item">${spriteOuEmoji('pizza'+id, t.emoji, 26)}</span>`;
     }).join('');
   }
   function renderPizza(){
@@ -6006,7 +6010,7 @@ function jogoPizzaria(){
         const raio = 18 + (i%3)*9;
         const x = 50 + Math.cos(ang*Math.PI/180)*raio;
         const y = 50 + Math.sin(ang*Math.PI/180)*raio;
-        html += `<span class="pizza-topping-item" style="left:${x}%;top:${y}%">${t.emoji}</span>`;
+        html += `<span class="pizza-topping-item" style="left:${x}%;top:${y}%">${spriteOuEmoji('pizza'+id, t.emoji, 22)}</span>`;
       }
       ti++;
     });
@@ -6014,13 +6018,19 @@ function jogoPizzaria(){
   }
   function renderIngredientes(){
     $('#pizza-ingredientes').innerHTML = TOPPINGS_PIZZA.map(t => `
-      <button class="ingrediente-btn${montado.has(t.id) ? ' ativo' : ''}" onclick="window._pizzaToggle('${t.id}')">${t.emoji}<small>${t.nome}</small></button>
+      <button class="ingrediente-btn${montado.has(t.id) ? ' ativo' : ''}" onclick="window._pizzaToggle('${t.id}')">${spriteOuEmoji('pizza'+t.id, t.emoji, 26)}<small>${t.nome}</small></button>
     `).join('');
   }
   function atualizarBotoes(){
     $('#btn-pizza-limpar').disabled = estagio !== 'montando';
     $('#btn-pizza-assar').disabled = estagio !== 'montando' || montado.size === 0;
     $('#btn-pizza-entregar').disabled = estagio !== 'pronto';
+  }
+  function atualizarCombo(){
+    const el = $('#placar-pizza-combo');
+    if(el) el.hidden = combo < 2;
+    const val = $('#valor-combo-pizza');
+    if(val) val.textContent = combo;
   }
   function pausarPaciencia(){ if(pacienciaTimer) cancelAnimationFrame(pacienciaTimer); pacienciaTimer = null; }
   function lacoPaciencia(){
@@ -6041,7 +6051,11 @@ function jogoPizzaria(){
     pedido = embaralhado.slice(0, n).map(t => t.id);
     pacienciaDuracao = Math.max(7000, 15000 - rodada*600);
     pacienciaFim = Date.now() + pacienciaDuracao;
+    pedidoVip = rodada > 1 && Math.random() < 0.15;
     $('#pizza-cliente-emoji').textContent = CLIENTES_PIZZA[Math.floor(Math.random()*CLIENTES_PIZZA.length)];
+    $('#pizza-cliente-vip').hidden = !pedidoVip;
+    $('#pizza-vip-tag').hidden = !pedidoVip;
+    $('#pizza-pedido-cliente').classList.toggle('vip', pedidoVip);
     $('#pizza-base').classList.remove('assando', 'pronta');
     renderPedido();
     renderPizza();
@@ -6079,9 +6093,14 @@ function jogoPizzaria(){
     certo ? acertou() : perderVida();
   };
   function acertou(){
+    combo++;
     const bonusTempo = Math.max(0, Math.round((pacienciaFim - Date.now())/1000));
-    pontos += 10 + pedido.length*5 + bonusTempo;
+    const bonusCombo = (combo-1)*5;
+    let ganho = 10 + pedido.length*5 + bonusTempo + bonusCombo;
+    if(pedidoVip) ganho *= 2;
+    pontos += ganho;
     $('#placar-pizza').textContent = pontos;
+    atualizarCombo();
     tocarEfeito('pizzaria', 'acerto');
     pausarPaciencia();
     estagio = 'entregue';
@@ -6090,6 +6109,8 @@ function jogoPizzaria(){
   }
   function perderVida(){
     vidas--;
+    combo = 0;
+    atualizarCombo();
     tocarEfeito('pizzaria', 'erro');
     $('#placar-pizza-vidas').textContent = vidas;
     pausarPaciencia();
@@ -7118,6 +7139,7 @@ const MEDALHAS = [
   {id:'empurrador', emoji:'📦', nome:'Zerar o Empurra-Caixas', ok:()=>estado.recordes.sokoban!==null && estado.recordes.sokoban>=10},
   {id:'estrategista', emoji:'♟️', nome:'3 vitórias nas Damas', ok:()=>(estado.recordes.damas ?? 0)>=3},
   {id:'enxadrista', emoji:'♞', nome:'3 vitórias no Xadrez', ok:()=>(estado.recordes.xadrez ?? 0)>=3},
+  {id:'pizzaiolo', emoji:'🍕', nome:'50 pontos na Pizzaria', ok:()=>estado.recordes.pizzaria>=50},
   {id:'chama',    emoji:'🔥', nome:'7 dias seguidos', ok:()=>estado.streak.melhor>=7},
   {id:'estiloso', emoji:'😎', nome:'Bicho estiloso', ok:()=>estado.equipado.length>=1},
   {id:'clube',    emoji:'🏅', nome:'Em um clube', ok:()=>!!clubeAtual}

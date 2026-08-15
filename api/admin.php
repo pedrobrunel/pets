@@ -105,7 +105,7 @@
      POST ?acao=musica_upload         (multipart: arquivo) -> sobe e já grava a música de fundo
      POST ?acao=musica_definir        {nomeArquivo} -> mesma ideia de casa_fundo_definir, pra música
      POST ?acao=musica_remover        -> remove a música (volta a não ter trilha sonora)
-     GET  ?acao=minigame_sprites_listar -> os 20 slots de sprite dos 4 minigames (emoji padrão + imagem/escala, se configurados)
+     GET  ?acao=minigame_sprites_listar -> os 26 slots de sprite dos 5 minigames (emoji padrão + imagem/escala, se configurados)
      POST ?acao=minigame_sprite_imagem  (multipart: arquivo, chave) -> sobe pra assets/minigames/
      POST ?acao=minigame_sprite_definir {chave, nomeArquivo} -> usa um arquivo já copiado pra assets/minigames/
                                         (seletor da biblioteca), sem novo upload
@@ -490,6 +490,12 @@ const SPRITES_MINIGAME = [
   'sequencia2' => ['emoji' => '🌸', 'rotulo' => 'Sequência do Bicho — quadrado 2'],
   'sequencia3' => ['emoji' => '🍀', 'rotulo' => 'Sequência do Bicho — quadrado 3'],
   'sequencia4' => ['emoji' => '⭐', 'rotulo' => 'Sequência do Bicho — quadrado 4'],
+  'pizzaqueijo' => ['emoji' => '🧀', 'rotulo' => 'Pizzaria do Bicho — ingrediente queijo'],
+  'pizzatomate' => ['emoji' => '🍅', 'rotulo' => 'Pizzaria do Bicho — ingrediente tomate'],
+  'pizzaazeitona' => ['emoji' => '🫒', 'rotulo' => 'Pizzaria do Bicho — ingrediente azeitona'],
+  'pizzapimentao' => ['emoji' => '🫑', 'rotulo' => 'Pizzaria do Bicho — ingrediente pimentão'],
+  'pizzacogumelo' => ['emoji' => '🍄', 'rotulo' => 'Pizzaria do Bicho — ingrediente cogumelo'],
+  'pizzamilho' => ['emoji' => '🌽', 'rotulo' => 'Pizzaria do Bicho — ingrediente milho'],
 ];
 /* todo minigame do Arcade (não só os 4 com sprite por slot) — usado pra validar "jogo" nos
    endpoints de fundo/som/miniatura, mesmo espírito de whitelist fechada do SPRITES_MINIGAME
