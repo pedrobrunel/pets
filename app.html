@@ -1165,6 +1165,39 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .selecao-dificuldade-xadrez .btn{flex-direction:column;gap:2px;padding:14px 20px}
 .selecao-dificuldade-xadrez .btn small{font-weight:700;font-size:12px;opacity:.85}
 
+/* ---------- pizzaria do bicho (minigame 13, ref: Pizzatron 3000 do Club Penguin) ---------- */
+.pizzaria-jogo{max-width:360px;margin:0 auto}
+.pedido-cliente{display:flex;align-items:center;gap:10px;background:#fff;border:var(--borda) solid var(--contorno);
+  border-bottom-width:6px;border-radius:var(--r);padding:10px 12px;margin-bottom:8px}
+.pedido-cliente-emoji{flex:none;width:46px;height:46px;border-radius:50%;background:#F4F1EA;
+  display:grid;place-items:center;font-size:26px}
+.pedido-cliente-ticket{flex:1;min-width:0}
+.pedido-cliente-ticket small{font-weight:800;color:#7F8C8D;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.pedido-itens{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.pedido-item{font-size:22px;line-height:1}
+.paciencia-barra{height:10px;border-radius:5px;background:#0001;overflow:hidden;margin-bottom:10px}
+.paciencia-preenchida{height:100%;width:100%;background:var(--mata);transition:width .1s linear, background .2s ease}
+.paciencia-preenchida.alerta{background:#E74C3C}
+.pizza-montagem{display:flex;justify-content:center;margin-bottom:10px}
+.pizza-base{position:relative;width:180px;height:180px;border-radius:50%;
+  background:radial-gradient(circle,#F4D160 0%,#E8B84B 70%,#D9A73C 100%);
+  border:4px solid #B5822A;transition:filter .3s ease}
+.pizza-base.assando{animation:pizzaAssando .5s ease-in-out infinite alternate}
+@keyframes pizzaAssando{0%{filter:brightness(1)}100%{filter:brightness(.82) saturate(1.3)}}
+.pizza-base.pronta{box-shadow:0 0 0 4px var(--moeda)}
+.pizza-toppings{position:absolute;inset:0}
+.pizza-topping-item{position:absolute;transform:translate(-50%,-50%);font-size:22px}
+.pizza-ingredientes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.ingrediente-btn{display:flex;flex-direction:column;align-items:center;gap:2px;background:#fff;
+  border:3px solid var(--contorno);border-bottom-width:5px;border-radius:12px;padding:8px 4px;font-size:22px;
+  transition:transform .1s ease, border-bottom-width .1s ease}
+.ingrediente-btn small{font-size:10px;font-weight:800;color:#7F8C8D}
+.ingrediente-btn:active{transform:translateY(3px);border-bottom-width:1px}
+.ingrediente-btn.ativo{background:var(--jabuti);border-color:var(--jabuti-rim)}
+.ingrediente-btn.ativo small{color:#fff}
+.pizza-acoes{display:flex;gap:8px;flex-wrap:wrap}
+.pizza-acoes .btn{flex:1;min-width:90px}
+
 /* tela de seleção de fase do Empurra-Caixas — grade de botões numerados, cadeado nas
    ainda não desbloqueadas, estrela nas já resolvidas (pode jogar de novo à vontade) */
 .grade-fases-sokoban{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:10px;margin-top:14px}
@@ -1519,7 +1552,7 @@ const estado = {
   moedas:60, xp:0,
   fome:72, felicidade:80, energia:90,
   equipado:[], mochila:[], inventario:{},
-  licoesFeitas:[], recordes:{memoria:null, memoriaTempo:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0, rua:0, pescaria:0, bolha:0, sokoban:null, damas:0, xadrez:0},
+  licoesFeitas:[], recordes:{memoria:null, memoriaTempo:null, chuva:0, toca:0, sequencia:0, corrida:0, blocos:0, rua:0, pescaria:0, bolha:0, sokoban:null, damas:0, xadrez:0, pizzaria:0},
   paresMemoria:6, faseSokobanDesbloqueada:1, sokobanCompletadas:[],
   missoes:{}, cenasVisitadas:[], gatilhosAtivos:[], itensColetados:[],
   moveisComprados:[], casaMoveis:[], casaDesbloqueada:false,
@@ -3381,6 +3414,8 @@ const JOGOS_ARCADE = [
     descricao:() => 'Você contra o PC — captura vale', recorde:() => (estado.recordes.damas ?? 0)>0 ? `${estado.recordes.damas} vitória(s)` : null},
   {id:'xadrez', emoji:'♞', nome:'Xadrez', cor:'jabuti', onclick:'jogoXadrezSelecionarDificuldade()',
     descricao:() => 'Fácil, médio ou difícil — você escolhe', recorde:() => (estado.recordes.xadrez ?? 0)>0 ? `${estado.recordes.xadrez} vitória(s)` : null},
+  {id:'pizzaria', emoji:'🍕', nome:'Pizzaria do Bicho', cor:'manga', onclick:'jogoPizzaria()',
+    descricao:() => 'Monte a pizza certinha antes que o cliente perca a paciência', recorde:() => estado.recordes.pizzaria>0 ? `${estado.recordes.pizzaria} pontos` : null},
 ];
 // "top 3" do carrossel de destaques: prioriza jogo(s) onde o jogador já tem troféu — é
 // literalmente o que ele mais manda bem — e completa com um punhado de jogos-bandeira fixos
@@ -5915,6 +5950,173 @@ function jogoXadrez(dificuldade){
     </div>`;
   pinta();
   pararLoops = null;
+}
+
+/* --- minigame 13: pizzaria do bicho (montar a pizza igual o pedido, ref: Pizzatron 3000 do Club Penguin) --- */
+const TOPPINGS_PIZZA = [
+  {id:'queijo', emoji:'🧀', nome:'Queijo'},
+  {id:'tomate', emoji:'🍅', nome:'Tomate'},
+  {id:'azeitona', emoji:'🫒', nome:'Azeitona'},
+  {id:'pimentao', emoji:'🫑', nome:'Pimentão'},
+  {id:'cogumelo', emoji:'🍄', nome:'Cogumelo'},
+  {id:'milho', emoji:'🌽', nome:'Milho'},
+];
+function jogoPizzaria(){
+  $('#tela-arcade').innerHTML = `
+    <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Veja o pedido do cliente e toque nos ingredientes certinhos pra montar a pizza igualzinha ao pedido. Depois toque em Assar e, quando sair do forno, em Entregar antes que a paciência do cliente acabe. Montar errado ou demorar demais custa uma vida!')">?</button>
+    <div class="titulo-secao"><h2>🍕 Pizzaria do Bicho</h2><small>vidas: <b id="placar-pizza-vidas">3</b> · pontos: <b id="placar-pizza">0</b></small></div>
+    <div class="pizzaria-jogo"${estiloFundoMinigame('pizzaria')}>
+      <div class="pedido-cliente">
+        <div class="pedido-cliente-emoji" id="pizza-cliente-emoji">🐨</div>
+        <div class="pedido-cliente-ticket">
+          <small>Pedido</small>
+          <div id="pizza-pedido-itens" class="pedido-itens"></div>
+        </div>
+      </div>
+      <div class="paciencia-barra"><div id="pizza-paciencia" class="paciencia-preenchida"></div></div>
+      <div class="pizza-montagem">
+        <div class="pizza-base" id="pizza-base"><div id="pizza-toppings-atual" class="pizza-toppings"></div></div>
+      </div>
+      <div class="pizza-ingredientes" id="pizza-ingredientes"></div>
+      <div class="pizza-acoes">
+        <button class="btn branco" id="btn-pizza-limpar" onclick="window._pizzaLimpar()">🧹 Limpar</button>
+        <button class="btn" id="btn-pizza-assar" onclick="window._pizzaAssar()">🔥 Assar</button>
+        <button class="btn laranja" id="btn-pizza-entregar" onclick="window._pizzaEntregar()" disabled>🚗 Entregar</button>
+      </div>
+    </div>`;
+  const CLIENTES_PIZZA = ['🐨','🐰','🦊','🐸','🐵','🐷','🐭','🐻'];
+  let vidas = 3, pontos = 0, rodando = false, rodada = 0;
+  let pedido = [], montado = new Set(), estagio = 'montando';
+  let pacienciaTimer = null, pacienciaFim = 0, pacienciaDuracao = 0;
+
+  function renderPedido(){
+    $('#pizza-pedido-itens').innerHTML = pedido.map(id => {
+      const t = TOPPINGS_PIZZA.find(x => x.id === id);
+      return `<span class="pedido-item">${t.emoji}</span>`;
+    }).join('');
+  }
+  function renderPizza(){
+    let html = '';
+    let ti = 0;
+    montado.forEach(id => {
+      const t = TOPPINGS_PIZZA.find(x => x.id === id);
+      for(let i=0; i<4; i++){
+        const ang = (ti*67 + i*91) % 360;
+        const raio = 18 + (i%3)*9;
+        const x = 50 + Math.cos(ang*Math.PI/180)*raio;
+        const y = 50 + Math.sin(ang*Math.PI/180)*raio;
+        html += `<span class="pizza-topping-item" style="left:${x}%;top:${y}%">${t.emoji}</span>`;
+      }
+      ti++;
+    });
+    $('#pizza-toppings-atual').innerHTML = html;
+  }
+  function renderIngredientes(){
+    $('#pizza-ingredientes').innerHTML = TOPPINGS_PIZZA.map(t => `
+      <button class="ingrediente-btn${montado.has(t.id) ? ' ativo' : ''}" onclick="window._pizzaToggle('${t.id}')">${t.emoji}<small>${t.nome}</small></button>
+    `).join('');
+  }
+  function atualizarBotoes(){
+    $('#btn-pizza-limpar').disabled = estagio !== 'montando';
+    $('#btn-pizza-assar').disabled = estagio !== 'montando' || montado.size === 0;
+    $('#btn-pizza-entregar').disabled = estagio !== 'pronto';
+  }
+  function pausarPaciencia(){ if(pacienciaTimer) cancelAnimationFrame(pacienciaTimer); pacienciaTimer = null; }
+  function lacoPaciencia(){
+    if(!rodando) return;
+    const restante = pacienciaFim - Date.now();
+    const pct = Math.max(0, restante/pacienciaDuracao*100);
+    const barra = $('#pizza-paciencia');
+    if(barra){ barra.style.width = pct+'%'; barra.classList.toggle('alerta', pct < 25); }
+    if(restante <= 0){ perderVida(); return; }
+    pacienciaTimer = requestAnimationFrame(lacoPaciencia);
+  }
+  function novoPedido(){
+    rodada++;
+    montado = new Set();
+    estagio = 'montando';
+    const n = Math.min(2 + Math.floor(rodada/3), 5);
+    const embaralhado = [...TOPPINGS_PIZZA].sort(() => Math.random()-.5);
+    pedido = embaralhado.slice(0, n).map(t => t.id);
+    pacienciaDuracao = Math.max(7000, 15000 - rodada*600);
+    pacienciaFim = Date.now() + pacienciaDuracao;
+    $('#pizza-cliente-emoji').textContent = CLIENTES_PIZZA[Math.floor(Math.random()*CLIENTES_PIZZA.length)];
+    $('#pizza-base').classList.remove('assando', 'pronta');
+    renderPedido();
+    renderPizza();
+    renderIngredientes();
+    atualizarBotoes();
+    pausarPaciencia();
+    lacoPaciencia();
+  }
+  window._pizzaToggle = id => {
+    if(!rodando || estagio !== 'montando') return;
+    if(montado.has(id)) montado.delete(id); else montado.add(id);
+    renderPizza(); renderIngredientes(); atualizarBotoes();
+  };
+  window._pizzaLimpar = () => {
+    if(!rodando || estagio !== 'montando') return;
+    montado = new Set();
+    renderPizza(); renderIngredientes(); atualizarBotoes();
+  };
+  window._pizzaAssar = () => {
+    if(!rodando || estagio !== 'montando' || montado.size === 0) return;
+    estagio = 'assando';
+    atualizarBotoes();
+    $('#pizza-base').classList.add('assando');
+    setTimeout(() => {
+      if(!rodando) return;
+      estagio = 'pronto';
+      $('#pizza-base').classList.remove('assando');
+      $('#pizza-base').classList.add('pronta');
+      atualizarBotoes();
+    }, 1200);
+  };
+  window._pizzaEntregar = () => {
+    if(!rodando || estagio !== 'pronto') return;
+    const certo = pedido.length === montado.size && pedido.every(id => montado.has(id));
+    certo ? acertou() : perderVida();
+  };
+  function acertou(){
+    const bonusTempo = Math.max(0, Math.round((pacienciaFim - Date.now())/1000));
+    pontos += 10 + pedido.length*5 + bonusTempo;
+    $('#placar-pizza').textContent = pontos;
+    tocarEfeito('pizzaria', 'acerto');
+    pausarPaciencia();
+    estagio = 'entregue';
+    atualizarBotoes();
+    setTimeout(() => { if(rodando) novoPedido(); }, 400);
+  }
+  function perderVida(){
+    vidas--;
+    tocarEfeito('pizzaria', 'erro');
+    $('#placar-pizza-vidas').textContent = vidas;
+    pausarPaciencia();
+    if(vidas <= 0){ encerra(); return; }
+    estagio = 'entregue';
+    atualizarBotoes();
+    setTimeout(() => { if(rodando) novoPedido(); }, 600);
+  }
+  function encerra(){
+    rodando = false;
+    pausarPaciencia();
+    const novoRecorde = bateuRecorde('pizzaria', pontos);
+    const premio = Math.round(pontos/3);
+    estado.energia = lim(estado.energia - 12);
+    estado.felicidade = lim(estado.felicidade + 10);
+    ganhar(premio, 15);
+    modal(`${celebracaoRecorde(novoRecorde)}<h2 style="font-size:24px">Pizzaria fechou! 🍕</h2>
+      <p style="margin:6px 0 12px">Você entregou pedidos suficientes pra fazer ${pontos} ponto(s).</p>
+      <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
+      <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoPizzaria()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
+  }
+  pararLoops = contarRegressiva(() => {
+    rodando = true;
+    pararLoops = () => { rodando = false; pausarPaciencia(); };
+    novoPedido();
+  });
 }
 
 /* ---------- 9. TELA: LOJA DA VILA ----------

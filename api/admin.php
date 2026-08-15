@@ -501,7 +501,7 @@ const JOGOS_ARCADE = [
   'corrida' => 'Corrida do Bicho', 'blocos' => 'Blocos do Bicho',
   'rua' => 'Atravessar a Rua', 'pescaria' => 'Pescaria',
   'bolha' => 'Bolha de Sabão', 'sokoban' => 'Empurra-Caixas do Bicho',
-  'damas' => 'Damas', 'xadrez' => 'Xadrez',
+  'damas' => 'Damas', 'xadrez' => 'Xadrez', 'pizzaria' => 'Pizzaria do Bicho',
 ];
 /* a imagem pode estar em assets/cenas/ (enviada pelo painel) ou em assets/ (veio no
    repositório, como o mapa-mundosv2.webp da ilha) — o front tenta nessa ordem */
