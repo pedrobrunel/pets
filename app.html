@@ -3399,9 +3399,9 @@ function celebracaoRecorde(bateu){
   }).join('');
   return `<div class="confete-chuva">${confete}</div><div class="selo-recorde">🏆 Novo recorde!</div>`;
 }
-// mapa jogo -> id da conquista relacionada em MEDALHAS (chuva não tem uma própria)
+// mapa jogo -> id da conquista relacionada em MEDALHAS
 const MEDALHA_DO_JOGO = {
-  memoria:'memoria', toca:'reflexo', sequencia:'ouvido', corrida:'corredor',
+  memoria:'memoria', chuva:'coletor', toca:'reflexo', sequencia:'ouvido', corrida:'corredor',
   blocos:'empilhador', rua:'atravessador', pescaria:'pescador', bolha:'estourador', sokoban:'empurrador',
   damas:'estrategista', xadrez:'enxadrista', pizzaria:'pizzaiolo',
 };
@@ -5925,17 +5925,17 @@ function jogoXadrez(dificuldade){
     const legais = xadrezMovimentosLegais(tabuleiro, 'jogador', estadoExtra);
     const peca = tabuleiro[r][c];
     if(peca && peca.cor === 'jogador'){
-      if(!legais.some(m => m.de[0]===r && m.de[1]===c)){ tocarEfeito('damas', 'erro'); return; }
+      if(!legais.some(m => m.de[0]===r && m.de[1]===c)){ tocarEfeito('xadrez', 'erro'); return; }
       selecionada = [r,c];
       pinta();
       return;
     }
-    if(!selecionada){ tocarEfeito('damas', 'erro'); return; }
+    if(!selecionada){ tocarEfeito('xadrez', 'erro'); return; }
     const mov = legais.find(m => m.de[0]===selecionada[0] && m.de[1]===selecionada[1] && m.para[0]===r && m.para[1]===c);
-    if(!mov){ tocarEfeito('damas', 'erro'); return; }
+    if(!mov){ tocarEfeito('xadrez', 'erro'); return; }
     ({ tab: tabuleiro, estadoExtra } = xadrezAplicarMovimento(tabuleiro, estadoExtra, mov));
     selecionada = null;
-    tocarEfeito('damas', 'acerto');
+    tocarEfeito('xadrez', 'acerto');
     const fimPc = xadrezFimDeJogo(tabuleiro, 'pc', estadoExtra);
     if(fimPc.fim){ pinta(); encerra(fimPc.motivo === 'xeque-mate' ? 'vitoria' : 'empate'); return; }
     turno = 'pc';
@@ -5950,7 +5950,7 @@ function jogoXadrez(dificuldade){
     const mov = xadrezMelhorMovimentoPC(tabuleiro, estadoExtra, dificuldade);
     if(!mov){ encerra('empate'); return; } // segurança: xadrezFimDeJogo já devia ter pego isso antes
     ({ tab: tabuleiro, estadoExtra } = xadrezAplicarMovimento(tabuleiro, estadoExtra, mov));
-    tocarEfeito('damas', 'acerto');
+    tocarEfeito('xadrez', 'acerto');
     const fimJogador = xadrezFimDeJogo(tabuleiro, 'jogador', estadoExtra);
     if(fimJogador.fim){ pinta(); encerra(fimJogador.motivo === 'xeque-mate' ? 'derrota' : 'empate'); return; }
     turno = 'jogador';
@@ -7185,6 +7185,7 @@ const MEDALHAS = [
   {id:'rico',     emoji:'💰', nome:'100 moedas', ok:()=>estado.moedas>=100},
   {id:'nivel3',   emoji:'⭐', nome:'Nível 3', ok:()=>nivel()>=3},
   {id:'memoria',  emoji:'🃏', nome:'Memória em 12 jogadas', ok:()=>estado.recordes.memoria!==null && estado.recordes.memoria<=12},
+  {id:'coletor',  emoji:'🍉', nome:'30 pontos na Chuva de Frutas', ok:()=>estado.recordes.chuva>=30},
   {id:'reflexo',  emoji:'⚡', nome:'10 pontos na Toca', ok:()=>estado.recordes.toca>=10},
   {id:'ouvido',   emoji:'🎵', nome:'8 rodadas na Sequência', ok:()=>estado.recordes.sequencia>=8},
   {id:'corredor', emoji:'🏃', nome:'80 pontos na Corrida', ok:()=>estado.recordes.corrida>=80},

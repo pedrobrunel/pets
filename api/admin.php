@@ -105,7 +105,7 @@
      POST ?acao=musica_upload         (multipart: arquivo) -> sobe e já grava a música de fundo
      POST ?acao=musica_definir        {nomeArquivo} -> mesma ideia de casa_fundo_definir, pra música
      POST ?acao=musica_remover        -> remove a música (volta a não ter trilha sonora)
-     GET  ?acao=minigame_sprites_listar -> os 26 slots de sprite dos 5 minigames (emoji padrão + imagem/escala, se configurados)
+     GET  ?acao=minigame_sprites_listar -> os 42 slots de sprite dos 8 minigames (emoji padrão + imagem/escala, se configurados)
      POST ?acao=minigame_sprite_imagem  (multipart: arquivo, chave) -> sobe pra assets/minigames/
      POST ?acao=minigame_sprite_definir {chave, nomeArquivo} -> usa um arquivo já copiado pra assets/minigames/
                                         (seletor da biblioteca), sem novo upload
@@ -496,6 +496,22 @@ const SPRITES_MINIGAME = [
   'pizzapimentao' => ['emoji' => '🫑', 'rotulo' => 'Pizzaria do Bicho — ingrediente pimentão'],
   'pizzacogumelo' => ['emoji' => '🍄', 'rotulo' => 'Pizzaria do Bicho — ingrediente cogumelo'],
   'pizzamilho' => ['emoji' => '🌽', 'rotulo' => 'Pizzaria do Bicho — ingrediente milho'],
+  'sokobanbicho' => ['emoji' => '🦫', 'rotulo' => 'Empurra-Caixas do Bicho — seu bicho'],
+  'sokobancaixa' => ['emoji' => '📦', 'rotulo' => 'Empurra-Caixas do Bicho — caixa'],
+  'damasjogador' => ['emoji' => '🔴', 'rotulo' => 'Damas — sua peça'],
+  'damaspc' => ['emoji' => '⚫', 'rotulo' => 'Damas — peça do PC'],
+  'xadrezpeaojogador' => ['emoji' => '♟', 'rotulo' => 'Xadrez — peão (você)'],
+  'xadrezpeaopc' => ['emoji' => '♟', 'rotulo' => 'Xadrez — peão (PC)'],
+  'xadrezcavalojogador' => ['emoji' => '♞', 'rotulo' => 'Xadrez — cavalo (você)'],
+  'xadrezcavalopc' => ['emoji' => '♞', 'rotulo' => 'Xadrez — cavalo (PC)'],
+  'xadrezbispojogador' => ['emoji' => '♝', 'rotulo' => 'Xadrez — bispo (você)'],
+  'xadrezbispopc' => ['emoji' => '♝', 'rotulo' => 'Xadrez — bispo (PC)'],
+  'xadreztorrejogador' => ['emoji' => '♜', 'rotulo' => 'Xadrez — torre (você)'],
+  'xadreztorrepc' => ['emoji' => '♜', 'rotulo' => 'Xadrez — torre (PC)'],
+  'xadrezdamajogador' => ['emoji' => '♛', 'rotulo' => 'Xadrez — dama (você)'],
+  'xadrezdamapc' => ['emoji' => '♛', 'rotulo' => 'Xadrez — dama (PC)'],
+  'xadrezreijogador' => ['emoji' => '♚', 'rotulo' => 'Xadrez — rei (você)'],
+  'xadrezreipc' => ['emoji' => '♚', 'rotulo' => 'Xadrez — rei (PC)'],
 ];
 /* todo minigame do Arcade (não só os 4 com sprite por slot) — usado pra validar "jogo" nos
    endpoints de fundo/som/miniatura, mesmo espírito de whitelist fechada do SPRITES_MINIGAME

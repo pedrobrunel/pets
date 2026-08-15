@@ -3633,10 +3633,13 @@ const GRUPOS_SPRITES_MINIGAME = [
   {titulo: '🕳️ Toca do Bicho', prefixo: 'toca'},
   {titulo: '🎵 Sequência do Bicho', prefixo: 'sequencia'},
   {titulo: '🍕 Pizzaria do Bicho', prefixo: 'pizza'},
+  {titulo: '📦 Empurra-Caixas do Bicho', prefixo: 'sokoban'},
+  {titulo: '⚫ Damas', prefixo: 'damas'},
+  {titulo: '♞ Xadrez', prefixo: 'xadrez'},
 ];
 // tamanho base (px) que cada sprite usa DENTRO do jogo real, antes da escala —
 // mesmos números usados em spriteOuEmoji()/desenharSprite() no app.html, pra prévia bater com o jogo de verdade
-const TAMANHO_BASE_SPRITE_MINIGAME = {memoria: 30, toca: 36, sequencia: 34, chuva: 36, chuvacesta: 74, pizza: 26};
+const TAMANHO_BASE_SPRITE_MINIGAME = {memoria: 30, toca: 36, sequencia: 34, chuva: 36, chuvacesta: 74, pizza: 26, sokoban: 25, damas: 30, xadrez: 30};
 const DICA_TAMANHO_SPRITE_MINIGAME = {
   memoria: 'imagem quadrada, ~300×300px. A proporção original é sempre preservada.',
   chuva: 'quadrada, ~200×200px (ícone que cai na tela).',
@@ -3644,6 +3647,9 @@ const DICA_TAMANHO_SPRITE_MINIGAME = {
   toca: 'quadrada, ~200×200px (aparece dentro de um buraco redondo).',
   sequencia: 'quadrada, ~250×250px.',
   pizza: 'quadrada, ~200×200px (aparece pequeno no pedido, no botão e espalhado na pizza).',
+  sokoban: 'quadrada, ~200×200px (serve tanto pro seu bicho quanto pra caixa).',
+  damas: 'quadrada, ~200×200px (a peça é redonda, a imagem preenche o círculo).',
+  xadrez: 'quadrada, ~200×200px por peça (você tem 6 tipos × 2 cores, 12 slots no total).',
 };
 let spritesMinigameCache = [];
 let minigameConfigCache = {}; // {memoria:{fundo,fundoUrl,somAcerto,somAcertoUrl,somErro,somErroUrl}, ...}
@@ -3772,7 +3778,7 @@ function simuladorGrupo(prefixo, itens){
     </div></div>`;
   }
   const tamanhoBase = TAMANHO_BASE_SPRITE_MINIGAME[prefixo] || 30;
-  const redondo = prefixo === 'toca' ? ' redondo' : '';
+  const redondo = (prefixo === 'toca' || prefixo === 'damas') ? ' redondo' : '';
   return `<div class="simulador-arcade">${itens.map(s => {
     const tam = Math.round(tamanhoBase * (s.escala || 100) / 100);
     const conteudo = s.imagemUrl
