@@ -980,6 +980,25 @@ canvas{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;border
 .confete-item{position:absolute;top:-14px;width:8px;height:8px;border-radius:2px;animation-name:confeteCai;animation-timing-function:ease-in;animation-fill-mode:forwards}
 @keyframes confeteCai{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(120px) rotate(360deg);opacity:0}}
 .selo-trofeu-card{position:absolute;top:8px;right:8px;font-size:16px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}
+/* lista de "como jogar" (ajudaJogo) — uma linha com ícone por regra, em vez de um parágrafo
+   corrido; cada item entra com um leve atraso escalonado pra não aparecer tudo de bloco */
+.lista-ajuda{display:flex;flex-direction:column;gap:9px;margin:14px 0 20px;text-align:left}
+.item-ajuda{
+  display:flex;align-items:flex-start;gap:11px;background:#F4F6F7;border-radius:14px;padding:10px 12px;
+  animation:itemAjudaEntra .35s cubic-bezier(.2,.8,.3,1.1) backwards;
+}
+.item-ajuda:nth-child(1){animation-delay:.02s}
+.item-ajuda:nth-child(2){animation-delay:.08s}
+.item-ajuda:nth-child(3){animation-delay:.14s}
+.item-ajuda:nth-child(4){animation-delay:.2s}
+.item-ajuda:nth-child(5){animation-delay:.26s}
+.item-ajuda:nth-child(6){animation-delay:.32s}
+@keyframes itemAjudaEntra{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+.icone-ajuda{
+  flex:none;width:30px;height:30px;border-radius:50%;background:#fff;
+  border:2px solid var(--contorno);display:grid;place-items:center;font-size:15px;
+}
+.item-ajuda span:last-child{font-size:14px;font-weight:800;line-height:1.35;padding-top:3px;color:var(--tinta)}
 
 /* ---------- diálogo do NPC (balão + botões, estilo Duolingo — nunca texto livre) ---------- */
 #npc-fundo{align-items:flex-end}
@@ -3356,9 +3375,14 @@ function bateuRecorde(chave, valor, menorMelhor){
   return bateu;
 }
 // pop-up de "como jogar" — cada minigame chama isso no botão "?" ao lado do Voltar, em vez
-// de deixar o texto de instrução fixo ocupando espaço embaixo do tabuleiro/canvas
-function ajudaJogo(texto){
-  modal(`<h2 style="font-size:22px">Como jogar</h2><p style="margin:10px 0 18px">${texto}</p>
+// de deixar o texto de instrução fixo ocupando espaço embaixo do tabuleiro/canvas. itens é uma
+// lista de [emoji, texto] — cada um vira uma linha própria com ícone, em vez de um parágrafo
+// só jogado ali (bem mais fácil de escanear rápido antes de começar a jogar)
+function ajudaJogo(itens){
+  const linhas = itens.map(([icone, texto]) => `
+    <div class="item-ajuda"><span class="icone-ajuda">${icone}</span><span>${texto}</span></div>`).join('');
+  modal(`<h2 style="font-size:22px">🎮 Como jogar</h2>
+    <div class="lista-ajuda">${linhas}</div>
     <button class="btn grande" onclick="fecharModal()">Entendi!</button>`);
 }
 // confete + selo dourado pra colar no topo do modal de fim de jogo quando bateuRecorde()
@@ -3654,7 +3678,7 @@ function jogoMemoria(){
   };
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Memorize as cartas na prévia. Depois toque em duas cartas por vez pra achar os pares — acerte rápido e sem errar pra ganhar bônus de moedas!')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['🧠','Memorize as cartas na prévia, antes delas virarem.'],['👆','Toque em duas cartas por vez pra achar os pares.'],['⚡','Acerte rápido e sem errar pra ganhar bônus de moedas.']])">?</button>
     <div class="titulo-secao"><h2>🃏 Memória do Bicho</h2><small>Fase ${fase} · jogadas: <b id="placar-mem">0</b> · tempo: <b id="cronometro-mem">0s</b></small></div>
     <p id="aviso-preview-mem" class="aviso" style="margin:6px 0">👀 Memorize as cartas...</p>
     <div id="tabuleiro-memoria"${estiloFundoMinigame('memoria')}></div>`;
@@ -3683,7 +3707,7 @@ function jogoMemoria(){
 function jogoChuva(){
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Arraste o dedo (ou use ← →) para mover a cesta. Fruta vale ponto, lata tira ponto.')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['👆','Arraste o dedo (ou use ← →) pra mover a cesta.'],['🍎','Fruta vale ponto.'],['🥫','Lata tira ponto — desvie dela!']])">?</button>
     <div class="titulo-secao"><h2>🍉 Chuva de Frutas</h2><small id="cronometro">30s</small></div>
     <canvas id="tela-jogo"${estiloFundoMinigame('chuva')}></canvas>`;
   const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
@@ -3852,7 +3876,7 @@ function jogoToca(){
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Toque no ${emojiAlvo} rápido! Se tocar no ⚡ perde ponto.')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['⚡','Toque no ${emojiAlvo} rápido!'],['🚫','Tocar no ⚡ (raio) tira ponto.']])">?</button>
     <div class="titulo-secao"><h2>🕳️ Toca do Bicho</h2><small id="cronometro-toca">${DURACAO}s</small></div>
     <div class="placar-toca">Pontos: <span id="placar-toca">0</span></div>
     <div id="buracos-toca" class="grade-toca"${estiloFundoMinigame('toca')}></div>`;
@@ -3931,7 +3955,7 @@ function jogoSequencia(){
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Observe a ordem que acende e repita tocando nos mesmos quadrados.')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['👀','Observe a ordem que os quadrados acendem.'],['👆','Repita tocando nos mesmos quadrados, na mesma ordem.']])">?</button>
     <div class="titulo-secao"><h2>🎵 Sequência do Bicho</h2></div>
     <div class="placar-simon">Rodadas: <span id="placar-sequencia">0</span></div>
     <div class="grade-simon"${estiloFundoMinigame('sequencia')}>
@@ -3947,7 +3971,7 @@ function jogoSequencia(){
 function jogoCorrida(){
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Toque na tela (ou aperte espaço/↑) pra pular os obstáculos!')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['👆','Toque na tela (ou aperte espaço/↑) pra pular.'],['🌵','Desvie dos obstáculos correndo!']])">?</button>
     <div class="titulo-secao"><h2>🏃 Corrida do Bicho</h2><small>pontos: <b id="placar-corrida">0</b></small></div>
     <canvas id="tela-jogo"${estiloFundoMinigame('corrida')}></canvas>`;
   const cv = $('#tela-jogo'), ctx = cv.getContext('2d');
@@ -4171,7 +4195,7 @@ function jogoBlocos(){
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Toque numa coluna pra soltar o bloco. 3 ou mais da mesma cor encostados somem!')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['👆','Toque numa coluna pra soltar o bloco.'],['✨','3 ou mais blocos da mesma cor encostados somem!']])">?</button>
     <div class="titulo-secao"><h2>🧱 Blocos do Bicho</h2><small>combos: <b id="placar-blocos-grupos">0</b> · pontos: <b id="placar-blocos">0</b></small></div>
     <p class="blocos-proximo">Próximo bloco: <span id="peca-proxima" class="bloco-preview"></span></p>
     <div id="grade-blocos" class="grade-blocos"${estiloFundoMinigame('blocos')}></div>`;
@@ -4186,7 +4210,7 @@ function jogoBlocos(){
 function jogoRua(){
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Atravesse a rua sem ser atropelado! Use as setas (ou ←↑↓→ no teclado).')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['🚸','Atravesse a rua sem ser atropelado.'],['🎮','Use as setas (ou ←↑↓→ no teclado).']])">?</button>
     <div class="titulo-secao"><h2>🚸 Atravessar a Rua</h2><small>vidas: <b id="placar-rua-vidas">3</b> · pontos: <b id="placar-rua">0</b></small></div>
     <canvas id="tela-jogo"${estiloFundoMinigame('rua')}></canvas>
     <div class="dpad-rua">
@@ -4437,7 +4461,7 @@ function jogoPescaria(){
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Toque no botão Puxar! quando a boia mergulhar. Depois continue tocando rápido pra fisgar o peixe antes que a linha arrebente!')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['🎣','Toque em Puxar! quando a boia mergulhar.'],['👆','Continue tocando rápido pra fisgar o peixe.'],['⏱️','Não demore — a linha pode arrebentar!']])">?</button>
     <div class="titulo-secao"><h2>🎣 Pescaria</h2><small id="cronometro-pescaria">${DURACAO}s</small></div>
     <div class="placar-pescaria">Pontos: <span id="placar-pescaria">0</span></div>
     <canvas id="tela-jogo"${estiloFundoMinigame('pescaria')}></canvas>
@@ -4733,7 +4757,7 @@ function jogoBolha(){
 
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Espere a mira ▼ passar pela coluna certa e toque no botão Atirar!. 3 ou mais bolhas da mesma cor encostadas estouram!')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['🎯','Espere a mira ▼ passar pela coluna certa.'],['👆','Toque em Atirar! na hora certa.'],['💥','3 ou mais bolhas da mesma cor encostadas estouram.']])">?</button>
     <div class="titulo-secao"><h2>🎈 Bolha de Sabão</h2><small>pontos: <b id="placar-bolhas">0</b></small></div>
     <div id="campo-bolhas" class="bolha-campo">
       <div id="grade-bolhas" class="grade-bolhas"${estiloFundoMinigame('bolha')}></div>
@@ -4811,7 +4835,7 @@ function jogoSokobanSelecionarFase(){
   const completadas = new Set(estado.sokobanCompletadas ?? []);
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Empurre as caixas 📦 até os alvos usando as setas (ou o toquinho). Só dá pra empurrar, nunca puxar. Espinhos 🔺 travam só você — a caixa passa por cima numa boa. Uma caixa em cima do gatilho 🟣 destranca as portas 🚪 do resto da fase.')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['📦','Empurre as caixas até os alvos usando as setas (ou o toquinho).'],['🚫','Só dá pra empurrar, nunca puxar.'],['🔺','Espinhos travam só você — a caixa passa por cima numa boa.'],['🟣','Uma caixa em cima do gatilho destranca as portas 🚪 do resto da fase.']])">?</button>
     <div class="titulo-secao"><h2>📦 Empurra-Caixas</h2><small>${completas}/${total} fases completas · escolha uma fase</small></div>
     <div class="grade-fases-sokoban">
       ${SOKOBAN_FASES.map(f => {
@@ -5050,7 +5074,7 @@ function jogoSokoban(numero, opcoes){
   window._voltarSokobanCustom = aoVoltar;
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="${ehCustom ? 'window._voltarSokobanCustom()' : 'jogoSokobanSelecionarFase()'}">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Empurre as caixas 📦 até os alvos usando as setas (ou o toquinho abaixo do tabuleiro). Só dá pra empurrar, nunca puxar — se travar, toque em Desfazer ou Reiniciar. Espinhos 🔺 travam só você, a caixa passa por cima numa boa. Uma caixa em cima do gatilho 🟣 destranca as portas 🚪 do resto da fase.')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['📦','Empurre as caixas até os alvos usando as setas (ou o toquinho).'],['🚫','Só dá pra empurrar, nunca puxar — travou? Toque em Desfazer ou Reiniciar.'],['🔺','Espinhos travam só você — a caixa passa por cima numa boa.'],['🟣','Uma caixa em cima do gatilho destranca as portas 🚪 do resto da fase.']])">?</button>
     <div class="titulo-secao"><h2>📦 ${ehCustom ? esc(fase.nome) : 'Fase ' + fase.numero}</h2><small>jogadas: <b id="placar-sokoban">0</b></small></div>
     <div id="grade-sokoban" class="grade-sokoban"${estiloFundoMinigame('sokoban')}></div>
     <div class="dpad-rua">
@@ -5181,7 +5205,7 @@ function jogoSokobanCriarMapa(nomeExistente, gradeExistente){
   gradeEditorSokobanApp = gradeExistente ? textoParaGradeSokobanApp(gradeExistente) : (gradeEditorSokobanApp.length ? gradeEditorSokobanApp : gradeVaziaSokobanApp(11, 9));
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="jogoSokobanSelecionarFase()">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Desenhe seu próprio mapa! Escolha uma ferramenta e toque numa célula da grade pra pintar. Precisa de exatamente 1 você (🦫), pelo menos 1 alvo (🟨) e caixas (📦) suficientes pra cobrir os alvos. Depois é só testar — e, se curtir, mandar pro professor decidir se vira uma fase de verdade do jogo.')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['🎨','Escolha uma ferramenta e toque numa célula pra pintar.'],['✅','Precisa de exatamente 1 você (🦫), 1+ alvo (🟨) e caixas (📦) suficientes pra cobrir os alvos.'],['🧪','Teste seu mapa quantas vezes quiser antes de enviar.'],['📤','Curtiu? Manda pro professor decidir se vira uma fase de verdade.']])">?</button>
     <div class="titulo-secao"><h2>🎨 Criar meu mapa</h2><small>desenhe, teste e, se quiser, envie pro jogo</small></div>
     <label style="font-weight:800;font-size:13px;display:block;margin:8px 0 4px">Nome do mapa</label>
     <input id="sokoban-app-nome" type="text" maxlength="60" value="${esc(nomeExistente || '')}" placeholder="ex.: Labirinto do Bicho" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--contorno)">
@@ -5520,7 +5544,7 @@ function jogoDamas(){
   };
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Toque numa peça vermelha (sua) e depois na casa marcada pra mover. Peão só anda pra frente, mas captura em qualquer direção — e captura é obrigatória: se você puder comer uma peça do PC, precisa jogar essa jogada. Chegou na última fileira? Virou dama 👑, que agora anda e captura pra qualquer lado. Quem ficar sem peça (ou sem jogada) perde.')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['👆','Toque numa peça sua e depois na casa marcada pra mover.'],['⬆️','Peão só anda pra frente, mas captura em qualquer direção.'],['⚠️','Captura é obrigatória: se puder comer uma peça do PC, precisa jogar essa jogada.'],['👑','Chegou na última fileira? Vira dama — anda e captura pra qualquer lado.'],['🏆','Quem ficar sem peça (ou sem jogada) perde.']])">?</button>
     <div class="titulo-secao"><h2>♟️ Damas</h2><small id="status-damas">Sua vez</small></div>
     <div id="placar-damas" style="text-align:center;margin-top:6px"></div>
     <div id="tabuleiro-damas" class="tabuleiro-damas"${estiloFundoMinigame('damas')}></div>
@@ -5847,7 +5871,7 @@ const XADREZ_ROTULO_DIFICULDADE = {facil:'Fácil', medio:'Médio', dificil:'Dif�
 function jogoXadrezSelecionarDificuldade(){
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Você joga com as peças brancas e sempre começa. Toque numa peça pra ver pra onde ela pode ir, e depois na casa marcada pra mover. Peão que chega na última fileira vira dama automaticamente. Roque (rei + torre) e captura en passant funcionam do jeito oficial. Quem deixar o próprio rei sem fuga em xeque perde (xeque-mate); se ninguém estiver em xeque mas não houver jogada legal, é empate (afogamento).')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['⚪','Você joga com as peças brancas e sempre começa.'],['👆','Toque numa peça pra ver pra onde ela pode ir, e depois na casa marcada.'],['👑','Peão que chega na última fileira vira dama automaticamente.'],['🏰','Roque (rei + torre) e captura en passant funcionam do jeito oficial.'],['🏆','Rei sem fuga em xeque = xeque-mate (perde). Sem xeque mas sem jogada legal = empate.']])">?</button>
     <div class="titulo-secao"><h2>♞ Xadrez</h2><small>escolha a dificuldade</small></div>
     <div class="selecao-dificuldade-xadrez">
       <button class="btn grande" onclick="jogoXadrez('facil')">🙂 Fácil<small>pra quem tá começando</small></button>
@@ -5977,7 +6001,7 @@ function jogoXadrez(dificuldade){
   };
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Toque numa peça branca (sua) e depois na casa marcada pra mover. Peão que chega na última fileira vira dama sozinho. Roque e en passant funcionam do jeito oficial. Rei sem fuga em xeque = xeque-mate (perde); sem xeque mas sem jogada legal = empate.')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['👆','Toque numa peça branca (sua) e depois na casa marcada pra mover.'],['👑','Peão que chega na última fileira vira dama sozinho.'],['🏰','Roque e en passant funcionam do jeito oficial.'],['🏆','Rei sem fuga em xeque = xeque-mate (perde). Sem xeque mas sem jogada legal = empate.']])">?</button>
     <div class="titulo-secao"><h2>♞ Xadrez</h2><small id="status-xadrez">Sua vez · ${XADREZ_ROTULO_DIFICULDADE[dificuldade]}</small></div>
     <div id="tabuleiro-xadrez" class="tabuleiro-xadrez"${estiloFundoMinigame('xadrez')}></div>
     <div style="display:flex;gap:8px;justify-content:center;margin-top:10px">
@@ -6000,7 +6024,7 @@ const TOPPINGS_PIZZA = [
 function jogoPizzaria(){
   $('#tela-arcade').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('arcade')">Voltar</button>
-    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo('Veja o pedido do cliente e toque nos ingredientes certinhos pra montar a pizza igualzinha ao pedido. Depois toque em Assar e, quando sair do forno, em Entregar antes que a paciência do cliente acabe. Montar errado ou demorar demais custa uma vida! Acertos seguidos rendem um bônus de combo, e de vez em quando aparece um cliente VIP (coroa) que paga em dobro.')">?</button>
+    <button class="btn amarelo pequeno btn-ajuda-cena" onclick="ajudaJogo([['🍕','Veja o pedido e toque nos ingredientes certinhos pra montar a pizza igual.'],['🔥','Toque em Assar e, quando sair do forno, em Entregar.'],['⏱️','Não demore — a paciência do cliente acaba!'],['❌','Montar errado ou demorar demais custa uma vida.'],['🔥','Acertos seguidos rendem bônus de combo.'],['👑','De vez em quando aparece um cliente VIP que paga em dobro.']])">?</button>
     <div class="titulo-secao"><h2>🍕 Pizzaria do Bicho</h2><small>vidas: <b id="placar-pizza-vidas">3</b> · pontos: <b id="placar-pizza">0</b><span id="placar-pizza-combo" class="combo-pizza" hidden> · 🔥 combo x<b id="valor-combo-pizza">0</b></span></small></div>
     <div class="pizzaria-jogo"${estiloFundoMinigame('pizzaria')}>
       <div class="pedido-cliente" id="pizza-pedido-cliente">
