@@ -22,35 +22,70 @@ button,input,select,textarea{font-family:inherit;font-size:14px}
 .oculto{display:none !important}
 
 /* --- login --- */
+body:has(#tela-login:not([style*="display: none"])){
+  background:radial-gradient(circle at 20% 15%,color-mix(in srgb, var(--ceu) 14%, var(--papel)) 0%,var(--papel) 55%);
+}
 #tela-login{max-width:360px;margin:14vh auto;padding:0 20px}
-#tela-login .cartao{background:#fff;border:1px solid var(--contorno);border-radius:12px;padding:28px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
-#tela-login h1{font-size:22px;margin-bottom:2px}
+#tela-login .cartao{background:#fff;border:1px solid var(--contorno);border-top:5px solid var(--moeda);border-radius:16px;padding:28px;box-shadow:0 8px 24px rgba(44,62,80,.1)}
+#tela-login h1{font-size:24px;margin-bottom:2px;font-family:'Baloo 2',sans-serif}
 #tela-login p.sub{margin:0 0 18px;font-size:13px;color:#7F8C8D;font-weight:700}
 
 /* --- shell --- */
 #shell{display:none}
-#shell.ativo{display:flex;min-height:100vh}
-aside{width:210px;flex:none;background:var(--tinta);color:#fff;padding:18px 14px;display:flex;flex-direction:column}
-aside h1{font-size:18px;color:#fff;margin-bottom:2px}
-aside .marca{font-size:11px;opacity:.6;font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin-bottom:22px}
-aside nav{display:flex;flex-direction:column;gap:4px}
+#shell.ativo{display:flex;min-height:100vh;position:relative}
+aside{
+  width:230px;flex:none;background:linear-gradient(180deg,var(--tinta) 0%,#233340 100%);color:#fff;
+  padding:20px 14px;display:flex;flex-direction:column;
+}
+aside h1{font-size:19px;color:#fff;margin-bottom:2px;font-family:'Baloo 2',sans-serif}
+aside .marca{font-size:11px;opacity:.55;font-weight:800;text-transform:uppercase;letter-spacing:.6px;margin-bottom:20px}
+aside nav{display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.grupo-nav{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
+.titulo-grupo-nav{
+  font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.4);
+  padding:14px 12px 4px;
+}
+.grupo-nav:first-child .titulo-grupo-nav{padding-top:0}
 aside nav button{
-  text-align:left;background:none;border:none;color:#fff;opacity:.75;padding:10px 12px;border-radius:8px;
-  font-weight:800;cursor:pointer;font-size:14px;
+  display:flex;align-items:center;gap:9px;text-align:left;background:none;border:none;border-left:3px solid transparent;
+  color:#fff;opacity:.7;padding:9px 11px;border-radius:9px;font-weight:800;cursor:pointer;font-size:13.5px;
+  transition:background .12s ease,opacity .12s ease;
 }
 aside nav button:hover{opacity:1;background:rgba(255,255,255,.08)}
-aside nav button.ativo{opacity:1;background:rgba(255,255,255,.16)}
-.badge-nav{display:inline-block;background:#E74C3C;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;vertical-align:middle}
-aside .rodape-lateral{margin-top:auto;font-size:12px;opacity:.7}
-aside .rodape-lateral button{width:100%;margin-top:10px;background:rgba(255,255,255,.1);border:none;color:#fff;padding:9px;border-radius:8px;font-weight:800;cursor:pointer}
-main{flex:1;padding:26px 32px;max-width:980px}
-main h2{font-size:24px;margin-bottom:4px}
+aside nav button.ativo{opacity:1;background:rgba(255,255,255,.14);border-left-color:var(--moeda)}
+.badge-nav{display:inline-block;background:var(--erro);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:auto;vertical-align:middle}
+aside .rodape-lateral{margin-top:auto;padding-top:14px;font-size:12px;opacity:.7}
+aside .rodape-lateral button{width:100%;margin-top:10px;background:rgba(255,255,255,.1);border:none;color:#fff;padding:9px;border-radius:9px;font-weight:800;cursor:pointer;transition:background .12s ease}
+aside .rodape-lateral button:hover{background:rgba(255,255,255,.18)}
+main{flex:1;padding:26px 32px;max-width:1040px}
+main h2{font-size:24px;margin-bottom:4px;font-family:'Baloo 2',sans-serif}
 main .sub{color:#7F8C8D;font-weight:700;font-size:13px;margin:0 0 20px}
 
-.painel{background:#fff;border:1px solid var(--contorno);border-radius:12px;padding:20px;margin-bottom:18px}
+/* --- topbar + gaveta do menu no celular --- */
+.topo-mobile{display:none;position:fixed;top:0;left:0;right:0;height:56px;z-index:50;
+  background:var(--tinta);color:#fff;align-items:center;gap:12px;padding:0 14px;
+  box-shadow:0 1px 8px rgba(0,0,0,.18)}
+.topo-mobile-marca{font-family:'Baloo 2',sans-serif;font-size:16px;font-weight:700}
+.btn-hamburguer{background:none;border:none;color:#fff;font-size:22px;padding:4px 6px;cursor:pointer;line-height:1}
+.backdrop-menu{display:none;position:fixed;inset:0;background:rgba(20,25,31,.5);z-index:39}
+.backdrop-menu.ativo{display:block}
+@media (max-width:860px){
+  .topo-mobile{display:flex}
+  #shell.ativo{padding-top:56px}
+  aside{
+    position:fixed;top:0;left:0;bottom:0;z-index:40;width:250px;
+    transform:translateX(-100%);transition:transform .22s ease-out;box-shadow:3px 0 20px rgba(0,0,0,.3);
+  }
+  aside.aberta{transform:translateX(0)}
+  main{padding:18px}
+}
+
+.painel{background:#fff;border:1px solid var(--contorno);border-radius:14px;padding:20px;margin-bottom:18px}
 .grade-metricas{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:8px}
-.metrica{background:#fff;border:1px solid var(--contorno);border-radius:12px;padding:16px}
-.metrica b{display:block;font-family:'Baloo 2';font-size:28px;line-height:1.1}
+.metrica{background:#fff;border:1px solid var(--contorno);border-left:4px solid var(--ceu);border-radius:14px;padding:16px;
+  transition:transform .12s ease,box-shadow .12s ease}
+.metrica:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(44,62,80,.08)}
+.metrica b{display:block;font-family:'Baloo 2';font-size:28px;line-height:1.1;color:var(--tinta)}
 .metrica span{font-size:12px;color:#7F8C8D;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
 
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -62,10 +97,12 @@ tr:hover td{background:#FAFBFC}
 .selo.on{background:#D5F5E3;color:#1E8449}
 .selo.off{background:#FDEBD0;color:#9C640C}
 
-.btn{background:var(--tinta);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer}
+.btn{background:var(--tinta);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-weight:800;cursor:pointer;
+  transition:transform .08s ease,opacity .12s ease}
 .btn:hover{opacity:.9}
-.btn:disabled{opacity:.5;cursor:default}
-.btn.linha{padding:5px 10px;font-size:12px;border-radius:6px}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.5;cursor:default;transform:none}
+.btn.linha{padding:5px 10px;font-size:12px;border-radius:7px}
 .btn.branco{background:#fff;color:var(--tinta);border:1px solid var(--contorno)}
 .btn.erro{background:var(--erro)}
 .btn.mata{background:var(--mata)}
@@ -346,28 +383,50 @@ body.conectando-fluxo{cursor:crosshair}
 </div>
 
 <div id="shell">
-  <aside>
+  <div class="topo-mobile">
+    <button type="button" class="btn-hamburguer" id="btn-menu-mobile" aria-label="Abrir menu">☰</button>
+    <span class="topo-mobile-marca">🐾 Bichoteca</span>
+  </div>
+  <div class="backdrop-menu" id="backdrop-menu"></div>
+  <aside id="aside-admin">
     <h1>🐾 Bichoteca</h1>
     <div class="marca">Painel do Hostmaster</div>
     <nav>
-      <button data-aba="painel" class="ativo">📊 Painel</button>
-      <button data-aba="mapas">🗺️ Mapas</button>
-      <button data-aba="npcs">🗨️ NPCs</button>
-      <button data-aba="missoes">🎯 Missões</button>
-      <button data-aba="jornal">📰 Jornal</button>
-      <button data-aba="itens">🔭 Itens</button>
-      <button data-aba="moveis">🛋️ Móveis</button>
-      <button data-aba="arcade">🕹️ Arcade</button>
-      <button data-aba="sokoban">📦 Sokoban <span id="badge-sokoban-pendentes" class="badge-nav" hidden></span></button>
-      <button data-aba="temporadas">🎉 Temporadas</button>
-      <button data-aba="lojas">🏪 Lojas</button>
-      <button data-aba="mundos">🎒 Mundos</button>
-      <button data-aba="licoes">📚 Lições</button>
-      <button data-aba="jogadores">🧒 Jogadores</button>
-      <button data-aba="moderacao">🛡️ Moderação</button>
-      <button data-aba="clubes">🏅 Clubes</button>
-      <button data-aba="arquivos">🗂️ Arquivos</button>
-      <button data-aba="backup">💾 Backup</button>
+      <div class="grupo-nav">
+        <button data-aba="painel" class="ativo">📊 Painel</button>
+      </div>
+      <div class="grupo-nav">
+        <div class="titulo-grupo-nav">Conteúdo</div>
+        <button data-aba="mundos">🎒 Mundos</button>
+        <button data-aba="licoes">📚 Lições</button>
+        <button data-aba="mapas">🗺️ Mapas</button>
+        <button data-aba="jornal">📰 Jornal</button>
+      </div>
+      <div class="grupo-nav">
+        <div class="titulo-grupo-nav">Mundo do bicho</div>
+        <button data-aba="npcs">🗨️ NPCs</button>
+        <button data-aba="missoes">🎯 Missões</button>
+        <button data-aba="itens">🔭 Itens</button>
+        <button data-aba="moveis">🛋️ Móveis</button>
+        <button data-aba="lojas">🏪 Lojas</button>
+        <button data-aba="temporadas">🎉 Temporadas</button>
+      </div>
+      <div class="grupo-nav">
+        <div class="titulo-grupo-nav">Arcade</div>
+        <button data-aba="arcade">🕹️ Arcade</button>
+        <button data-aba="sokoban">📦 Sokoban <span id="badge-sokoban-pendentes" class="badge-nav" hidden></span></button>
+      </div>
+      <div class="grupo-nav">
+        <div class="titulo-grupo-nav">Comunidade</div>
+        <button data-aba="jogadores">🧒 Jogadores</button>
+        <button data-aba="moderacao">🛡️ Moderação</button>
+        <button data-aba="clubes">🏅 Clubes</button>
+      </div>
+      <div class="grupo-nav">
+        <div class="titulo-grupo-nav">Sistema</div>
+        <button data-aba="arquivos">🗂️ Arquivos</button>
+        <button data-aba="backup">💾 Backup</button>
+      </div>
     </nav>
     <div class="rodape-lateral">
       Logado como <b id="usuario-logado"></b>
@@ -1555,8 +1614,20 @@ $('#btn-sair').onclick = async () => {
   location.reload();
 };
 
+/* ---------- gaveta do menu no celular (aside vira off-canvas abaixo de 860px) ---------- */
+function fecharMenuMobile(){
+  $('#aside-admin').classList.remove('aberta');
+  $('#backdrop-menu').classList.remove('ativo');
+}
+$('#btn-menu-mobile').onclick = () => {
+  $('#aside-admin').classList.toggle('aberta');
+  $('#backdrop-menu').classList.toggle('ativo');
+};
+$('#backdrop-menu').onclick = fecharMenuMobile;
+
 /* ---------- navegação por abas ---------- */
 $$('aside nav button').forEach(b => b.onclick = () => {
+  fecharMenuMobile();
   $$('aside nav button').forEach(x => x.classList.remove('ativo'));
   b.classList.add('ativo');
   $$('main > section').forEach(s => s.classList.add('oculto'));
