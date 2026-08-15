@@ -4870,7 +4870,10 @@ function jogoSokoban(numero, opcoes){
     for(const a of alvos) if(!caixas.has(a)) return false;
     return true;
   }
-  const bloqueiaJogador = k => paredes.has(k) || espinhos.has(k) || (portas.has(k) && !portasAbertas);
+  // espinho só bloqueia o jogador ANDANDO — empurrando uma caixa que já descansa em cima
+  // de um espinho não pode contar como "andar no espinho", senão a caixa fica presa lá pra
+  // sempre (o jogador nunca mais consegue chegar perto dela pra empurrar de novo)
+  const bloqueiaJogador = (k, empurrando) => paredes.has(k) || (!empurrando && espinhos.has(k)) || (portas.has(k) && !portasAbertas);
   const bloqueiaCaixa = (k, bs) => paredes.has(k) || bs.has(k) || (portas.has(k) && !portasAbertas);
   // mesma ideia da Memória (dimensionarTabuleiro): calcula colunas/tamanho de célula a partir
   // do espaço real disponível — os níveis variam MUITO de tamanho (5x4 até 17x12), um grid
@@ -4934,9 +4937,10 @@ function jogoSokoban(numero, opcoes){
     if(travado) return;
     const [jr, jc] = jogador.split(',').map(Number);
     const nk = (jr+dr)+','+(jc+dc);
-    if(bloqueiaJogador(nk)){ bloqueado(); return; }
+    const empurrando = caixas.has(nk);
+    if(bloqueiaJogador(nk, empurrando)){ bloqueado(); return; }
     let novasCaixas = caixas, novasPortasAbertas = portasAbertas;
-    if(caixas.has(nk)){
+    if(empurrando){
       const bk = (jr+dr*2)+','+(jc+dc*2);
       if(bloqueiaCaixa(bk, caixas)){ bloqueado(); return; } // caixa travada, não dá pra empurrar
       novasCaixas = new Set(caixas);
@@ -5027,15 +5031,18 @@ function jogoSokoban(numero, opcoes){
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
     // barrinha de avanço automático: encolhe sozinha e troca de fase ao zerar — sem tirar
     // os botões de baixo (clicar em QUALQUER um deles fecha o modal, que já é o sinal usado
-    // aqui pra saber que deu tempo de cancelar: some o #barra-auto-sokoban do DOM)
+    // aqui pra saber que deu tempo de cancelar). Guarda a REFERÊNCIA do elemento (não o id) e
+    // confere .isConnected no disparo — reconsultar por id seria enganado se o jogador resolver
+    // a próxima fase rapidinho demais (dentro dos 2.5s): o modal novo cria outro elemento com
+    // o mesmo id, e o timeout velho pensaria que é o mesmo, avançando fase errada por cima
     if(proximaDesbloqueada){
       const DURACAO_MS = 2500;
+      const barraDessaTela = $('#barra-auto-sokoban');
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        const barra = $('#barra-auto-sokoban');
-        if(barra) barra.style.width = '0%';
+        if(barraDessaTela) barraDessaTela.style.width = '0%';
       }));
       setTimeout(() => {
-        if($('#barra-auto-sokoban')){ fecharModal(); jogoSokoban(proximaFase.numero); }
+        if(barraDessaTela?.isConnected){ fecharModal(); jogoSokoban(proximaFase.numero); }
       }, DURACAO_MS);
     }
   }
@@ -5116,18 +5123,32 @@ function gradeSokobanAppParaTexto(){
   return gradeEditorSokobanApp.map(linha => linha.join('').replace(/ +$/, '')).join('\n');
 }
 function validarGradeSokobanApp(){
-  let jogadores=0, caixas=0, alvos=0;
+  let jogadores=0, caixas=0, alvos=0, gatilhos=0, portas=0;
   for(const linha of gradeEditorSokobanApp){
     for(const ch of linha){
       if(ch==='@'||ch==='+') jogadores++;
       if(ch==='$'||ch==='*') caixas++;
       if(ch==='.'||ch==='+'||ch==='*') alvos++;
+      if(ch==='%') gatilhos++;
+      if(ch==='D') portas++;
     }
   }
   const problemas = [];
   if(jogadores !== 1) problemas.push(`precisa de exatamente 1 você no mapa (tem ${jogadores})`);
   if(alvos < 1) problemas.push('precisa de pelo menos 1 alvo');
   if(caixas < alvos) problemas.push(`tem menos caixas (${caixas}) do que alvos (${alvos})`);
+  if(portas > 0 && gatilhos < 1) problemas.push('tem porta sem nenhum gatilho — ela nunca destranca');
+  // a borda precisa ser toda parede: o motor do jogo só bloqueia movimento em cima de '#',
+  // sem checagem de limite — se a borda tiver um buraco, dá pra "vazar" pra fora da grade
+  const altura = gradeEditorSokobanApp.length, largura = gradeEditorSokobanApp[0]?.length || 0;
+  let bordaOk = true;
+  for(let r=0; r<altura && bordaOk; r++){
+    for(let c=0; c<largura; c++){
+      const naBorda = r===0 || r===altura-1 || c===0 || c===largura-1;
+      if(naBorda && gradeEditorSokobanApp[r][c] !== '#'){ bordaOk = false; break; }
+    }
+  }
+  if(!bordaOk) problemas.push('a borda do mapa precisa ser toda parede (#)');
   return problemas;
 }
 function renderizarGradeEditorSokobanApp(){
@@ -5220,13 +5241,18 @@ window._enviarSokobanApp = async () => {
   }catch(e){ brinde(e.message || 'Não deu pra enviar agora. Tenta de novo?'); }
 };
 // "meus mapas" no Perfil — lista o que o jogador já enviou, com status de moderação;
-// dá pra jogar de novo (aprovado ou não) e apagar enquanto não foi decidido
+// dá pra jogar de novo (aprovado ou não) e apagar enquanto não foi decidido. Os mapas ficam
+// num cache à parte (não dá pra interpolar nome/grade direto num atributo onclick — nome
+// livre pode ter aspas, e grade é multi-linha) — o botão só passa o id, que o handler resolve
+// contra esse cache
+let MEUS_MAPAS_SOKOBAN_CACHE = [];
 async function jogoSokobanMeusMapas(){
   modal(`<h2 style="font-size:22px">🎨 Meus mapas</h2><p style="margin:10px 0">Carregando…</p>`);
   try{
     const r = await fetch('api/estado.php?acao=sokoban_meus_mapas', {cache:'no-store'});
     const d = await r.json().catch(() => ({mapas:[]}));
     if(!r.ok) throw new Error(d.erro || 'Não deu pra carregar seus mapas.');
+    MEUS_MAPAS_SOKOBAN_CACHE = d.mapas;
     const SELO = {pendente: '🕓 em análise', aprovado: '✅ virou fase oficial', rejeitado: '✖️ não aprovado'};
     modal(`
       <h2 style="font-size:22px">🎨 Meus mapas</h2>
@@ -5236,7 +5262,7 @@ async function jogoSokobanMeusMapas(){
             <b>${esc(m.nome)}</b><span class="chip">${SELO[m.status]}</span>
           </div>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-            <button class="btn pequeno" onclick="fecharModal(); jogoSokoban(null, {faseCustom:{nome:m.nome, grade:m.grade}, aoVoltar: jogoSokobanMeusMapas})">▶️ Jogar</button>
+            <button class="btn pequeno" onclick="window._jogarMeuMapaSokoban(${m.id})">▶️ Jogar</button>
             ${m.status === 'pendente' ? `<button class="btn pequeno branco" onclick="window._excluirMeuMapaSokoban(${m.id})">🗑️ Apagar</button>` : ''}
           </div>
         </div>`).join('') : '<p class="vazio" style="margin:10px 0">Você ainda não criou nenhum mapa. Vá no Arcade > Empurra-Caixas > 🎨 Criar meu mapa!</p>'}
@@ -5246,6 +5272,12 @@ async function jogoSokobanMeusMapas(){
       <button class="btn grande branco" style="margin-top:6px" onclick="fecharModal()">Fechar</button>`);
   }
 }
+window._jogarMeuMapaSokoban = id => {
+  const m = MEUS_MAPAS_SOKOBAN_CACHE.find(x => x.id === id);
+  if(!m) return;
+  fecharModal();
+  jogoSokoban(null, {faseCustom:{nome:m.nome, grade:m.grade}, aoVoltar: jogoSokobanMeusMapas});
+};
 window._excluirMeuMapaSokoban = async (id) => {
   if(!confirm('Apagar esse mapa?')) return;
   await fetch('api/estado.php?acao=sokoban_mapa_excluir', {
@@ -7136,7 +7168,7 @@ const MEDALHAS = [
   {id:'atravessador', emoji:'🚸', nome:'80 pontos na Rua', ok:()=>estado.recordes.rua>=80},
   {id:'pescador', emoji:'🎣', nome:'40 pontos na Pescaria', ok:()=>estado.recordes.pescaria>=40},
   {id:'estourador', emoji:'🎈', nome:'100 pontos na Bolha', ok:()=>estado.recordes.bolha>=100},
-  {id:'empurrador', emoji:'📦', nome:'Zerar o Empurra-Caixas', ok:()=>estado.recordes.sokoban!==null && estado.recordes.sokoban>=10},
+  {id:'empurrador', emoji:'📦', nome:'Zerar o Empurra-Caixas', ok:()=>estado.recordes.sokoban!==null && estado.recordes.sokoban>=SOKOBAN_FASES.length},
   {id:'estrategista', emoji:'♟️', nome:'3 vitórias nas Damas', ok:()=>(estado.recordes.damas ?? 0)>=3},
   {id:'enxadrista', emoji:'♞', nome:'3 vitórias no Xadrez', ok:()=>(estado.recordes.xadrez ?? 0)>=3},
   {id:'pizzaiolo', emoji:'🍕', nome:'50 pontos na Pizzaria', ok:()=>estado.recordes.pizzaria>=50},

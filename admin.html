@@ -3955,12 +3955,14 @@ function renderizarGradeEditorSokoban(){
 // espelhada aqui pra avisar ANTES de tentar salvar. Não confirma que dá pra resolver:
 // isso só jogando mesmo (ver README/instruções da aba).
 function validarGradeSokobanUI(){
-  let jogadores=0, caixas=0, alvos=0;
+  let jogadores=0, caixas=0, alvos=0, gatilhos=0, portas=0;
   for(const linha of gradeEditorSokoban){
     for(const ch of linha){
       if(ch==='@'||ch==='+') jogadores++;
       if(ch==='$'||ch==='*') caixas++;
       if(ch==='.'||ch==='+'||ch==='*') alvos++;
+      if(ch==='%') gatilhos++;
+      if(ch==='D') portas++;
     }
   }
   const el = $('#sokoban-validacao');
@@ -3968,6 +3970,18 @@ function validarGradeSokobanUI(){
   if(jogadores !== 1) problemas.push(`precisa de exatamente 1 jogador (tem ${jogadores})`);
   if(alvos < 1) problemas.push('precisa de pelo menos 1 alvo');
   if(caixas < alvos) problemas.push(`tem menos caixas (${caixas}) do que alvos (${alvos})`);
+  if(portas > 0 && gatilhos < 1) problemas.push('tem porta sem nenhum gatilho — ela nunca destranca');
+  // borda precisa ser toda parede: o motor do jogo em app.html não tem checagem de limite,
+  // só olha se a célula é '#' — um buraco na borda deixa jogador/caixa "vazarem" da grade
+  const altura = gradeEditorSokoban.length, largura = gradeEditorSokoban[0]?.length || 0;
+  let bordaOk = true;
+  for(let r=0; r<altura && bordaOk; r++){
+    for(let c=0; c<largura; c++){
+      const naBorda = r===0 || r===altura-1 || c===0 || c===largura-1;
+      if(naBorda && gradeEditorSokoban[r][c] !== '#'){ bordaOk = false; break; }
+    }
+  }
+  if(!bordaOk) problemas.push('a borda do mapa precisa ser toda parede (#)');
   el.style.display = 'block';
   if(problemas.length){
     el.className = 'aviso-form erro';

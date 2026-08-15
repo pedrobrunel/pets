@@ -737,10 +737,23 @@ try {
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX (numero)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
-  // numero não tem UNIQUE no banco de propósito — o upsert do admin.php usa "id" (o
-  // AUTO_INCREMENT) como chave, e valida ali mesmo que não exista outra fase com o mesmo
-  // número antes de salvar (erro claro pro admin, em vez de um ON DUPLICATE KEY silencioso
-  // sobrescrevendo a fase errada por coincidência de número)
+  // numero começou sem UNIQUE (o upsert usa "id" como chave) — mas nada impedia salvar duas
+  // fases com o mesmo número (a seleção de fase sempre abre a primeira, a segunda fica
+  // inacessível) nem duas aprovações de mapa de jogador quase simultâneas caírem no mesmo
+  // MAX(numero)+1. Migração pra travar isso no banco; se já existir duplicata em produção
+  // (não deveria, mas por segurança) o ADD INDEX falha sozinho e só avisa — não trava o resto
+  // do install.php, o Hostmaster só precisa renumerar a fase duplicada na aba Sokoban antes
+  // de rodar de novo.
+  $indicesSokobanFases = array_column($pdo->query(
+    "SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sokoban_fases'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'INDEX_NAME');
+  if (!in_array('numero_unico', $indicesSokobanFases, true)) {
+    try {
+      $pdo->exec('ALTER TABLE sokoban_fases ADD UNIQUE INDEX numero_unico (numero)');
+    } catch (Throwable $e) {
+      error_log('sokoban_fases.numero_unico não pôde ser criado (provavelmente já existe fase duplicada) — ' . $e->getMessage());
+    }
+  }
 
   // ranking do Empurra-Caixas: melhor pontuação (menos jogadas) de cada jogador em cada
   // fase — 1 linha por (jogador, fase), atualizada só quando melhora (ver estado.php,

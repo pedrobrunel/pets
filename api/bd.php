@@ -88,15 +88,33 @@ function validarSokobanGrade(string $grade): ?string {
       return 'Linha ' . ($i + 1) . ': só pode ter espaço, # @ $ . + * ^ % D.';
     }
   }
-  $jogadores = 0; $caixas = 0; $alvos = 0;
+  $jogadores = 0; $caixas = 0; $alvos = 0; $gatilhos = 0; $portas = 0;
   foreach ($linhas as $linha) {
     $jogadores += substr_count($linha, '@') + substr_count($linha, '+');
     $caixas += substr_count($linha, '$') + substr_count($linha, '*');
     $alvos += substr_count($linha, '.') + substr_count($linha, '+') + substr_count($linha, '*');
+    $gatilhos += substr_count($linha, '%');
+    $portas += substr_count($linha, 'D');
   }
   if ($jogadores !== 1) return "A grade precisa ter exatamente 1 jogador (@ ou +) — tem $jogadores.";
   if ($alvos < 1) return 'A grade precisa ter pelo menos 1 alvo (.).';
   if ($caixas < $alvos) return "Tem menos caixas ($caixas) do que alvos ($alvos) — impossível de resolver.";
+  if ($portas > 0 && $gatilhos < 1) return 'Tem porta (D) sem nenhum gatilho (%) — a porta nunca destranca, ninguém consegue passar.';
+  // o motor do jogo (app.html) desenha um retângulo colsN×linhasN e só bloqueia movimento em
+  // '#' — não existe checagem de limite do array. Se a borda desse retângulo não for toda
+  // parede, jogador ou caixa "vazam" pra fora da área visível (o jogo não trava, só some o
+  // bicho da tela e a fase fica impossível de terminar)
+  $colsN = 0;
+  foreach ($linhas as $linha) $colsN = max($colsN, mb_strlen($linha));
+  $totalLinhas = count($linhas);
+  foreach ($linhas as $r => $linha) {
+    for ($c = 0; $c < $colsN; $c++) {
+      $naBorda = $r === 0 || $r === $totalLinhas - 1 || $c === 0 || $c === $colsN - 1;
+      if (!$naBorda) continue;
+      $ch = mb_substr($linha, $c, 1);
+      if ($ch !== '#') return 'A borda do mapa precisa ser toda parede (#) — senão dá pra "vazar" pra fora da grade.';
+    }
+  }
   return null;
 }
 /** notificação push em tempo real (mensagem nova, pedido de amizade aceito etc.) pra todos

@@ -3121,13 +3121,25 @@ try {
     if ($erro) responder(['erro' => $erro], 422);
     $id = (int)($d['id'] ?? 0);
     $publicada = !empty($d['publicada']) ? 1 : 0;
-    if ($id > 0) {
-      bd()->prepare('UPDATE sokoban_fases SET numero = ?, nome = ?, grade = ?, publicada = ? WHERE id = ?')
-        ->execute([$numero, $nome, $grade, $publicada, $id]);
-    } else {
-      bd()->prepare('INSERT INTO sokoban_fases (numero, nome, grade, publicada) VALUES (?, ?, ?, ?)')
-        ->execute([$numero, $nome, $grade, $publicada]);
-      $id = (int)bd()->lastInsertId();
+    // "numero" identifica a fase pro jogador (seleção de fase e ranking são chaveados por
+    // ele) — duas fases com o mesmo número deixavam a segunda inacessível pra sempre (a
+    // seleção sempre abre a primeira que encontra). A UNIQUE INDEX no banco (install.php) é
+    // só o backstop final; essa checagem aqui é o que dá um erro claro pro admin.
+    $stConflito = bd()->prepare('SELECT id FROM sokoban_fases WHERE numero = ? AND id != ?');
+    $stConflito->execute([$numero, $id]);
+    if ($stConflito->fetch()) responder(['erro' => "Já existe outra fase com o número $numero."], 422);
+    try {
+      if ($id > 0) {
+        bd()->prepare('UPDATE sokoban_fases SET numero = ?, nome = ?, grade = ?, publicada = ? WHERE id = ?')
+          ->execute([$numero, $nome, $grade, $publicada, $id]);
+      } else {
+        bd()->prepare('INSERT INTO sokoban_fases (numero, nome, grade, publicada) VALUES (?, ?, ?, ?)')
+          ->execute([$numero, $nome, $grade, $publicada]);
+        $id = (int)bd()->lastInsertId();
+      }
+    } catch (PDOException $e) {
+      if ($e->getCode() === '23000') responder(['erro' => "Já existe outra fase com o número $numero."], 422);
+      throw $e;
     }
     responder(['ok' => true, 'id' => $id]);
   }
@@ -3167,9 +3179,21 @@ try {
     if (!$mapa) responder(['erro' => 'Mapa não encontrado (ou já foi decidido).'], 404);
     $erro = validarSokobanGrade($mapa['grade']);
     if ($erro) responder(['erro' => 'Esse mapa não passa mais na validação: ' . $erro], 422);
-    $proximoNumero = (int)bd()->query('SELECT COALESCE(MAX(numero), 0) + 1 FROM sokoban_fases')->fetchColumn();
-    bd()->prepare('INSERT INTO sokoban_fases (numero, nome, grade, publicada) VALUES (?, ?, ?, 1)')
-      ->execute([$proximoNumero, $mapa['nome'] ?: ('Fase ' . $proximoNumero), $mapa['grade']]);
+    // duas aprovações quase simultâneas podem ler o mesmo MAX(numero) antes de qualquer
+    // uma inserir — a UNIQUE INDEX em sokoban_fases.numero pega essa corrida, então tenta de
+    // novo com o próximo número em vez de estourar erro pro Hostmaster por coincidência de timing
+    $proximoNumero = null;
+    for ($tentativa = 0; $tentativa < 5; $tentativa++) {
+      $proximoNumero = (int)bd()->query('SELECT COALESCE(MAX(numero), 0) + 1 FROM sokoban_fases')->fetchColumn();
+      try {
+        bd()->prepare('INSERT INTO sokoban_fases (numero, nome, grade, publicada) VALUES (?, ?, ?, 1)')
+          ->execute([$proximoNumero, $mapa['nome'] ?: ('Fase ' . $proximoNumero), $mapa['grade']]);
+        break;
+      } catch (PDOException $e) {
+        if ($e->getCode() !== '23000' || $tentativa === 4) throw $e;
+        usleep(50000 * ($tentativa + 1));
+      }
+    }
     bd()->prepare("UPDATE sokoban_mapas_jogadores SET status = 'aprovado', fase_numero_aprovada = ? WHERE id = ?")
       ->execute([$proximoNumero, $mapaId]);
     responder(['ok' => true, 'faseNumero' => $proximoNumero]);
