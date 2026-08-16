@@ -102,6 +102,7 @@ try {
     session_regenerate_id(true);
     $_SESSION['jogador_id'] = $id;
     $_SESSION['versao_sessao'] = 0;
+    criarLembrarLogin($id);
     responder(['ok' => true, 'apelido' => $apelido]);
   }
 
@@ -145,17 +146,28 @@ try {
     session_regenerate_id(true);
     $_SESSION['jogador_id'] = (int)$jogador['id'];
     $_SESSION['versao_sessao'] = (int)$jogador['versao_sessao'];
+    criarLembrarLogin((int)$jogador['id']);
     responder(['ok' => true, 'apelido' => $apelido]);
   }
 
   if ($acao === 'sair') {
+    apagarLembreteAtual();
     session_unset();
     session_destroy();
     responder(['ok' => true]);
   }
 
   $id = $_SESSION['jogador_id'] ?? null;
-  if (!$id) responder(['erro' => 'Entre com seu usuário e senha primeiro.'], 401);
+  if (!$id) {
+    // a sessão do PHP sumiu (fechou o navegador, ou o servidor limpou por inatividade) —
+    // antes de desistir, tenta restaurar sozinho pelo cookie de "lembrar de mim" (ver
+    // tentarRelogarPorLembrete em bd.php); só cai no erro se isso também não der certo
+    $relogado = tentarRelogarPorLembrete();
+    if (!$relogado) responder(['erro' => 'Entre com seu usuário e senha primeiro.'], 401);
+    session_regenerate_id(true);
+    $_SESSION['jogador_id'] = $id = $relogado['id'];
+    $_SESSION['versao_sessao'] = $relogado['versaoSessao'];
+  }
 
   // sessão fica inválida se a senha foi resetada (painel do professor) depois do login —
   // sem isso, uma sessão antiga continuaria valendo mesmo depois de trocar a senha

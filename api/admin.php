@@ -1277,8 +1277,12 @@ try {
     // versao_sessao += 1 derruba qualquer sessão antiga desse jogador (se alguém mais tinha
     // acesso a uma sessão ativa, o reset de senha tira esse acesso); zera bloqueio de
     // tentativas erradas também, já que é um recomeço assistido pelo professor
+    $idJogador = (int)($d['id'] ?? 0);
     bd()->prepare('UPDATE jogadores SET pin_hash = ?, versao_sessao = versao_sessao + 1, tentativas_falhas = 0, bloqueado_ate = NULL WHERE id = ?')
-      ->execute([password_hash($novaSenha, PASSWORD_DEFAULT), (int)($d['id'] ?? 0)]);
+      ->execute([password_hash($novaSenha, PASSWORD_DEFAULT), $idJogador]);
+    // também derruba qualquer "lembrar de mim" (ver bd.php) — senão um aparelho que tinha
+    // esse cookie voltaria a entrar sozinho com a senha antiga, contradizendo o reset
+    bd()->prepare('DELETE FROM lembretes_login WHERE jogador_id = ?')->execute([$idJogador]);
     responder(['ok' => true]);
   }
 

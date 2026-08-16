@@ -249,6 +249,20 @@ try {
     INDEX (de_id, status)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+  // "lembrar de mim": sobrevive tanto a fechar o navegador quanto à sessão do PHP expirar
+  // sozinha no servidor (hospedagem compartilhada costuma limpar sessões ociosas bem antes
+  // do jogador perceber) — token opaco guardado só como hash, cookie próprio (separado do
+  // PHPSESSID), um registro por aparelho, com validade própria e rotação a cada uso
+  $pdo->exec('CREATE TABLE IF NOT EXISTS lembretes_login (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    jogador_id INT NOT NULL,
+    token_hash CHAR(64) NOT NULL,
+    criado_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expira_em  DATETIME NOT NULL,
+    FOREIGN KEY (jogador_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    INDEX (jogador_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
   // inscrições de notificação push (lembrete de sequência) — um jogador pode ter mais de
   // uma (celular + computador, por exemplo). endpoint é a URL única que o navegador dá
   // pra cada inscrição; sem UNIQUE por causa do tamanho em utf8mb4, resolvido na aplicação

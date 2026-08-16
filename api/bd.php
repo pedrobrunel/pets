@@ -36,6 +36,90 @@ function iniciarSessaoSegura(): void {
   ]);
   session_start();
 }
+
+/* ---------- "lembrar de mim" ----------
+   O cookie de sessão do PHP (PHPSESSID) é só de sessão do navegador, e em hospedagem
+   compartilhada o próprio servidor costuma limpar sessões ociosas bem antes do jogador
+   perceber — sem isso, o jogo mostra "entre com seu usuário e senha" do nada no meio de
+   uma partida que a criança nem sabe que "caiu". Esse cookie separado (bicho_lembrar)
+   guarda só um token opaco de alta entropia; o banco guarda só o HASH dele, nunca o valor
+   cru. Um registro por aparelho — cada login/relogin cria o seu, sem derrubar os outros —
+   e o token roda (troca) a cada uso, então um cookie vazado só serve pra 1 reuso antes do
+   dono notar o próprio login "pulando" de aparelho. */
+const LEMBRAR_COOKIE = 'bicho_lembrar';
+const LEMBRAR_DIAS = 60;
+
+function definirCookieLembrar(string $valor, int $expiraEm): void {
+  $https = !empty($_SERVER['HTTPS']) || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+  setcookie(LEMBRAR_COOKIE, $valor, [
+    'expires' => $expiraEm, 'path' => '/', 'domain' => '',
+    'secure' => $https, 'httponly' => true, 'samesite' => 'Lax',
+  ]);
+}
+function apagarCookieLembrar(): void {
+  $https = !empty($_SERVER['HTTPS']) || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+  setcookie(LEMBRAR_COOKIE, '', [
+    'expires' => time() - 3600, 'path' => '/', 'domain' => '',
+    'secure' => $https, 'httponly' => true, 'samesite' => 'Lax',
+  ]);
+}
+/** cria (ou renova) o "lembrar de mim" desse jogador nesse aparelho: gera um token novo,
+    grava só o hash no banco, e manda o valor cru (jogadorId.token) pro cookie */
+function criarLembrarLogin(int $jogadorId): void {
+  $tokenCru = bin2hex(random_bytes(32));
+  $expiraEm = time() + LEMBRAR_DIAS * 86400;
+  bd()->prepare('INSERT INTO lembretes_login (jogador_id, token_hash, expira_em) VALUES (?, ?, FROM_UNIXTIME(?))')
+    ->execute([$jogadorId, hash('sha256', $tokenCru), $expiraEm]);
+  definirCookieLembrar($jogadorId . '.' . $tokenCru, $expiraEm);
+}
+/** se a sessão do PHP sumiu mas o cookie de "lembrar" ainda é válido, restaura o login
+    sozinho (chamado só quando $_SESSION['jogador_id'] já veio vazio). Rotaciona o token a
+    cada uso. @return array{id:int,versaoSessao:int}|null */
+function tentarRelogarPorLembrete(): ?array {
+  $cookie = $_COOKIE[LEMBRAR_COOKIE] ?? '';
+  if (!str_contains($cookie, '.')) return null;
+  [$jogadorIdTxto, $tokenCru] = explode('.', $cookie, 2);
+  $jogadorId = (int)$jogadorIdTxto;
+  if ($jogadorId <= 0 || $tokenCru === '') return null;
+
+  $st = bd()->prepare('SELECT id, token_hash FROM lembretes_login WHERE jogador_id = ? AND expira_em > NOW()');
+  $st->execute([$jogadorId]);
+  $hashAlvo = hash('sha256', $tokenCru);
+  $encontrado = null;
+  foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $linha) {
+    if (hash_equals($linha['token_hash'], $hashAlvo)) { $encontrado = $linha; break; }
+  }
+  // aproveita a consulta pra limpar tokens vencidos desse jogador, já que veio até aqui
+  bd()->prepare('DELETE FROM lembretes_login WHERE jogador_id = ? AND expira_em <= NOW()')->execute([$jogadorId]);
+  if (!$encontrado) { apagarCookieLembrar(); return null; }
+  bd()->prepare('DELETE FROM lembretes_login WHERE id = ?')->execute([$encontrado['id']]);
+
+  $st = bd()->prepare('SELECT versao_sessao FROM jogadores WHERE id = ?');
+  $st->execute([$jogadorId]);
+  $versaoSessao = $st->fetchColumn();
+  if ($versaoSessao === false) { apagarCookieLembrar(); return null; }
+
+  criarLembrarLogin($jogadorId);
+  return ['id' => $jogadorId, 'versaoSessao' => (int)$versaoSessao];
+}
+/** apaga só o "lembrar de mim" desse aparelho (o do cookie atual) — usado no logout
+    explícito, pra "sair" não deixar um jeito de voltar sozinho sem senha */
+function apagarLembreteAtual(): void {
+  $cookie = $_COOKIE[LEMBRAR_COOKIE] ?? '';
+  if (str_contains($cookie, '.')) {
+    [$jogadorIdTxto, $tokenCru] = explode('.', $cookie, 2);
+    $st = bd()->prepare('SELECT id, token_hash FROM lembretes_login WHERE jogador_id = ?');
+    $st->execute([(int)$jogadorIdTxto]);
+    $hashAlvo = hash('sha256', $tokenCru);
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $linha) {
+      if (hash_equals($linha['token_hash'], $hashAlvo)) {
+        bd()->prepare('DELETE FROM lembretes_login WHERE id = ?')->execute([$linha['id']]);
+        break;
+      }
+    }
+  }
+  apagarCookieLembrar();
+}
 /** minúsculo + sem acento, pra comparar texto de forma tolerante a maiúscula/acento
     (ex.: "É", "e", "È" comparam igual) — usado tanto pra gravar a lista de palavras
     proibidas quanto pra checar mensagem/post contra ela */
