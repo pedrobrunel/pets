@@ -17,7 +17,14 @@
      POST ?acao=amizade_solicitar {apelidoDestino}     -> pede amizade (aceita na hora se o outro já tinha pedido)
      POST ?acao=amizade_responder {solicitanteApelido, aceitar} -> aceita ou recusa um pedido recebido
      POST ?acao=amizade_remover {apelido}              -> desfaz amizade (ou cancela pedido) a qualquer momento
-     GET  ?acao=amizades_listar                        -> amigos + pedidos recebidos/enviados
+     GET  ?acao=amizades_listar                        -> amigos (com nível/sequência) + pedidos recebidos/enviados
+     POST ?acao=cutucar         {apelido}               -> "oi, tô aqui" de 1 toque; máx 1 por par a cada hora
+     GET  ?acao=cutucadas_pendentes                     -> cutucadas não vistas ainda (marca como vista ao listar)
+     POST ?acao=desafio_criar   {apelidoDestino, jogo, pontuacao, menorMelhor} -> desafia um amigo num minigame
+     GET  ?acao=desafios_listar                         -> desafios recebidos (pendentes) e enviados (com resultado)
+     POST ?acao=desafio_concluir {id, pontuacao}        -> registra o resultado do desafiado; chamado sozinho pelo jogo
+     POST ?acao=atividade_registrar {tipo, detalhe}     -> feed de atividade: novo recorde ou lição concluída
+     GET  ?acao=atividades_feed                         -> últimas atividades dos seus amigos
      POST ?acao=mensagem_enviar {apelidoDestino, texto} -> só entre amigos aceitos; passa pelo filtro
      GET  ?acao=conversa_obter  ?apelido=xx             -> últimas mensagens trocadas com esse amigo
      GET  ?acao=conversas_listar                        -> lista de amigos com prévia da última mensagem
@@ -36,10 +43,11 @@
      POST ?acao=clube_criar     {nome, emoji, descricao} -> cria e já entra como líder; só se ainda não tiver clube
      POST ?acao=clube_entrar    {clubeId}               -> entra na hora, sem convite; só se ainda não tiver clube
      POST ?acao=clube_sair                              -> sai a qualquer momento; promove o mais antigo, ou apaga se ficar vazio
-     GET  ?acao=clube_meu                               -> seu clube atual (ou null), com "souLider"
+     GET  ?acao=clube_meu                               -> seu clube atual (ou null), com "souLider" e "grupoId" (chat)
      POST ?acao=clube_editar    {nome, emoji, descricao} -> só o líder
      GET  ?acao=clube_membros_listar                    -> só o líder: cada membro com nível/streak/lições (tipo "resumo do professor")
      POST ?acao=clube_membro_remover {apelido}          -> só o líder, tira alguém do clube
+     GET  ?acao=clube_ranking                           -> top por nível/sequência só dentro do seu clube (qualquer membro vê)
      GET  ?acao=ranking                                -> top 10 por nível e por sequência (só apelido/bicho/número)
      POST ?acao=sokoban_pontuar {faseNumero, jogadas}  -> grava se bater a melhor marca (menos jogadas) do jogador nessa fase
      GET  ?acao=sokoban_ranking ?fase=xx                -> top 10 dessa fase do Empurra-Caixas (apelido/bicho/jogadas)
@@ -456,7 +464,9 @@ try {
   }
 
   if ($acao === 'amizades_listar') {
-    $st = bd()->prepare("SELECT j.apelido, JSON_UNQUOTE(JSON_EXTRACT(j.estado, '$.tipo')) AS tipo
+    $st = bd()->prepare("SELECT j.apelido, JSON_UNQUOTE(JSON_EXTRACT(j.estado, '$.tipo')) AS tipo,
+        COALESCE(JSON_EXTRACT(j.estado, '$.xp'), 0) AS xp,
+        COALESCE(JSON_EXTRACT(j.estado, '$.streak.atual'), 0) AS streak_atual
       FROM amizades a JOIN jogadores j ON j.id = IF(a.solicitante_id = ?, a.destinatario_id, a.solicitante_id)
       WHERE (a.solicitante_id = ? OR a.destinatario_id = ?) AND a.status = 'aceita'");
     $st->execute([$id, $id, $id]);
@@ -473,7 +483,10 @@ try {
     $enviados = $st->fetchAll(PDO::FETCH_COLUMN);
 
     responder([
-      'amigos' => array_map(fn($a) => ['apelido' => $a['apelido'], 'tipo' => $a['tipo'] ?: 'capivara'], $amigos),
+      'amigos' => array_map(fn($a) => [
+        'apelido' => $a['apelido'], 'tipo' => $a['tipo'] ?: 'capivara',
+        'nivel' => intdiv((int)$a['xp'], 120) + 1, 'streakAtual' => (int)$a['streak_atual'],
+      ], $amigos),
       'pedidosRecebidos' => $recebidos,
       'pedidosEnviados' => $enviados,
     ]);
@@ -485,6 +498,100 @@ try {
       AND ((solicitante_id = ? AND destinatario_id = ?) OR (solicitante_id = ? AND destinatario_id = ?))");
     $st->execute([$id, $outroId, $outroId, $id]);
     return (bool)$st->fetchColumn();
+  }
+
+  /* ---------- Cutucada ----------
+     "oi, tô aqui" de 1 toque só, sem digitar nada — por isso não passa pelo filtro de
+     palavras (não existe texto livre pra filtrar). Só entre amigos aceitos, com limite de
+     1 cutucada por par a cada hora pra não virar spam de notificação. */
+  if ($acao === 'cutucar') {
+    $outro = buscarJogadorPorApelido(trim((string)(corpo()['apelido'] ?? '')));
+    if (!$outro) responder(['erro' => 'Não achamos ninguém com esse apelido.'], 404);
+    $outroId = (int)$outro['id'];
+    if (!saoAmigos($id, $outroId)) responder(['erro' => 'Vocês precisam ser amigos pra se cutucar.'], 403);
+    $st = bd()->prepare('SELECT 1 FROM cutucadas WHERE de_id = ? AND para_id = ? AND criado_em > (NOW() - INTERVAL 1 HOUR)');
+    $st->execute([$id, $outroId]);
+    if ($st->fetchColumn()) responder(['erro' => 'Você já cutucou essa pessoa faz pouco tempo — espera um pouquinho.'], 422);
+    bd()->prepare('INSERT INTO cutucadas (de_id, para_id) VALUES (?, ?)')->execute([$id, $outroId]);
+    enviarPush($outroId, '👉 Cutucada', apelidoDoId($id) . ' te cutucou!');
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'cutucadas_pendentes') {
+    $st = bd()->prepare("SELECT c.id, j.apelido FROM cutucadas c JOIN jogadores j ON j.id = c.de_id
+      WHERE c.para_id = ? AND c.vista = 0 ORDER BY c.id");
+    $st->execute([$id]);
+    $pendentes = $st->fetchAll(PDO::FETCH_ASSOC);
+    if ($pendentes) {
+      bd()->prepare('UPDATE cutucadas SET vista = 1 WHERE para_id = ? AND vista = 0')->execute([$id]);
+    }
+    responder(['cutucadas' => array_map(fn($c) => ['apelido' => $c['apelido']], $pendentes)]);
+  }
+
+  /* ---------- Desafio de minigame ----------
+     "eu fiz X pontos, supera?" — jogo/pontuação vêm do cliente sem whitelist de jogo (baixo
+     risco: é só texto exibido pro amigo, não desbloqueia nada nem afeta moedas/XP de
+     ninguém), só limitando tamanho/faixa pra evitar abuso óbvio. Concluído automaticamente
+     pelo cliente (ver bateuRecorde() no app.html) assim que o desafiado joga esse mesmo jogo
+     de novo — nunca precisa de uma ação explícita de "responder desafio". */
+  if ($acao === 'desafio_criar') {
+    $d = corpo();
+    $outro = buscarJogadorPorApelido(trim((string)($d['apelidoDestino'] ?? '')));
+    if (!$outro) responder(['erro' => 'Não achamos ninguém com esse apelido.'], 404);
+    $outroId = (int)$outro['id'];
+    if ($outroId === $id) responder(['erro' => 'Desafie um amigo, não você mesmo :)'], 422);
+    if (!saoAmigos($id, $outroId)) responder(['erro' => 'Vocês precisam ser amigos pra se desafiar.'], 403);
+    $jogo = trim((string)($d['jogo'] ?? ''));
+    if ($jogo === '' || mb_strlen($jogo) > 20) responder(['erro' => 'Jogo inválido.'], 422);
+    $pontuacao = (int)($d['pontuacao'] ?? -1);
+    if ($pontuacao < 0 || $pontuacao > 1_000_000) responder(['erro' => 'Pontuação inválida.'], 422);
+    $menorMelhor = !empty($d['menorMelhor']) ? 1 : 0;
+    bd()->prepare('INSERT INTO desafios (de_id, para_id, jogo, pontuacao, menor_melhor) VALUES (?, ?, ?, ?, ?)')
+      ->execute([$id, $outroId, $jogo, $pontuacao, $menorMelhor]);
+    enviarPush($outroId, '🎯 Desafio novo', apelidoDoId($id) . ' te desafiou no Arcade — será que você supera?');
+    responder(['ok' => true, 'id' => (int)bd()->lastInsertId()]);
+  }
+
+  if ($acao === 'desafios_listar') {
+    $st = bd()->prepare("SELECT d.id, d.jogo, d.pontuacao, d.menor_melhor, d.status, d.resultado_pontuacao, d.superou, j.apelido
+      FROM desafios d JOIN jogadores j ON j.id = d.de_id
+      WHERE d.para_id = ? AND d.status = 'pendente' ORDER BY d.id DESC LIMIT 20");
+    $st->execute([$id]);
+    $recebidos = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    $st = bd()->prepare("SELECT d.id, d.jogo, d.pontuacao, d.menor_melhor, d.status, d.resultado_pontuacao, d.superou, j.apelido
+      FROM desafios d JOIN jogadores j ON j.id = d.para_id
+      WHERE d.de_id = ? ORDER BY d.id DESC LIMIT 20");
+    $st->execute([$id]);
+    $enviados = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    $mapear = fn($d) => [
+      'id' => (int)$d['id'], 'apelido' => $d['apelido'], 'jogo' => $d['jogo'],
+      'pontuacao' => (int)$d['pontuacao'], 'menorMelhor' => (bool)$d['menor_melhor'], 'status' => $d['status'],
+      'resultadoPontuacao' => $d['resultado_pontuacao'] !== null ? (int)$d['resultado_pontuacao'] : null,
+      'superou' => $d['superou'] !== null ? (bool)$d['superou'] : null,
+    ];
+    responder(['recebidos' => array_map($mapear, $recebidos), 'enviados' => array_map($mapear, $enviados)]);
+  }
+
+  /* o desafiado joga o jogo indicado e, seja qual for o resultado, o cliente chama isso
+     sozinho (não precisa de botão "enviar resultado") — ver bateuRecorde() no app.html */
+  if ($acao === 'desafio_concluir') {
+    $d = corpo();
+    $desafioId = (int)($d['id'] ?? 0);
+    $pontuacao = (int)($d['pontuacao'] ?? -1);
+    if ($pontuacao < 0) responder(['erro' => 'Pontuação inválida.'], 422);
+    $st = bd()->prepare("SELECT de_id, pontuacao, menor_melhor FROM desafios WHERE id = ? AND para_id = ? AND status = 'pendente'");
+    $st->execute([$desafioId, $id]);
+    $desafio = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$desafio) responder(['erro' => 'Desafio não encontrado.'], 404);
+    $superou = $desafio['menor_melhor'] ? $pontuacao <= (int)$desafio['pontuacao'] : $pontuacao >= (int)$desafio['pontuacao'];
+    bd()->prepare("UPDATE desafios SET status = 'concluido', resultado_pontuacao = ?, superou = ?, respondido_em = NOW() WHERE id = ?")
+      ->execute([$pontuacao, $superou ? 1 : 0, $desafioId]);
+    $meuApelido = apelidoDoId($id);
+    enviarPush((int)$desafio['de_id'], $superou ? '🏆 Desafio superado!' : '🎯 Desafio respondido',
+      $meuApelido . ($superou ? ' superou seu desafio!' : ' tentou seu desafio, mas não superou dessa vez.'));
+    responder(['ok' => true, 'superou' => $superou]);
   }
 
   if ($acao === 'mensagem_enviar') {
@@ -556,6 +663,38 @@ try {
     // conversa com mensagem mais recente primeiro
     usort($conversas, fn($a, $b) => strcmp((string)$b['quando'], (string)$a['quando']));
     responder(['conversas' => $conversas]);
+  }
+
+  /* ---------- Feed de atividade dos amigos ----------
+     Registrado pelo próprio jogo/servidor (nunca texto livre do jogador) em dois momentos:
+     novo recorde em qualquer minigame (bateuRecorde() no app.html) e lição concluída pela
+     primeira vez (aqui embaixo, em completar_licao). O feed só mostra atividade de quem já
+     é seu amigo aceito — mesma regra de privacidade do resto do social. */
+  $TIPOS_ATIVIDADE = ['recorde', 'licao'];
+
+  if ($acao === 'atividade_registrar') {
+    $d = corpo();
+    $tipo = (string)($d['tipo'] ?? '');
+    if (!in_array($tipo, $TIPOS_ATIVIDADE, true)) responder(['erro' => 'Tipo de atividade inválido.'], 422);
+    $detalhe = trim((string)($d['detalhe'] ?? ''));
+    if (mb_strlen($detalhe) > 160) $detalhe = mb_substr($detalhe, 0, 160);
+    bd()->prepare('INSERT INTO atividades (jogador_id, tipo, detalhe) VALUES (?, ?, ?)')
+      ->execute([$id, $tipo, $detalhe]);
+    responder(['ok' => true]);
+  }
+
+  if ($acao === 'atividades_feed') {
+    $st = bd()->prepare("SELECT a.tipo, a.detalhe, a.criado_em, j.apelido,
+        JSON_UNQUOTE(JSON_EXTRACT(j.estado, '$.tipo')) AS bicho
+      FROM atividades a
+      JOIN amizades am ON (am.status = 'aceita' AND ((am.solicitante_id = ? AND am.destinatario_id = a.jogador_id) OR (am.destinatario_id = ? AND am.solicitante_id = a.jogador_id)))
+      JOIN jogadores j ON j.id = a.jogador_id
+      ORDER BY a.id DESC LIMIT 30");
+    $st->execute([$id, $id]);
+    responder(['atividades' => array_map(fn($a) => [
+      'apelido' => $a['apelido'], 'tipo' => $a['bicho'] ?: 'capivara', 'tipoAtividade' => $a['tipo'],
+      'detalhe' => $a['detalhe'], 'quando' => $a['criado_em'],
+    ], $st->fetchAll(PDO::FETCH_ASSOC))]);
   }
 
   if ($acao === 'mensagem_denunciar') {
@@ -800,6 +939,15 @@ try {
     ], $st->fetchAll(PDO::FETCH_ASSOC))]);
   }
 
+  /** id do grupo de chat desse clube (1:1, criado junto com o clube) — null só se o clube
+      foi criado antes dessa feature existir e a migração ainda não rodou de novo */
+  function grupoDoClube(int $clubeId): ?int {
+    $st = bd()->prepare('SELECT id FROM grupos WHERE clube_id = ?');
+    $st->execute([$clubeId]);
+    $g = $st->fetchColumn();
+    return $g !== false ? (int)$g : null;
+  }
+
   if ($acao === 'clube_meu') {
     $clube = clubeDoJogador($id);
     if (!$clube) responder(['clube' => null]);
@@ -808,6 +956,7 @@ try {
     responder(['clube' => [
       'id' => (int)$clube['id'], 'nome' => $clube['nome'], 'emoji' => $clube['emoji'], 'descricao' => $clube['descricao'],
       'souLider' => (int)$clube['lider_id'] === $id, 'totalMembros' => (int)$st->fetchColumn(),
+      'grupoId' => grupoDoClube((int)$clube['id']),
     ]]);
   }
 
@@ -831,6 +980,10 @@ try {
       ->execute([$nome, $emoji, $descricao, $id]);
     $clubeId = (int)bd()->lastInsertId();
     bd()->prepare('INSERT INTO clube_membros (jogador_id, clube_id) VALUES (?, ?)')->execute([$id, $clubeId]);
+    // chat do clube: um "grupos" próprio, com o líder já dentro
+    bd()->prepare('INSERT INTO grupos (nome, criador_id, clube_id) VALUES (?, ?, ?)')->execute([$nome, $id, $clubeId]);
+    $grupoId = (int)bd()->lastInsertId();
+    bd()->prepare('INSERT INTO grupo_membros (grupo_id, jogador_id, ultima_leitura) VALUES (?, ?, NOW())')->execute([$grupoId, $id]);
     responder(['ok' => true, 'clubeId' => $clubeId]);
   }
 
@@ -844,6 +997,8 @@ try {
     $st->execute([$clubeId]);
     if ((int)$st->fetchColumn() >= $CLUBE_MAX_MEMBROS) responder(['erro' => 'Esse clube já está cheio.'], 422);
     bd()->prepare('INSERT INTO clube_membros (jogador_id, clube_id) VALUES (?, ?)')->execute([$id, $clubeId]);
+    $grupoId = grupoDoClube($clubeId);
+    if ($grupoId) bd()->prepare('INSERT INTO grupo_membros (grupo_id, jogador_id, ultima_leitura) VALUES (?, ?, NOW())')->execute([$grupoId, $id]);
     responder(['ok' => true]);
   }
 
@@ -852,9 +1007,12 @@ try {
     if (!$clube) responder(['ok' => true]);
     $clubeId = (int)$clube['id'];
     bd()->prepare('DELETE FROM clube_membros WHERE jogador_id = ?')->execute([$id]);
+    $grupoId = grupoDoClube($clubeId);
+    if ($grupoId) bd()->prepare('DELETE FROM grupo_membros WHERE grupo_id = ? AND jogador_id = ?')->execute([$grupoId, $id]);
     if ((int)$clube['lider_id'] === $id) {
       // líder saiu: promove o membro mais antigo que sobrou; se não sobrou ninguém, o
-      // clube deixa de existir (sem líder, um clube não faz sentido)
+      // clube deixa de existir (sem líder, um clube não faz sentido) — o grupo de chat
+      // some sozinho (ON DELETE CASCADE em grupos.clube_id)
       $st = bd()->prepare('SELECT jogador_id FROM clube_membros WHERE clube_id = ? ORDER BY entrou_em LIMIT 1');
       $st->execute([$clubeId]);
       $proximoLider = $st->fetchColumn();
@@ -884,6 +1042,7 @@ try {
     if ($st->fetchColumn()) responder(['erro' => 'Já existe um clube com esse nome.'], 422);
     bd()->prepare('UPDATE clubes SET nome = ?, emoji = ?, descricao = ? WHERE id = ?')
       ->execute([$nome, $emoji, $descricao, (int)$clube['id']]);
+    bd()->prepare('UPDATE grupos SET nome = ? WHERE clube_id = ?')->execute([$nome, (int)$clube['id']]);
     responder(['ok' => true]);
   }
 
@@ -914,7 +1073,28 @@ try {
     if ((int)$alvo['id'] === $id) responder(['erro' => 'Use "sair do clube" pra você mesmo.'], 422);
     bd()->prepare('DELETE FROM clube_membros WHERE jogador_id = ? AND clube_id = ?')
       ->execute([(int)$alvo['id'], (int)$clube['id']]);
+    $grupoId = grupoDoClube((int)$clube['id']);
+    if ($grupoId) bd()->prepare('DELETE FROM grupo_membros WHERE grupo_id = ? AND jogador_id = ?')->execute([$grupoId, (int)$alvo['id']]);
     responder(['ok' => true]);
+  }
+
+  /* ranking do clube: mesma ideia do ?acao=ranking geral (top por nível e por sequência),
+     só que restrito a quem está no MEU clube — qualquer membro vê, não só o líder (diferente
+     de clube_membros_listar, que é o "resumo do professor" e mostra mais detalhe). */
+  if ($acao === 'clube_ranking') {
+    $clube = clubeDoJogador($id);
+    if (!$clube) responder(['erro' => 'Você não está em nenhum clube.'], 422);
+    $st = bd()->prepare("SELECT apelido,
+        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(estado, '$.tipo')), 'capivara') AS tipo,
+        COALESCE(JSON_EXTRACT(estado, '$.xp'), 0) AS xp,
+        COALESCE(JSON_EXTRACT(estado, '$.streak.atual'), 0) AS streak_atual
+      FROM jogadores j JOIN clube_membros m ON m.jogador_id = j.id
+      WHERE m.clube_id = ? ORDER BY xp DESC LIMIT 20");
+    $st->execute([(int)$clube['id']]);
+    responder(['ranking' => array_map(fn($l) => [
+      'apelido' => $l['apelido'], 'tipo' => $l['tipo'], 'nivel' => intdiv((int)$l['xp'], 120) + 1,
+      'xp' => (int)$l['xp'], 'streakAtual' => (int)$l['streak_atual'],
+    ], $st->fetchAll(PDO::FETCH_ASSOC))]);
   }
 
   if ($acao === 'salvar') {
@@ -936,11 +1116,11 @@ try {
     $respostas = is_array($d['respostas'] ?? null) ? $d['respostas'] : [];
     // gabarito é gravado pelo painel administrativo (api/admin.php) toda vez que uma
     // lição é salva — deriva do "certa:" de cada bloco tipo "pergunta", na ordem deles
-    $st = bd()->prepare('SELECT gabarito FROM licoes WHERE id = ? AND publicado = 1');
+    $st = bd()->prepare('SELECT gabarito, titulo, emoji FROM licoes WHERE id = ? AND publicado = 1');
     $st->execute([$licaoId]);
-    $gabaritoJson = $st->fetchColumn();
-    if ($gabaritoJson === false) responder(['erro' => 'Lição sem gabarito no servidor.'], 422);
-    $gabarito = json_decode((string)$gabaritoJson, true) ?? [];
+    $licaoInfo = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$licaoInfo) responder(['erro' => 'Lição sem gabarito no servidor.'], 422);
+    $gabarito = json_decode((string)$licaoInfo['gabarito'], true) ?? [];
 
     // grava cada resposta (todas as tentativas, não só a última) — é o que alimenta
     // "onde a criança mais erra" no painel do responsável e no painel do Hostmaster
@@ -963,7 +1143,12 @@ try {
 
     $moedas = $acertos * ($primeiraVez ? 10 : 3);
     $xp = $acertos * ($primeiraVez ? 15 : 5);
-    if ($primeiraVez && $acertos >= $meta) $estado['licoesFeitas'][] = $licaoId;
+    $concluiuAgora = $primeiraVez && $acertos >= $meta;
+    if ($concluiuAgora) {
+      $estado['licoesFeitas'][] = $licaoId;
+      bd()->prepare('INSERT INTO atividades (jogador_id, tipo, detalhe) VALUES (?, \'licao\', ?)')
+        ->execute([$id, trim($licaoInfo['emoji'] . ' ' . $licaoInfo['titulo'])]);
+    }
     $estado['moedas'] = max(0, min(1_000_000, (int)($estado['moedas'] ?? 0) + $moedas));
     $estado['xp'] = max(0, min(1_000_000, (int)($estado['xp'] ?? 0) + $xp));
 

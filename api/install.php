@@ -190,6 +190,65 @@ try {
     INDEX (clube_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
+  // chat do clube: em vez de reinventar mensagens em grupo, todo clube ganha um "grupos"
+  // (mesmo motor do chat em grupo entre amigos) só dele na hora que é criado — clube_id
+  // aqui identifica esse grupo especial; a moderação (aba Moderação do painel) já enxerga
+  // essas mensagens de graça, porque é a mesma tabela grupo_mensagens de sempre.
+  $colunasGrupos = array_column($pdo->query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'grupos'"
+  )->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+  if (!in_array('clube_id', $colunasGrupos, true)) {
+    $pdo->exec('ALTER TABLE grupos ADD COLUMN clube_id INT NULL UNIQUE, ADD FOREIGN KEY (clube_id) REFERENCES clubes(id) ON DELETE CASCADE');
+  }
+
+  // feed de atividade dos amigos: registrado pelo próprio jogo (novo recorde num minigame,
+  // lição concluída pela primeira vez) — "detalhe" é sempre texto gerado pelo servidor/jogo,
+  // nunca digitado livre pelo jogador, então não passa (nem precisa passar) pelo filtro de
+  // palavras usado em mensagem/fórum.
+  $pdo->exec("CREATE TABLE IF NOT EXISTS atividades (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    jogador_id INT NOT NULL,
+    tipo       VARCHAR(20) NOT NULL,
+    detalhe    VARCHAR(160) NOT NULL DEFAULT '',
+    criado_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (jogador_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    INDEX (jogador_id, criado_em)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+  // cutucada: "oi, tô aqui" de 1 toque, sem digitar nada — só entre amigos aceitos, com
+  // limite de 1 por par a cada hora (checado na aplicação) pra não virar spam
+  $pdo->exec('CREATE TABLE IF NOT EXISTS cutucadas (
+    id        INT AUTO_INCREMENT PRIMARY KEY,
+    de_id     INT NOT NULL,
+    para_id   INT NOT NULL,
+    vista     TINYINT(1) NOT NULL DEFAULT 0,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (de_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    FOREIGN KEY (para_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    INDEX (para_id, vista)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+  // desafio de minigame entre amigos: "eu fiz X pontos, supera?" — menor_melhor copia o
+  // mesmo sentido de bateuRecorde() no cliente (a maioria dos jogos é "quanto mais, melhor",
+  // só a Memória e o Empurra-Caixas-por-jogadas invertem isso)
+  $pdo->exec("CREATE TABLE IF NOT EXISTS desafios (
+    id                   INT AUTO_INCREMENT PRIMARY KEY,
+    de_id                INT NOT NULL,
+    para_id              INT NOT NULL,
+    jogo                 VARCHAR(20) NOT NULL,
+    pontuacao            INT NOT NULL,
+    menor_melhor         TINYINT(1) NOT NULL DEFAULT 0,
+    status               ENUM('pendente','concluido') NOT NULL DEFAULT 'pendente',
+    resultado_pontuacao  INT NULL,
+    superou              TINYINT(1) NULL,
+    criado_em            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    respondido_em        TIMESTAMP NULL,
+    FOREIGN KEY (de_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    FOREIGN KEY (para_id) REFERENCES jogadores(id) ON DELETE CASCADE,
+    INDEX (para_id, status),
+    INDEX (de_id, status)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
   // inscrições de notificação push (lembrete de sequência) — um jogador pode ter mais de
   // uma (celular + computador, por exemplo). endpoint é a URL única que o navegador dá
   // pra cada inscrição; sem UNIQUE por causa do tamanho em utf8mb4, resolvido na aplicação

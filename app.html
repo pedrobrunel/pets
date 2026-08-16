@@ -3365,6 +3365,15 @@ function contarRegressiva(aoComecar){
 // true (e já atualiza estado.recordes) se esse resultado bateu o recorde anterior — usado no
 // fim de cada minigame pra decidir se mostra o selo "novo recorde" + confete. menorMelhor é
 // só pra Memória, onde menos jogadas é melhor; todo o resto é "quanto mais pontos, melhor"
+//
+// também é o ÚNICO lugar chamado por todo minigame pontuado (13 jogos, só Damas/Xadrez usam
+// contador direto de vitórias e ficam de fora) — por isso é reaproveitado como gancho central
+// pros dois recursos sociais ligados a resultado de jogo, sem precisar tocar em cada um dos
+// minigames: guarda o último resultado (pro botão "Desafiar um amigo" ler), registra no feed
+// de atividade quando bate recorde, e reporta sozinho o resultado se o jogador tava cumprindo
+// um desafio recebido (ver jogarDesafio())
+let ULTIMO_RESULTADO_JOGO = null;
+let DESAFIO_ATIVO = null;
 function bateuRecorde(chave, valor, menorMelhor){
   const atual = estado.recordes[chave];
   // "atual" pode vir undefined (não null) em conta antiga salva antes desse campo existir —
@@ -3372,7 +3381,72 @@ function bateuRecorde(chave, valor, menorMelhor){
   const semRecorde = atual === null || atual === undefined;
   const bateu = menorMelhor ? (semRecorde || valor < atual) : (semRecorde || valor > atual);
   if(bateu) estado.recordes[chave] = valor;
+  const jogoObj = JOGOS_ARCADE.find(j => j.id === chave);
+  if(jogoObj){
+    ULTIMO_RESULTADO_JOGO = {jogo: chave, valor, menorMelhor: !!menorMelhor};
+    if(logado && bateu){
+      fetch('api/estado.php?acao=atividade_registrar', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({tipo:'recorde', detalhe: `${jogoObj.recorde() || valor} em ${jogoObj.nome}`}),
+      }).catch(()=>{});
+    }
+    if(logado && DESAFIO_ATIVO && DESAFIO_ATIVO.jogo === chave){
+      const { id } = DESAFIO_ATIVO;
+      DESAFIO_ATIVO = null;
+      fetch('api/estado.php?acao=desafio_concluir', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({id, pontuacao: valor}),
+      }).then(r => r.json()).then(d => { if(d.superou) brinde('🏆 Você superou o desafio!'); }).catch(()=>{});
+    }
+  }
   return bateu;
+}
+function nomeDoJogoArcade(jogoId){ return JOGOS_ARCADE.find(j => j.id === jogoId)?.nome || jogoId; }
+function rotuloPontuacaoJogo(jogoId, valor){
+  if(jogoId === 'sokoban') return `fase ${valor}`;
+  if(jogoId === 'memoria') return `${valor} jogada${valor===1?'':'s'}`;
+  return `${valor} ponto${valor===1?'':'s'}`;
+}
+// friend-picker pra mandar um desafio com o resultado do jogo que acabou de terminar —
+// chamado pelo botão "🎯 Desafiar um amigo" que cada minigame pontuado mostra na tela de fim
+async function abrirDesafiar(){
+  if(!ULTIMO_RESULTADO_JOGO){ brinde('Termine uma partida primeiro!'); return; }
+  if(!logado){ brinde('Crie uma conta (usuário e senha) pra poder desafiar amigos.'); return; }
+  modal(`<h2 style="font-size:22px">🎯 Desafiar um amigo</h2><p style="margin:10px 0">Carregando…</p>`);
+  let amigos = [];
+  try{ amigos = (await chamarSocial('amizades_listar', null, 'GET')).amigos; }catch(e){ /* segue vazio */ }
+  if(!amigos.length){
+    modal(`<h2 style="font-size:22px">🎯 Desafiar um amigo</h2><p style="margin:10px 0">Você precisa ter um amigo aceito pra desafiar. Adicione um em 👥 Amigos!</p>
+      <button class="btn grande branco" style="margin-top:6px" onclick="fecharModal()">Fechar</button>`);
+    return;
+  }
+  modal(`
+    <h2 style="font-size:22px">🎯 Desafiar um amigo</h2>
+    <p style="margin:8px 0 12px">Quem vai tentar superar seu resultado?</p>
+    <div style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto">
+      ${amigos.map(am => `<button class="btn branco" onclick="enviarDesafio('${esc(am.apelido)}')">${emojiDoTipo(am.tipo)} ${esc(am.apelido)}</button>`).join('')}
+    </div>
+    <button class="btn grande branco" style="margin-top:14px" onclick="fecharModal()">Cancelar</button>`);
+}
+async function enviarDesafio(apelidoDestino){
+  const { jogo, valor, menorMelhor } = ULTIMO_RESULTADO_JOGO;
+  try{
+    const r = await fetch('api/estado.php?acao=desafio_criar', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({apelidoDestino, jogo, pontuacao: valor, menorMelhor}),
+    });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.erro || 'Não deu pra desafiar agora.');
+    fecharModal();
+    brinde(`🎯 Desafio enviado pra ${apelidoDestino}!`);
+  }catch(e){ brinde(e.message); }
+}
+// "Jogar" num desafio recebido: marca qual desafio tá em andamento e abre o jogo certinho —
+// quando o jogador terminar a partida, bateuRecorde() reporta o resultado sozinho
+function jogarDesafio(id, jogoId){
+  DESAFIO_ATIVO = {id, jogo: jogoId};
+  const jogoObj = JOGOS_ARCADE.find(j => j.id === jogoId);
+  if(jogoObj) (new Function(jogoObj.onclick))();
 }
 // pop-up de "como jogar" — cada minigame chama isso no botão "?" ao lado do Voltar, em vez
 // de deixar o texto de instrução fixo ocupando espaço embaixo do tabuleiro/canvas. itens é uma
@@ -3672,6 +3746,7 @@ function jogoMemoria(){
           ${bonusCombo>0?`<span class="chip">🔥 +${bonusCombo} combo</span>`:''}
           <p style="margin:12px 0 0;font-weight:800">${avancouFase ? `🆙 Próxima fase: ${estado.paresMemoria} pares!` : '🏅 Você chegou na fase máxima!'}</p>
           <button class="btn grande" style="margin-top:10px" onclick="fecharModal(); jogoMemoria()">${avancouFase ? 'Próxima fase' : 'Jogar de novo'}</button>
+          <button class="btn grande branco" style="margin-top:10px" onclick="abrirDesafiar()">🎯 Desafiar um amigo</button>
           <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
       }
     }, acertou ? 260 : 700);
@@ -3773,6 +3848,7 @@ function jogoChuva(){
       <p style="margin:6px 0 12px">${pontos} ponto(s) — seu bicho está lambendo os beiços.</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoChuva()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="abrirDesafiar()">🎯 Desafiar um amigo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
 
@@ -3871,6 +3947,7 @@ function jogoToca(){
       <p style="margin:6px 0 12px">Você fez ${pontos} ponto(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoToca()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="abrirDesafiar()">🎯 Desafiar um amigo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
 
@@ -3950,6 +4027,7 @@ function jogoSequencia(){
       <p style="margin:6px 0 12px">Você completou ${pontos} rodada(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoSequencia()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="abrirDesafiar()">🎯 Desafiar um amigo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
 
@@ -4016,6 +4094,7 @@ function jogoCorrida(){
       <p style="margin:6px 0 12px">Você fez ${pontos} ponto(s) correndo.</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoCorrida()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="abrirDesafiar()">🎯 Desafiar um amigo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
 
@@ -4190,6 +4269,7 @@ function jogoBlocos(){
       <p style="margin:6px 0 12px">${gruposFeitos} combinação(ões), ${pontos} ponto(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoBlocos()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="abrirDesafiar()">🎯 Desafiar um amigo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
 
@@ -4297,6 +4377,7 @@ function jogoRua(){
       <p style="margin:6px 0 12px">Você fez ${pontos} ponto(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoRua()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="abrirDesafiar()">🎯 Desafiar um amigo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
 
@@ -4456,6 +4537,7 @@ function jogoPescaria(){
       <p style="margin:6px 0 12px">${capturas} peixe(s) fisgado(s), ${pontos} ponto(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoPescaria()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="abrirDesafiar()">🎯 Desafiar um amigo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
 
@@ -4752,6 +4834,7 @@ function jogoBolha(){
       <p style="margin:6px 0 12px">${bolhasEstouradas} bolha(s) estourada(s), ${pontos} ponto(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoBolha()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="abrirDesafiar()">🎯 Desafiar um amigo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
 
@@ -5052,6 +5135,7 @@ function jogoSokoban(numero, opcoes){
       <div class="barra-auto-sokoban-wrap"><div id="barra-auto-sokoban" class="barra-auto-sokoban-cheio"></div></div>
       <small style="opacity:.65;display:block;margin-top:3px">Passando pra próxima sozinho...</small>` : ''}
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); jogoSokobanSelecionarFase()">Escolher fase</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="abrirDesafiar()">🎯 Desafiar um amigo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
     // barrinha de avanço automático: encolhe sozinha e troca de fase ao zerar — sem tirar
     // os botões de baixo (clicar em QUALQUER um deles fecha o modal, que já é o sinal usado
@@ -6187,6 +6271,7 @@ function jogoPizzaria(){
       <p style="margin:6px 0 12px">Você entregou pedidos suficientes pra fazer ${pontos} ponto(s).</p>
       <span class="chip">🪙 +${premio}</span> <span class="chip">⭐ +15</span>
       <button class="btn grande" style="margin-top:14px" onclick="fecharModal(); jogoPizzaria()">Jogar de novo</button>
+      <button class="btn grande branco" style="margin-top:10px" onclick="abrirDesafiar()">🎯 Desafiar um amigo</button>
       <button class="btn grande branco" style="margin-top:10px" onclick="fecharModal(); ir('arcade')">Voltar ao arcade</button>`);
   }
   pararLoops = contarRegressiva(() => {
@@ -6669,14 +6754,26 @@ async function chamarSocial(acao, dados, metodo){
 }
 
 let amizadesCache = {amigos:[], pedidosRecebidos:[], pedidosEnviados:[]};
+let atividadesCache = [];
+let desafiosCache = {recebidos:[], enviados:[]};
 RENDER.amigos = async () => {
   $('#tela-amigos').innerHTML = `
     <button class="btn amarelo pequeno btn-voltar-cena" onclick="ir('perfil')">Voltar</button>
     <div class="titulo-secao"><h2>👥 Amigos</h2></div>
     <p class="aviso" style="margin-top:12px">Carregando...</p>`;
-  try{ amizadesCache = await chamarSocial('amizades_listar', null, 'GET'); }
-  catch(e){ amizadesCache = {amigos:[], pedidosRecebidos:[], pedidosEnviados:[]}; }
+  try{
+    const [amiz, ativ, des] = await Promise.all([
+      chamarSocial('amizades_listar', null, 'GET'),
+      chamarSocial('atividades_feed', null, 'GET').catch(() => ({atividades:[]})),
+      chamarSocial('desafios_listar', null, 'GET').catch(() => ({recebidos:[], enviados:[]})),
+    ]);
+    amizadesCache = amiz; atividadesCache = ativ.atividades || []; desafiosCache = des;
+  }catch(e){ amizadesCache = {amigos:[], pedidosRecebidos:[], pedidosEnviados:[]}; }
   pintarAmigos();
+  // cutucadas: mostra como toast por cima da tela — não trava o resto se falhar
+  fetch('api/estado.php?acao=cutucadas_pendentes', {cache:'no-store'}).then(r => r.json()).then(d => {
+    (d.cutucadas || []).forEach((c, i) => setTimeout(() => brinde(`👉 ${c.apelido} te cutucou!`), i*1700));
+  }).catch(() => {});
 };
 function pintarAmigos(){
   const a = amizadesCache;
@@ -6693,6 +6790,26 @@ function pintarAmigos(){
       <p id="aviso-amigo" class="aviso" style="display:none;margin-top:8px"></p>
       <p class="aviso-mini" style="margin-top:8px">Só dá pra conversar depois que os dois aceitarem.</p>
     </div>
+    ${desafiosCache.recebidos.length ? `
+      <div class="titulo-secao" style="margin-top:16px"><h2 style="font-size:18px">🎯 Desafios recebidos</h2></div>
+      <div class="sticker">${desafiosCache.recebidos.map(d => `
+        <div class="linha-amigo">
+          <span><b>${esc(d.apelido)}</b> fez ${rotuloPontuacaoJogo(d.jogo, d.pontuacao)} em ${esc(nomeDoJogoArcade(d.jogo))} — supera?</span>
+          <button class="btn pequeno" onclick="jogarDesafio(${d.id},'${d.jogo}')">▶️ Jogar</button>
+        </div>`).join('')}</div>` : ''}
+    ${desafiosCache.enviados.length ? `
+      <div class="titulo-secao" style="margin-top:16px"><h2 style="font-size:18px">Desafios enviados</h2></div>
+      <div class="sticker">${desafiosCache.enviados.map(d => `
+        <div class="linha-amigo">
+          <span>${esc(d.apelido)} — ${esc(nomeDoJogoArcade(d.jogo))}</span>
+          <span class="chip">${d.status==='pendente' ? 'aguardando' : (d.superou ? '🏆 superou!' : 'não superou')}</span>
+        </div>`).join('')}</div>` : ''}
+    ${atividadesCache.length ? `
+      <div class="titulo-secao" style="margin-top:16px"><h2 style="font-size:18px">📣 Atividade recente</h2></div>
+      <div class="sticker">${atividadesCache.slice(0,10).map(at => `
+        <div class="linha-amigo" style="font-weight:700">
+          <span>${emojiDoTipo(at.tipo)} <b>${esc(at.apelido)}</b> ${at.tipoAtividade==='licao' ? 'concluiu a lição' : 'fez'} ${esc(at.detalhe)}</span>
+        </div>`).join('')}</div>` : ''}
     ${a.pedidosRecebidos.length ? `
       <div class="titulo-secao" style="margin-top:16px"><h2 style="font-size:18px">Pedidos recebidos</h2></div>
       <div class="sticker">${a.pedidosRecebidos.map(ap => `
@@ -6707,14 +6824,32 @@ function pintarAmigos(){
       <div class="sticker">${a.pedidosEnviados.map(ap => `<div class="linha-amigo"><span>${esc(ap)}</span><small>pendente</small></div>`).join('')}</div>` : ''}
     <div class="titulo-secao" style="margin-top:16px"><h2 style="font-size:18px">Meus amigos</h2></div>
     ${a.amigos.length ? `<div class="sticker">${a.amigos.map(am => `
-      <div class="linha-amigo">
-        <span>${emojiDoTipo(am.tipo)} ${esc(am.apelido)}</span>
-        <div style="display:flex;gap:6px">
+      <div class="linha-amigo" style="align-items:flex-start;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0">
+          <span style="font-size:22px">${emojiDoTipo(am.tipo)}</span>
+          <div style="min-width:0">
+            <span>${esc(am.apelido)}</span>
+            <p class="aviso-mini" style="margin:1px 0 0">Nível ${am.nivel}${am.streakAtual>0?` · 🔥 ${am.streakAtual}d`:''}</p>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn pequeno" onclick="ir('conversa','${esc(am.apelido)}')">💬 Conversar</button>
+          <button class="btn branco pequeno" onclick="cutucarAmigo('${esc(am.apelido)}')" title="Cutucar">👉</button>
+          <button class="btn branco pequeno" onclick="ir('vercasa','${esc(am.apelido)}')" title="Visitar casa">🏠</button>
           <button class="btn branco pequeno" onclick="removerAmizade('${esc(am.apelido)}')">Desfazer</button>
         </div>
       </div>`).join('')}</div>`
       : '<p class="sub" style="margin:0 4px">Você ainda não tem amigos adicionados. Peça pra alguém acima!</p>'}`;
+}
+async function cutucarAmigo(apelido){
+  try{
+    const r = await fetch('api/estado.php?acao=cutucar', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({apelido}),
+    });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.erro || 'Não deu pra cutucar agora.');
+    brinde(`👉 Você cutucou ${apelido}!`);
+  }catch(e){ brinde(e.message); }
 }
 async function pedirAmizade(){
   const campo = $('#campo-pedir-amigo');
@@ -7078,6 +7213,8 @@ async function pintarMeuClube(){
       ${c.descricao ? `<p class="sub" style="margin:0 0 6px">${esc(c.descricao)}</p>` : ''}
       <p class="aviso-mini">${c.totalMembros} membro${c.totalMembros===1?'':'s'}${c.souLider ? ' · você é o líder 👑' : ''}</p>
       <div style="display:flex;gap:8px;margin-top:12px;justify-content:center;flex-wrap:wrap">
+        ${c.grupoId ? `<button class="btn pequeno" onclick="ir('grupoconversa',${c.grupoId})">💬 Chat do clube</button>` : ''}
+        <button class="btn branco pequeno" onclick="abrirRankingClube()">🏆 Ranking do clube</button>
         ${c.souLider ? `<button class="btn branco pequeno" onclick="abrirFormClube(true)">✏️ Editar</button>` : ''}
         <button class="btn branco pequeno" onclick="sairDoClube()">🚪 Sair do clube</button>
       </div>
@@ -7400,6 +7537,28 @@ async function abrirRanking(){
       <button class="btn grande branco" style="margin-top:14px" onclick="fecharModal()">Fechar</button>`);
   }catch(e){
     modal(`<h2 style="font-size:22px">🏆 Ranking</h2><p style="margin:10px 0">${esc(e.message)}</p>
+      <button class="btn grande branco" style="margin-top:6px" onclick="fecharModal()">Fechar</button>`);
+  }
+}
+// mesma ideia do abrirRanking() geral, só que restrito a quem tá no clube da vez — qualquer
+// membro pode abrir, não só o líder (o líder já tem clube_membros_listar, bem mais detalhado)
+async function abrirRankingClube(){
+  modal(`<h2 style="font-size:22px">🏆 Ranking do clube</h2><p style="margin:10px 0">Carregando…</p>`);
+  try{
+    const r = await fetch('api/estado.php?acao=clube_ranking', {cache:'no-store'});
+    const d = await r.json().catch(() => ({ranking:[]}));
+    if(!r.ok) throw new Error(d.erro || 'Não deu pra carregar o ranking do clube.');
+    modal(`
+      <h2 style="font-size:22px">🏆 Ranking do clube</h2>
+      <p style="margin:4px 0 10px;font-size:12px;font-weight:700;opacity:.7">Por nível, só entre quem tá no seu clube.</p>
+      ${d.ranking.length ? d.ranking.map(l => `<div class="ranking-linha${l.apelido===estado.apelido?' eu':''}">
+        ${svgBicho(l.tipo, {estilo:'width:30px;height:30px'})}
+        <b style="flex:1">${esc(l.apelido)}</b>
+        <span class="chip">Nível ${l.nivel}</span>
+      </div>`).join('') : '<p class="vazio" style="margin:0">Ninguém no clube ainda.</p>'}
+      <button class="btn grande branco" style="margin-top:14px" onclick="fecharModal()">Fechar</button>`);
+  }catch(e){
+    modal(`<h2 style="font-size:22px">🏆 Ranking do clube</h2><p style="margin:10px 0">${esc(e.message)}</p>
       <button class="btn grande branco" style="margin-top:6px" onclick="fecharModal()">Fechar</button>`);
   }
 }
